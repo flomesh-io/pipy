@@ -384,14 +384,25 @@ void Pipy::listen(pjs::Context &ctx) {
   std::string ip;
 
   if (address) {
-    if (!utils::get_host_port(address->str(), ip, port)) {
-      ctx.error("invalid 'address:port' form");
-      return;
-    }
-    uint8_t buf[16];
-    if (!utils::get_ip_v4(ip, buf) && !utils::get_ip_v6(ip, buf)) {
-      ctx.error("invalid IP address");
-      return;
+    auto n = address->parse_float();
+    if (std::isnan(n)) {
+      if (!utils::get_host_port(address->str(), ip, port)) {
+        ctx.error("invalid 'address:port' form");
+        return;
+      }
+      uint8_t buf[16];
+      if (!utils::get_ip_v4(ip, buf) && !utils::get_ip_v6(ip, buf)) {
+        ctx.error("invalid IP address");
+        return;
+      }
+    } else {
+      auto i = (int)n;
+      if (i != n || i < 1 || i > 65535) {
+        ctx.error("invalid port number");
+        return;
+      }
+      ip = "0.0.0.0";
+      port = i;
     }
   } else {
     ip = "0.0.0.0";
