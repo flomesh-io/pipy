@@ -30,6 +30,7 @@
 #include "timer.hpp"
 #include "api/configuration.hpp"
 #include "api/console.hpp"
+#include "api/pipy.hpp"
 #include "net.hpp"
 #include "log.hpp"
 #include "utils.hpp"
@@ -415,6 +416,7 @@ void WorkerThread::shutdown_all(bool force) {
 
 void WorkerThread::main() {
   Log::init();
+  Pipy::argv(m_manager->m_argv);
 
   m_new_worker = Worker::make(
     m_manager->loading_pipeline_lb(),
@@ -524,6 +526,13 @@ void WorkerThread::main() {
 auto WorkerManager::get() -> WorkerManager& {
   static WorkerManager s_worker_manager;
   return s_worker_manager;
+}
+
+void WorkerManager::argv(int argc, char *argv[]) {
+  m_argv.resize(argc);
+  for (int i = 0; i < argc; i++) {
+    m_argv[i] = argv[i];
+  }
 }
 
 bool WorkerManager::start(int concurrency, bool force) {

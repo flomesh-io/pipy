@@ -50,6 +50,19 @@
 
 namespace pipy {
 
+thread_local static pjs::Ref<pjs::Array> s_argv;
+
+auto Pipy::argv() -> pjs::Array* {
+  return s_argv;
+}
+
+void Pipy::argv(const std::vector<std::string> &argv) {
+  s_argv = pjs::Array::make(argv.size());
+  for (int i = 0; i < argv.size(); i++) {
+    s_argv->set(i, pjs::Str::make(argv[i]));
+  }
+}
+
 static std::function<void(int)> s_on_exit;
 
 void Pipy::on_exit(const std::function<void(int)> &on_exit) {
@@ -538,6 +551,10 @@ template<> void ClassDef<Pipy>::init() {
     thread_local static pjs::Ref<pjs::Str> str;
     if (!str) str = pjs::Str::make(Status::LocalInstance::uuid);
     ret.set(str);
+  });
+
+  accessor("argv", [](Object *, Value &ret) {
+    ret.set(s_argv.get());
   });
 
   method("fork", [](Context &ctx, Object *obj, Value &ret) {

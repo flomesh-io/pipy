@@ -107,7 +107,9 @@ MainOptions::MainOptions(int argc, char *argv[]) {
       auto i = term.find('=');
       auto k = (i == std::string::npos ? term : term.substr(0, i));
       auto v = (i == std::string::npos ? std::string() : term.substr(i + 1));
-      if (k == "-v" || k == "-version" || k == "--version") {
+      if (k == "--") {
+        break;
+      } if (k == "-v" || k == "-version" || k == "--version") {
         version = true;
       } else if (k == "-h" || k == "-help" || k == "--help") {
         help = true;

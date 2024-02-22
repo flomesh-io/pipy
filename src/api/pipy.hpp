@@ -31,6 +31,8 @@
 #include "pipeline.hpp"
 
 #include <functional>
+#include <string>
+#include <vector>
 
 namespace pipy {
 
@@ -84,6 +86,8 @@ public:
     virtual void on_pipeline_result(Pipeline *p, pjs::Value &result) override;
   };
 
+  static auto argv() -> pjs::Array*;
+  static void argv(const std::vector<std::string> &argv);
   static void on_exit(const std::function<void(int)> &on_exit);
   static auto exec(const std::string &cmd, const ExecOptions &options = ExecOptions()) -> ExecResult;
   static auto exec(pjs::Array *args, const ExecOptions &options = ExecOptions()) -> ExecResult;

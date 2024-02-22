@@ -121,6 +121,7 @@ public:
   void enable_graph(bool b) { m_graph_enabled = b; }
   void on_done(const std::function<void()> &cb) { m_on_done = cb; }
   void on_ended(const std::function<void()> &cb) { m_on_ended = cb; }
+  void argv(int argc, char *argv[]);
   bool started() const { return !m_worker_threads.empty(); }
   bool start(int concurrency = 1, bool force = false);
   auto status() -> Status&;
@@ -154,6 +155,7 @@ private:
   };
 
   std::vector<WorkerThread*> m_worker_threads;
+  std::vector<std::string> m_argv;
   pjs::Ref<PipelineLoadBalancer> m_running_pipeline_lb;
   pjs::Ref<PipelineLoadBalancer> m_loading_pipeline_lb;
   Status m_status;

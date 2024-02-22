@@ -561,16 +561,18 @@ int main(int argc, char *argv[]) {
               return;
             }
 
-            WorkerManager::get().enable_graph(!opts.no_graph);
+            auto &wm = WorkerManager::get();
+            wm.argv(argc, argv);
+            wm.enable_graph(!opts.no_graph);
 
             if (is_repo || is_remote) {
-              WorkerManager::get().on_ended(exit);
+              wm.on_ended(exit);
             } else {
-              WorkerManager::get().on_done(exit);
+              wm.on_done(exit);
             }
 
             try {
-              started = WorkerManager::get().start(opts.threads, opts.force_start);
+              started = wm.start(opts.threads, opts.force_start);
             } catch (std::runtime_error &) {
               start_error = true;
             }
