@@ -121,12 +121,16 @@ void Connect::reset() {
     m_outbound->close();
     m_outbound = nullptr;
   }
+  m_end_input = false;
 }
 
 void Connect::process(Event *evt) {
+  if (m_end_input) return;
+
   if (!m_outbound) {
     if (evt->is<StreamEnd>()) {
       Filter::output(evt);
+      m_end_input = true;
       return;
     }
 
@@ -207,6 +211,9 @@ void Connect::process(Event *evt) {
 
   if (m_outbound) {
     m_outbound->send(evt);
+    if (evt->is<StreamEnd>()) {
+      m_end_input = true;
+    }
   }
 }
 

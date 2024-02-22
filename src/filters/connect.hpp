@@ -63,6 +63,7 @@ private:
   pjs::Ref<Outbound> m_outbound;
   pjs::Ref<pjs::Function> m_options_f;
   Options m_options;
+  bool m_end_input = false;
 
   friend class ConnectReceiver;
 };
