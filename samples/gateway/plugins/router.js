@@ -9,8 +9,8 @@ var router = new algo.URLRouter(
       ]) {
         if (rewrite) {
           rewrite = [
-            new RegExp(rewrite[0]),
-            rewrite[1],
+            new RegExp(rewrite.pattern),
+            rewrite.replace,
           ]
         }
         return [url, { route, rewrite }]

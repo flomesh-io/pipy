@@ -1,5 +1,5 @@
 export default (
-  JSON.decode(
-    pipy.load('config.json')
+  YAML.decode(
+    pipy.load('config.yml')
   )
 )
