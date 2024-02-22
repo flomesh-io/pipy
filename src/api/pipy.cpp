@@ -358,6 +358,7 @@ void Pipy::listen(pjs::Context &ctx) {
   pjs::Str *protocol = nullptr;
   pjs::Object *options = nullptr;
   pjs::Function *builder = nullptr;
+  PipelineLayoutWrapper *plw = nullptr;
 
   if (ctx.get(i, address) || ctx.get(i, port)) i++;
   else {
@@ -367,9 +368,9 @@ void Pipy::listen(pjs::Context &ctx) {
 
   if (ctx.get(i, protocol)) i++;
 
-  if (!ctx.get(i, builder)) {
-    if (!ctx.check(i, options)) return;
-    if (!ctx.check(i + 1, builder)) return;
+  if (!ctx.get(i, builder) && !ctx.get(i, plw)) {
+    if (!ctx.check(i++, options)) return;
+    if (!ctx.check(i, builder) && !ctx.check(i, plw)) return;
   }
 
   Listener::Protocol proto = Listener::Protocol::TCP;
@@ -414,7 +415,9 @@ void Pipy::listen(pjs::Context &ctx) {
   }
 
   PipelineLayout *pl = nullptr;
-  if (builder) {
+  if (plw) {
+    pl = plw->get();
+  } else if (builder) {
     pl = PipelineDesigner::make_pipeline_layout(ctx, builder);
     if (!pl) return;
   }
