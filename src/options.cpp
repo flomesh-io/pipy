@@ -72,6 +72,18 @@ Options::Value& Options::Value::get(bool &value) {
     m_got = true;
     return *this;
   }
+  if (m_value.is_string()) {
+    auto s = m_value.s();
+    if (s == pjs::Str::bool_true) {
+      value = true;
+      m_got = true;
+      return *this;
+    } else if (s == pjs::Str::bool_false) {
+      value = false;
+      m_got = true;
+      return *this;
+    }
+  }
   return *this;
 }
 
