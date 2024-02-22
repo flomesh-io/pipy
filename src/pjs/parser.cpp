@@ -356,6 +356,15 @@ void Tokenizer::init_operator_map() {
 
 auto Tokenizer::parse(Location &loc) -> Token {
 
+  // Skip the shebang line
+  if (m_ptr == 0 &&
+      m_script.length() > 1 &&
+      m_script[0] == '#' &&
+      m_script[1] == '!'
+  ) {
+    while (get() && get() != '\n') count();
+  }
+
   // Parse template strings
   if (m_is_template) {
     auto c = get();
