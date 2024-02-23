@@ -48,7 +48,11 @@ PipelineLayout::PipelineLayout(Worker *worker, ModuleBase *module, int index, co
   , m_module(module)
 {
   s_all_pipeline_layouts.push(this);
-  if (module) module->m_pipelines.push_back(this);
+  if (module) {
+    module->m_pipelines.push_back(this);
+  } else if (worker) {
+    worker->append_pipeline_template(this);
+  }
   Log::debug(Log::PIPELINE, "[pipeline] create layout: %s", name_or_label()->c_str());
 }
 
@@ -61,6 +65,7 @@ PipelineLayout::~PipelineLayout() {
     delete pipeline;
   }
   s_all_pipeline_layouts.remove(this);
+  if (m_worker) m_worker->remove_pipeline_template(this);
 }
 
 void PipelineLayout::bind() {

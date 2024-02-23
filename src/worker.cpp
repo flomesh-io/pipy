@@ -601,12 +601,29 @@ void Worker::on_exit(Exit *exit) {
 }
 
 void Worker::end_all() {
+  if (s_current == this) s_current = nullptr;
+  for (auto *pt : m_pipeline_templates) pt->shutdown();
   for (auto *task : m_tasks) task->end();
   for (auto *watch : m_watches) watch->end();
   for (auto *exit : m_exits) exit->end();
   for (auto *admin : m_admins) admin->end();
-  for (auto *mod : m_legacy_modules) if (mod) mod->unload();
-  if (s_current == this) s_current = nullptr;
+  if (m_pipeline_templates.empty()) {
+    for (auto *mod : m_legacy_modules) if (mod) mod->unload();
+  } else {
+    m_unloading = true;
+  }
+}
+
+void Worker::append_pipeline_template(PipelineLayout *pt) {
+  m_pipeline_templates.insert(pt);
+}
+
+void Worker::remove_pipeline_template(PipelineLayout *pt) {
+  m_pipeline_templates.erase(pt);
+  if (m_pipeline_templates.empty() && m_unloading) {
+    m_unloading = false;
+    for (auto *mod : m_legacy_modules) if (mod) mod->unload();
+  }
 }
 
 //

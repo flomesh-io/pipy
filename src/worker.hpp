@@ -161,6 +161,7 @@ private:
   pjs::Ref<pjs::Fiber> m_root_fiber;
   pjs::Ref<PipelineLoadBalancer> m_pipeline_lb;
   pjs::Ref<Thread> m_thread;
+  std::set<PipelineLayout*> m_pipeline_templates;
   std::vector<Module*> m_legacy_modules;
   std::map<std::string, JSModule*> m_js_module_map;
   std::map<std::string, nmi::NativeModule*> m_native_module_map;
@@ -176,6 +177,7 @@ private:
   bool m_forced = false;
   bool m_started = false;
   bool m_graph_enabled = false;
+  bool m_unloading = false;
 
   auto new_module_index() -> int;
   void add_module(Module *m);
@@ -183,10 +185,14 @@ private:
   void on_exit(Exit *exit);
   void end_all();
 
+  void append_pipeline_template(PipelineLayout *pt);
+  void remove_pipeline_template(PipelineLayout *pt);
+
   thread_local static pjs::Ref<Worker> s_current;
 
   friend class pjs::RefCount<Worker>;
   friend class JSModule;
+  friend class PipelineLayout;
 };
 
 } // namespace pipy
