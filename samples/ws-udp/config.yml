@@ -1,0 +1,14 @@
+server:
+  listen: 127.0.0.1:18888
+  forwarding:
+    - listen: 127.0.0.1:2000
+      target: 127.0.0.1:2001
+    - listen: 127.0.0.1:3000
+      target: 127.0.0.1:3001
+client:
+  connect: localhost:18888
+  forwarding:
+    - listen: 127.0.0.1:6001
+      target: 127.0.0.1:6000
+    - listen: 127.0.0.1:7001
+      target: 127.0.0.1:7000

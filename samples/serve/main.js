@@ -32,10 +32,8 @@ config.http.forEach(
       function (service) {
         switch (service.type) {
           case 'proxy':
-            Object.assign(service, {
-              version: service.protocol === 'http2' ? 2 : 1,
-              balancer: new algo.LoadBalancer(service.targets),
-            })
+            service.balancer = new algo.LoadBalancer(service.targets)
+            service.version = (service.protocol === 'http2' ? 2 : 1)
             var re = service.rewrite
             if (re) {
               var p = new RegExp(re.pattern)
