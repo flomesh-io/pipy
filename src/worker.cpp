@@ -160,7 +160,7 @@ template<> void ClassDef<pipy::Global>::init() {
   variable("ListenerArray", class_of<Constructor<ListenerArray>>());
 
   // Swap
-  variable("Swap", class_of<Constructor<Swap>>());
+  variable("Swap", class_of<Constructor<LegacySwap>>());
 
   // Timeout
   variable("Timeout", class_of<Constructor<Timeout>>());

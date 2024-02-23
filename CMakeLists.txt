@@ -290,6 +290,7 @@ add_executable(pipy
   src/filters/resp.cpp
   src/filters/socks.cpp
   src/filters/split.cpp
+  src/filters/swap.cpp
   src/filters/tee.cpp
   src/filters/thrift.cpp
   src/filters/throttle.cpp

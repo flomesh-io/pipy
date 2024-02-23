@@ -63,6 +63,7 @@
 #include "filters/resp.hpp"
 #include "filters/socks.hpp"
 #include "filters/split.hpp"
+#include "filters/swap.hpp"
 #include "filters/tee.hpp"
 #include "filters/thrift.hpp"
 #include "filters/throttle.hpp"
@@ -384,6 +385,10 @@ void PipelineDesigner::split(const pjs::Value &separator) {
   append_filter(new Split(separator));
 }
 
+void PipelineDesigner::swap(const pjs::Value &hub) {
+  append_filter(new Swap(hub));
+}
+
 void PipelineDesigner::tee(const pjs::Value &filename, pjs::Object *options) {
   append_filter(new Tee(filename, options));
 }
@@ -476,6 +481,44 @@ void PipelineWrapper::on_event(Event *evt) {
 void PipelineWrapper::on_pipeline_result(Pipeline *p, pjs::Value &result) {
   m_settler->resolve(result);
   release();
+}
+
+//
+// Hub
+//
+
+void Hub::join(EventTarget::Input *party) {
+  if (m_broadcasting) { m_changing_parties.push_back({ true, party }); return; }
+  if (m_pair[0] == party || m_pair[1] == party) return;
+  if (m_parties.count(party) > 0) return;
+  if (!m_pair[0]) { m_pair[0] = party; return; }
+  if (!m_pair[1]) { m_pair[1] = party; return; }
+  m_parties.insert(party);
+}
+
+void Hub::exit(EventTarget::Input *party) {
+  if (m_broadcasting) { m_changing_parties.push_back({ false, party }); return; }
+  if (m_pair[0] == party) { m_pair[0] = nullptr; return; }
+  if (m_pair[1] == party) { m_pair[1] = nullptr; return; }
+  m_parties.erase(party);
+}
+
+void Hub::broadcast(Event *evt, EventTarget::Input *from) {
+  if (!m_broadcasting) {
+    m_broadcasting = true;
+    if (m_pair[0] && m_pair[0] != from) m_pair[0]->input(evt);
+    if (m_pair[1] && m_pair[1] != from) m_pair[1]->input(evt);
+    for (const auto &p : m_parties) if (p != from) p->input(evt);
+    m_broadcasting = false;
+    for (const auto &cp : m_changing_parties) {
+      if (cp.join) {
+        join(cp.party);
+      } else {
+        exit(cp.party);
+      }
+    }
+    m_changing_parties.clear();
+  }
 }
 
 } // namespace pipy
@@ -1067,6 +1110,17 @@ template<> void ClassDef<PipelineDesigner>::init() {
     obj->split(separator);
   });
 
+  // PipelineDesigner.swap
+  filter("swap", [](Context &ctx, PipelineDesigner *obj) {
+    Hub *hub = nullptr;
+    Function *hub_f = nullptr;
+    if (!ctx.get(0, hub) && !ctx.get(0, hub_f)) {
+      ctx.error_argument_type(0, "a Hub or a function");
+      return;
+    }
+    if (hub_f) obj->swap(hub_f); else obj->swap(hub);
+  });
+
   // PipelineDesigner.tee
   filter("tee", [](Context &ctx, PipelineDesigner *obj) {
     Value filename;
@@ -1119,6 +1173,16 @@ template<> void ClassDef<PipelineLayoutWrapper>::init() {
 }
 
 template<> void ClassDef<PipelineLayoutWrapper::Constructor>::init() {
+  super<Function>();
+  ctor();
+  variable("Hub", class_of<Constructor<Hub>>());
+}
+
+template<> void ClassDef<Hub>::init() {
+  ctor();
+}
+
+template<> void ClassDef<Constructor<Hub>>::init() {
   super<Function>();
   ctor();
 }

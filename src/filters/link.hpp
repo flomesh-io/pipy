@@ -30,7 +30,7 @@
 
 namespace pipy {
 
-class Swap;
+class LegacySwap;
 
 //
 // Link
@@ -52,7 +52,7 @@ private:
 
   pjs::Ref<pjs::Function> m_name_f;
   pjs::Ref<Pipeline> m_pipeline;
-  pjs::Ref<Swap> m_swap;
+  pjs::Ref<LegacySwap> m_swap;
   pjs::Ref<EventTarget::Input> m_swap_input;
   EventBuffer m_buffer;
   bool m_is_started = false;

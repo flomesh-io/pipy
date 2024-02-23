@@ -30,6 +30,9 @@
 #include "pipeline.hpp"
 #include "filter.hpp"
 
+#include <list>
+#include <set>
+
 namespace pipy {
 
 //
@@ -111,6 +114,7 @@ public:
   void replay(pjs::Object *options);
   void serve_http(pjs::Object *handler, pjs::Object *options);
   void split(const pjs::Value &separator);
+  void swap(const pjs::Value &hub);
   void tee(const pjs::Value &filename, pjs::Object *options);
   void throttle_concurrency(pjs::Object *quota, pjs::Object *options);
   void throttle_data_rate(pjs::Object *quota, pjs::Object *options);
@@ -189,6 +193,30 @@ private:
   virtual void on_pipeline_result(Pipeline *p, pjs::Value &result) override;
 
   friend class pjs::ObjectTemplate<PipelineWrapper>;
+};
+
+//
+// Hub
+//
+
+class Hub : public pjs::ObjectTemplate<Hub> {
+public:
+  void join(EventTarget::Input *party);
+  void exit(EventTarget::Input *party);
+  void broadcast(Event *evt, EventTarget::Input *from);
+
+private:
+  Hub() {}
+  ~Hub() {}
+
+  struct PartyChange { bool join; pjs::Ref<EventTarget::Input> party; };
+
+  pjs::Ref<EventTarget::Input> m_pair[2];
+  std::set<pjs::Ref<EventTarget::Input>> m_parties;
+  std::list<PartyChange> m_changing_parties;
+  bool m_broadcasting = false;
+
+  friend class pjs::ObjectTemplate<Hub>;
 };
 
 } // namespace pipy

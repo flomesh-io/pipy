@@ -88,8 +88,8 @@ void Link::process(Event *evt) {
           return;
         }
 
-      } else if (ret.is<Swap>()) {
-        auto swap = ret.as<Swap>();
+      } else if (ret.is<LegacySwap>()) {
+        auto swap = ret.as<LegacySwap>();
         auto input = swap->link(EventSource::reply());
         if (!input) {
           Filter::error("cannot link to a fully occupied Swap");

@@ -23,32 +23,39 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef API_SWAP_HPP
-#define API_SWAP_HPP
+#ifndef SWAP_HPP
+#define SWAP_HPP
 
-#include "event.hpp"
+#include "filter.hpp"
 
 namespace pipy {
 
+class Hub;
+
 //
-// LegacySwap
+// Swap
 //
 
-class LegacySwap : public pjs::ObjectTemplate<LegacySwap>, protected EventProxy {
+class Swap : public Filter {
 public:
-  auto link(EventTarget::Input *output) -> EventTarget::Input*;
+  Swap(const pjs::Value &hub);
 
 private:
-  LegacySwap() {}
-  ~LegacySwap() {}
+  Swap(const Swap &r);
+  ~Swap();
 
-  int m_party_count = 0;
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
 
-  virtual void on_input(Event *evt) override;
-
-  friend class pjs::ObjectTemplate<LegacySwap>;
+  pjs::Value m_hub_value;
+  pjs::Ref<Hub> m_hub;
+  EventBuffer m_buffer;
+  bool m_is_started = false;
+  bool m_is_outputting = false;
 };
 
 } // namespace pipy
 
-#endif // API_SWAP_HPP
+#endif // LINK_HPP

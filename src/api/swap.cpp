@@ -27,7 +27,7 @@
 
 namespace pipy {
 
-auto Swap::link(EventTarget::Input *output) -> EventTarget::Input* {
+auto LegacySwap::link(EventTarget::Input *output) -> EventTarget::Input* {
   switch (m_party_count) {
     case 0:
       m_party_count = 1;
@@ -41,7 +41,7 @@ auto Swap::link(EventTarget::Input *output) -> EventTarget::Input* {
   }
 }
 
-void Swap::on_input(Event *evt) {
+void LegacySwap::on_input(Event *evt) {
   EventProxy::forward(evt);
 }
 
@@ -51,11 +51,11 @@ namespace pjs {
 
 using namespace pipy;
 
-template<> void ClassDef<Swap>::init() {
+template<> void ClassDef<LegacySwap>::init() {
   ctor();
 }
 
-template<> void ClassDef<Constructor<Swap>>::init() {
+template<> void ClassDef<Constructor<LegacySwap>>::init() {
   super<Function>();
   ctor();
 }
