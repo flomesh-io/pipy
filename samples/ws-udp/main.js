@@ -49,7 +49,7 @@ function runServer() {
   )
 
   var recv = pipeline($=>$
-    .swap(() => hubs[$source])
+    .swap(() => hubs[$source] ??= new pipeline.Hub)
   )
 
   pipy.listen(config.server.listen, $=>$
@@ -63,7 +63,6 @@ function runServer() {
             return ok
           } else if (path.startsWith('/recv/')) {
             $source = path.substring(6)
-            hubs[$source] ??= new pipeline.Hub
             console.info(`Started receiving from ${$source}`)
             return ok
           } else {
@@ -75,6 +74,15 @@ function runServer() {
         .pipe(() => $target ? send : recv)
         .replaceData(data => new Message(data))
         .encodeWebSocket()
+        .onEnd(
+          function () {
+            if ($target) {
+              console.info(`Stopped forwarding to ${$target}`)
+            } else {
+              console.info(`Stopped receiving from ${$source}`)
+            }
+          }
+        )
       )
     )
   )
@@ -82,7 +90,7 @@ function runServer() {
   config.server.forwarding.forEach(
     function ({ listen, target }) {
       pipy.listen(listen, 'udp', $=>$
-        .swap(() => hubs[target])
+        .swap(() => hubs[target] ??= new pipeline.Hub)
       )
     }
   )
@@ -122,6 +130,7 @@ function runClient() {
         .onStart(new Data)
         .replay({ delay: 1 }).to($=>$
           .loop($=>$
+            .replaceStreamEnd()
             .replaceData(data => new Message(data))
             .encodeWebSocket()
             .connectHTTPTunnel(
