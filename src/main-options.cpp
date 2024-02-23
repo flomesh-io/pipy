@@ -44,6 +44,9 @@ void MainOptions::show_help() {
   std::cout << "  -v, -version, --version              Show version information" << std::endl;
   std::cout << "  -e, -eval, --eval                    Evaluate the given string as script" << std::endl;
   std::cout << "  -f, -file, --file                    Interpret the given string as a pathname" << std::endl;
+  std::cout << "  --                                   Indicate the end of Pipy options" << std::endl;
+  std::cout << "  --skip-redundant-arguments           Do not quit at redundant arguments" << std::endl;
+  std::cout << "  --skip-unknown-options               Do not quit at unknown options" << std::endl;
   std::cout << "  --threads=<number>                   Number of worker threads (1, 2, ... max)" << std::endl;
   std::cout << "  --log-file=<filename>                Set the pathname of the log file" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
@@ -68,7 +71,7 @@ void MainOptions::show_help() {
   std::cout << "  --tls-trusted=<filename>             Administration service certificate(s) trusted by client" << std::endl;
   std::cout << "  --init-repo=<dirname>                Populate the repo with codebases under the specified directory" << std::endl;
   std::cout << "  --init-code=<codebase>               Start running the specified codebase right after the repo is initialized" << std::endl;
-  std::cout << "  --openssl-engine=<id>                Select an OpenSSL engine for the ciphers" << std::endl;
+  std::cout << "  --openssl-engine=<id>                Select an OpenSSL engine" << std::endl;
   std::cout << std::endl;
 }
 
@@ -94,22 +97,35 @@ static const struct {
 
 MainOptions::MainOptions(int argc, char *argv[]) {
   auto max_threads = std::thread::hardware_concurrency();
+  bool end_of_options = false;
+  bool skip_redundant_arguments = false;
+  bool skip_unknown_options = false;
 
   for (int i = 1; i < argc; i++) {
     std::string term(argv[i]);
-    if (term[0] != '-') {
-      if (!filename.empty()) {
-        std::string msg("redundant filename: ");
-        throw std::runtime_error(msg + term);
+    if (end_of_options) {
+      if (filename.empty()) {
+        filename = term;
       }
-      filename = term;
+      break;
+    }
+    if (term[0] != '-') {
+      if (filename.empty()) {
+        filename = term;
+      } else if (!skip_redundant_arguments) {
+        throw std::runtime_error("redundant argument: " + term);
+      }
     } else {
       auto i = term.find('=');
       auto k = (i == std::string::npos ? term : term.substr(0, i));
       auto v = (i == std::string::npos ? std::string() : term.substr(i + 1));
       if (k == "--") {
-        break;
-      } if (k == "-v" || k == "-version" || k == "--version") {
+        end_of_options = true;
+      } else if (k == "--skip-redundant-arguments") {
+        skip_redundant_arguments = true;
+      } else if (k == "--skip-unknown-options") {
+        skip_unknown_options = true;
+      } else if (k == "-v" || k == "-version" || k == "--version") {
         version = true;
       } else if (k == "-h" || k == "-help" || k == "--help") {
         help = true;
@@ -219,7 +235,7 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         init_code = v;
       } else if (k == "--openssl-engine") {
         openssl_engine = v;
-      } else {
+      } else if (!skip_unknown_options) {
         std::string msg("unknown option: ");
         throw std::runtime_error(msg + k);
       }

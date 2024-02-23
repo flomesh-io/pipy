@@ -1,25 +1,19 @@
-#!/usr/bin/env pipy
+#!/usr/bin/env -S pipy --skip-redundant-arguments --skip-unknown-options
 
-var argv = (function () {
-  var seen = false
-  return pipy.argv.filter(opt => {
-    if (seen) return true;
-    if (opt === '--') seen = true;
-    return false;
-  })
-})()
-
-var mode = argv[0]
 var config = YAML.decode(pipy.load('config.yml'))
 
-if (mode == '--server') {
+var mode = pipy.argv.find(
+  arg => (arg === 'server' || arg === 'client')
+)
+
+if (mode == 'server') {
   console.info('Started in server mode')
   runServer()
-} else if (mode == '--client') {
+} else if (mode == 'client') {
   console.info('Started in client mode')
   runClient()
 } else {
-  console.error('Missing option --server or --client')
+  console.error('Missing mode option: server or client')
 }
 
 //
