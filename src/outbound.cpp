@@ -494,7 +494,11 @@ void OutboundUDP::connect(const std::string &address) {
 }
 
 void OutboundUDP::send(Event *evt) {
-  SocketUDP::output(evt);
+  if (evt->is<StreamEnd>()) {
+    Outbound::input(evt);
+  } else {
+    SocketUDP::output(evt);
+  }
 }
 
 void OutboundUDP::close() {
