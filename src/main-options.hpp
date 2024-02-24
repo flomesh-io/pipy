@@ -45,6 +45,8 @@ public:
 
   MainOptions(int argc, char *argv[]);
 
+  std::vector<std::string> arguments;
+
   std::string filename;
   bool        version = false;
   bool        help = false;

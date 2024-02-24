@@ -528,11 +528,8 @@ auto WorkerManager::get() -> WorkerManager& {
   return s_worker_manager;
 }
 
-void WorkerManager::argv(int argc, char *argv[]) {
-  m_argv.resize(argc);
-  for (int i = 0; i < argc; i++) {
-    m_argv[i] = argv[i];
-  }
+void WorkerManager::argv(const std::vector<std::string> &argv) {
+  m_argv = argv;
 }
 
 bool WorkerManager::start(int concurrency, bool force) {

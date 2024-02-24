@@ -1,4 +1,4 @@
-#!/usr/bin/env -S pipy --skip-redundant-arguments --skip-unknown-options
+#!/usr/bin/env -S pipy --skip-redundant-arguments --skip-unknown-arguments
 
 var config = YAML.decode(pipy.load('config.yml'))
 

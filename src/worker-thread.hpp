@@ -121,7 +121,7 @@ public:
   void enable_graph(bool b) { m_graph_enabled = b; }
   void on_done(const std::function<void()> &cb) { m_on_done = cb; }
   void on_ended(const std::function<void()> &cb) { m_on_ended = cb; }
-  void argv(int argc, char *argv[]);
+  void argv(const std::vector<std::string> &argv);
   bool started() const { return !m_worker_threads.empty(); }
   bool start(int concurrency = 1, bool force = false);
   auto status() -> Status&;

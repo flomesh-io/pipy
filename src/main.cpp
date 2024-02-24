@@ -562,7 +562,7 @@ int main(int argc, char *argv[]) {
             }
 
             auto &wm = WorkerManager::get();
-            wm.argv(argc, argv);
+            wm.argv(opts.arguments);
             wm.enable_graph(!opts.no_graph);
 
             if (is_repo || is_remote) {
