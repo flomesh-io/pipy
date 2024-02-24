@@ -59,7 +59,7 @@ public:
   bool        reuse_port = false;
   int         threads = 1;
   std::string log_file;
-  Log::Level  log_level = Log::ERROR;
+  Log::Level  log_level = Log::INFO;
   size_t      log_history_limit = 1000;
   int         log_topics = 0;
   bool        log_local_only = false;

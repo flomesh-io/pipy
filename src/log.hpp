@@ -41,8 +41,8 @@ public:
   enum Level {
     DEBUG,
     WARN,
-    ERROR,
     INFO,
+    ERROR,
   };
 
   enum Topic {

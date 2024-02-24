@@ -41,7 +41,7 @@ namespace pipy {
 //
 
 static std::string s_log_filename;
-static Log::Level s_log_level = Log::ERROR;
+static Log::Level s_log_level = Log::INFO;
 static int s_log_topics = 0;
 static bool s_log_local_only = false;
 
@@ -51,8 +51,8 @@ thread_local static Data::Producer s_dp("Log");
 static const char *s_levels[] = {
   "[DBG]", // DEBUG
   "[WRN]", // WARN
-  "[ERR]", // ERROR
   "[INF]", // INFO
+  "[ERR]", // ERROR
 };
 
 static void logf(Log::Level level, const char *fmt, va_list ap) {
