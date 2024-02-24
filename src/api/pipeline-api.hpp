@@ -100,6 +100,7 @@ public:
   void handle_message(pjs::Function *handler, pjs::Object *options);
   void handle_start(pjs::Function *handler);
   void handle_tls_client_hello(pjs::Function *handler);
+  void insert(pjs::Object *events);
   void loop();
   void mux(pjs::Function *session_selector, pjs::Object *options);
   void mux_fcgi(pjs::Function *session_selector, pjs::Object *options);

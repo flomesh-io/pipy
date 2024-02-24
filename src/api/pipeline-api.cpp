@@ -43,6 +43,7 @@
 #include "filters/fcgi.hpp"
 #include "filters/fork.hpp"
 #include "filters/http.hpp"
+#include "filters/insert.hpp"
 #include "filters/loop.hpp"
 #include "filters/mime.hpp"
 #include "filters/mqtt.hpp"
@@ -315,6 +316,10 @@ void PipelineDesigner::handle_start(pjs::Function *callback) {
 
 void PipelineDesigner::handle_tls_client_hello(pjs::Function *callback) {
   append_filter(new tls::OnClientHello(callback));
+}
+
+void PipelineDesigner::insert(pjs::Object *events) {
+  append_filter(new Insert(events));
 }
 
 void PipelineDesigner::loop() {
@@ -929,6 +934,13 @@ template<> void ClassDef<PipelineDesigner>::init() {
     Function *handler;
     if (!ctx.arguments(1, &handler)) return;
     obj->handle_tls_client_hello(handler);
+  });
+
+  // PipelineDesigner.insert
+  filter("insert", [](Context &ctx, PipelineDesigner *obj) {
+    Object *events = nullptr;
+    if (!ctx.arguments(1, &events)) return;
+    obj->insert(events);
   });
 
   // PipelineDesigner.loop
