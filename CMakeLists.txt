@@ -281,6 +281,7 @@ add_executable(pipy
   src/filters/produce.cpp
   src/filters/proxy-protocol.cpp
   src/filters/read.cpp
+  src/filters/repeat.cpp
   src/filters/replace.cpp
   src/filters/replace-body.cpp
   src/filters/replace-event.cpp

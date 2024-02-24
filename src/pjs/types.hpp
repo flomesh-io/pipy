@@ -2963,6 +2963,7 @@ public:
   public:
     auto resolved() -> Function*;
     auto rejected() -> Function*;
+    void discard() { m_cb = nullptr; }
     virtual void on_resolved(const Value &value) { if (m_cb) m_cb(RESOLVED, value); }
     virtual void on_rejected(const Value &error) { if (m_cb) m_cb(REJECTED, error); }
   protected:

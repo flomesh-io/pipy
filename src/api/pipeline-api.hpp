@@ -108,6 +108,7 @@ public:
   void pipe(const pjs::Value &target, pjs::Object *target_map, pjs::Object *init_args);
   void pipe_next();
   void print();
+  void repeat(pjs::Function *condition);
   void replace(Event::Type type, pjs::Object *replacement);
   void replace_body(pjs::Object *replacement, pjs::Object *options);
   void replace_message(pjs::Object *replacement, pjs::Object *options);
