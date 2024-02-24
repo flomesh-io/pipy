@@ -180,7 +180,10 @@ void Module::execute(Context &ctx, int l, Tree::LegacyImports *imports, Value &r
   Stmt::Result res;
   m_tree->execute(ctx, res);
   if (res.is_throw()) {
+    auto s = res.value.to_string();
+    ctx.error(s->str());
     ctx.backtrace("(root)");
+    s->release();
     return;
   }
 

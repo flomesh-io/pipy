@@ -2045,6 +2045,10 @@ auto Error::name() const -> Str* {
   return s_error;
 }
 
+auto Error::to_string() const -> std::string {
+  return m_message->str();
+}
+
 //
 // Promise
 //

@@ -486,6 +486,7 @@ void Throw::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *im
 void Throw::execute(Context &ctx, Result &result) {
   if (m_expr) {
     if (m_expr->eval(ctx, result.value)) {
+      ctx.backtrace(source(), line(), column());
       result.set_throw();
     } else {
       result.value.set(pjs::Error::make(ctx.error()));

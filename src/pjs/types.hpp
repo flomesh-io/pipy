@@ -3582,6 +3582,8 @@ private:
 
   Error(const Context::Error &error);
 
+  virtual auto to_string() const -> std::string;
+
   Ref<Str> m_message;
   Ref<Error> m_cause;
   Ref<Str> m_stack;
