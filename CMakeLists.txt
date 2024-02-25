@@ -221,6 +221,7 @@ add_executable(pipy
   src/api/os.cpp
   src/api/pipeline-api.cpp
   src/api/pipy.cpp
+  src/api/print.cpp
   src/api/protobuf.cpp
   src/api/resp.cpp
   src/api/stats.cpp

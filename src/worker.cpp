@@ -53,6 +53,7 @@
 #include "api/os.hpp"
 #include "api/pipy.hpp"
 #include "api/pipeline-api.hpp"
+#include "api/print.hpp"
 #include "api/protobuf.hpp"
 #include "api/resp.hpp"
 #include "api/sqlite.hpp"
@@ -188,6 +189,12 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // pipy
   variable("pipy", class_of<Pipy>());
+
+  // print
+  variable("print", class_of<PrintFunction>());
+
+  // println
+  variable("println", class_of<PrintlnFunction>());
 
   // pipeline
   variable("pipeline", class_of<PipelineLayoutWrapper::Constructor>());
