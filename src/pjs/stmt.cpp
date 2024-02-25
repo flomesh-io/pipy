@@ -57,6 +57,10 @@ thread_local static ConstStr s_default("default");
 // Block
 //
 
+bool Block::is_expression() const {
+  return m_stmts.size() == 1 && m_stmts.front()->is_expression();
+}
+
 bool Block::declare(Module *module, Tree::Scope &scope, Error &error) {
   Tree::Scope s(Tree::Scope::BLOCK, &scope);
   for (const auto &p : m_stmts) {

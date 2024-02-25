@@ -46,6 +46,7 @@ public:
   auto tree() const -> Stmt* { return m_tree.get(); }
   auto scope() -> Tree::Scope& { return m_scope; }
   auto exports_object() const -> Object* { return m_exports_object; }
+  bool is_expression() const { return m_tree->is_expression(); }
 
   void load(const std::string &name, const std::string &source);
   auto add_import(Str *name, Str *src_name, Str *path) -> Tree::Import*;

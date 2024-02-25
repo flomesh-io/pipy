@@ -69,6 +69,7 @@ public:
 
   Stmt();
   virtual ~Stmt();
+  virtual bool is_expression() const { return false; }
   virtual void execute(Context &ctx, Result &result) {};
   virtual void dump(std::ostream &out, const std::string &indent = "") = 0;
 
@@ -99,6 +100,7 @@ public:
   Block() {}
   Block(std::list<std::unique_ptr<Stmt>> &&stmts) : m_stmts(std::move(stmts)) {}
 
+  virtual bool is_expression() const override;
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
   virtual void resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
@@ -134,6 +136,7 @@ class Evaluate : public Exportable {
 public:
   Evaluate(Expr *expr) : m_expr(expr) {}
 
+  virtual bool is_expression() const override { return true; }
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
   virtual void resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;

@@ -443,15 +443,9 @@ void WorkerThread::main() {
   bool started = !Net::context().stopped();
 
   if (!started) {
-    if (!result.is_empty() && !result.is<Configuration>()) {
+    if (mod->is_expression() && !result.is<Configuration>()) {
       if (result.is_string()) {
         std::cout << result.s()->str();
-      } else if (result.is<Data>()) {
-        result.as<Data>()->to_chunks(
-          [&](const uint8_t *ptr, int len) {
-            std::cout.write((const char *)ptr, len);
-          }
-        );
       } else {
         Data buf;
         Console::dump(result, buf);
