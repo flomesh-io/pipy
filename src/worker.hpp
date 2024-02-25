@@ -61,7 +61,6 @@ public:
 
   auto root() const -> Module* { return m_root; }
   auto root_fiber() const -> pjs::Fiber* { return m_root_fiber; }
-  auto thread() const -> Thread* { return m_thread; }
   bool handling_signal(int sig);
   auto find_js_module(const std::string &path) -> JSModule*;
   auto load_js_module(const std::string &path) -> JSModule*;
@@ -160,7 +159,6 @@ private:
   Module* m_root = nullptr;
   pjs::Ref<pjs::Fiber> m_root_fiber;
   pjs::Ref<PipelineLoadBalancer> m_pipeline_lb;
-  pjs::Ref<Thread> m_thread;
   std::set<PipelineLayout*> m_pipeline_templates;
   std::vector<Module*> m_legacy_modules;
   std::map<std::string, JSModule*> m_js_module_map;

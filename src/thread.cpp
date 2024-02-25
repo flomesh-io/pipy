@@ -24,6 +24,30 @@
  */
 
 #include "thread.hpp"
+#include "worker-thread.hpp"
+
+namespace pipy {
+
+auto Thread::current() -> Thread* {
+  thread_local static pjs::Ref<Thread> s_thread;
+  if (!s_thread) s_thread = Thread::make();
+  return s_thread;
+}
+
+auto Thread::index() const -> int {
+  if (auto wt = WorkerThread::current()) {
+    return wt->index();
+  } else {
+    return -1;
+  }
+}
+
+auto Thread::concurrency() const -> int {
+  auto &wm = WorkerManager::get();
+  return wm.concurrency();
+}
+
+} // namespace pipy
 
 namespace pjs {
 

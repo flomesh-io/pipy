@@ -201,7 +201,7 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // __thread
   accessor("__thread", [](Object *obj, Value &ret) {
-    ret.set(obj->as<pipy::Global>()->worker()->thread());
+    ret.set(Thread::current());
   });
 
 }
@@ -220,7 +220,6 @@ Worker::Worker(PipelineLoadBalancer *plb, bool is_graph_enabled)
   : pjs::Instance(Global::make(this))
   , m_root_fiber(new_fiber())
   , m_pipeline_lb(plb)
-  , m_thread(Thread::make(WorkerThread::current()))
   , m_graph_enabled(is_graph_enabled)
 {
   Log::debug(Log::ALLOC, "[worker   %p] ++", this);

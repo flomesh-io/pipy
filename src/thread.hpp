@@ -27,7 +27,6 @@
 #define THREAD_HPP
 
 #include "pjs/pjs.hpp"
-#include "worker-thread.hpp"
 
 namespace pipy {
 
@@ -39,13 +38,13 @@ class WorkerThread;
 
 class Thread : public pjs::ObjectTemplate<Thread> {
 public:
-  auto index() const -> int { return m_worker_thread->index(); }
-  auto concurrency() const -> int { return m_worker_thread->manager()->concurrency(); }
+  static auto current() -> Thread*;
+
+  auto index() const -> int;
+  auto concurrency() const -> int;
 
 private:
-  Thread(WorkerThread *worker_thread) : m_worker_thread(worker_thread) {}
-
-  WorkerThread* m_worker_thread;
+  Thread() {}
 
   friend class pjs::ObjectTemplate<Thread>;
 };

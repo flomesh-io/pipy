@@ -29,6 +29,7 @@
 #include "context.hpp"
 #include "worker.hpp"
 #include "worker-thread.hpp"
+#include "thread.hpp"
 #include "status.hpp"
 #include "net.hpp"
 #include "listener.hpp"
@@ -555,6 +556,10 @@ template<> void ClassDef<Pipy>::init() {
 
   accessor("argv", [](Object *, Value &ret) {
     ret.set(s_argv.get());
+  });
+
+  accessor("thread", [](Object *, Value &ret) {
+    ret.set(Thread::current());
   });
 
   method("fork", [](Context &ctx, Object *obj, Value &ret) {
