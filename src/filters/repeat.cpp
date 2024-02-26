@@ -69,6 +69,7 @@ void Repeat::reset() {
   m_buffer.clear();
   m_timer.cancel();
   m_pipeline = nullptr;
+  m_outputting = false;
   m_restarting = false;
   m_ended = false;
 }
@@ -120,28 +121,38 @@ void Repeat::on_reply(Event *evt) {
       end();
     }
   } else {
+    m_outputting = true;
     Filter::output(evt);
+    m_outputting = false;
   }
 }
 
 void Repeat::restart() {
-  if (!m_restarting) {
-    m_restarting = true;
-    m_timer.schedule(0, [this]() {
-      InputContext ic;
-      auto p = sub_pipeline(0, false);
-      auto i = p->input();
-      m_pipeline = p;
-      m_restarting = false;
-      p->chain(EventSource::reply());
-      p->start();
-      m_buffer.iterate(
-        [&](Event *evt) {
-          i->input(evt->clone());
-        }
-      );
-    });
+  if (m_outputting) {
+    if (!m_restarting) {
+      m_restarting = true;
+      m_timer.schedule(0, [this]() {
+        m_restarting = false;
+        repeat();
+      });
+    }
+  } else {
+    repeat();
   }
+}
+
+void Repeat::repeat() {
+  auto p = sub_pipeline(0, false);
+  auto i = p->input();
+  m_pipeline = p;
+  m_restarting = false;
+  p->chain(EventSource::reply());
+  p->start();
+  m_buffer.iterate(
+    [&](Event *evt) {
+      i->input(evt->clone());
+    }
+  );
 }
 
 void Repeat::end() {

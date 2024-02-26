@@ -55,10 +55,12 @@ private:
   pjs::Ref<StreamEnd> m_eos;
   EventBuffer m_buffer;
   Timer m_timer;
+  bool m_outputting = false;
   bool m_restarting = false;
   bool m_ended = false;
 
   void restart();
+  void repeat();
   void end();
 };
 
