@@ -96,10 +96,27 @@ void WorkerThread::status(const std::function<void(Status&)> &cb) {
   );
 }
 
+void WorkerThread::stats(stats::MetricData &metric_data, const std::vector<std::string> &names, const std::function<void()> &cb) {
+  m_net->post(
+    [&, cb]() {
+      stats::MetricSet ms;
+      for (const auto &name : names) {
+        pjs::Ref<pjs::Str> s(pjs::Str::make(name));
+        if (auto m = stats::Metric::local().get(s)) {
+          ms.add(m);
+        }
+      }
+      ms.collect();
+      metric_data.update(ms);
+      cb();
+    }
+  );
+}
+
 void WorkerThread::stats(stats::MetricData &metric_data, const std::function<void()> &cb) {
   m_net->post(
     [&, cb]() {
-      stats::Metric::local().collect_all();
+      stats::Metric::local().collect();
       metric_data.update(stats::Metric::local());
       cb();
     }
@@ -109,7 +126,7 @@ void WorkerThread::stats(stats::MetricData &metric_data, const std::function<voi
 void WorkerThread::stats(const std::function<void(stats::MetricData&)> &cb) {
   m_net->post(
     [=]() {
-      stats::Metric::local().collect_all();
+      stats::Metric::local().collect();
       m_metric_data.update(stats::Metric::local());
       cb(m_metric_data);
     }
@@ -693,6 +710,15 @@ bool WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) 
   return true;
 }
 
+void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb, const std::vector<std::string> &names) {
+  auto req = new StatsRequest(this, names, cb);
+  Net::main().post(
+    [=]() {
+      req->start();
+    }
+  );
+}
+
 void WorkerManager::recycle() {
   for (auto *wt : m_worker_threads) {
     wt->recycle();
@@ -819,6 +845,49 @@ void WorkerManager::on_thread_ended(int index) {
         m_on_ended();
       }
     );
+  }
+}
+
+//
+// WorkerManager::StatsRequest
+//
+
+void WorkerManager::StatsRequest::start() {
+  if (m_manager->m_querying_stats ||
+      m_manager->m_reloading ||
+      m_manager->m_worker_threads.empty()
+  ) {
+    m_from->post(
+      [this]() {
+        stats::MetricDataSum sum;
+        m_cb(sum);
+      }
+    );
+  } else {
+    m_manager->m_querying_stats = true;
+    for (auto *wt : m_manager->m_worker_threads) {
+      wt->stats(
+        m_threads[wt->index()],
+        m_names,
+        [=]() {
+          m_from->post(
+            [=]() {
+              auto size = m_threads.size();
+              if (++m_counter == size) {
+                stats::MetricDataSum sum;
+                for (size_t i = 0; i < size; i++) {
+                  sum.sum(m_threads[i], i == 0);
+                }
+                m_cb(sum);
+                m_manager->m_querying_stats = false;
+                m_manager->check_reloading();
+                delete this;
+              }
+            }
+          );
+        }
+      );
+    }
   }
 }
 

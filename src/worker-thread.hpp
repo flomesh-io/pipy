@@ -66,8 +66,10 @@ public:
   bool start(bool force);
   void status(Status &status, const std::function<void()> &cb);
   void status(const std::function<void(Status&)> &cb);
+  void stats(stats::MetricData &metric_data, const std::vector<std::string> &names, const std::function<void()> &cb);
   void stats(stats::MetricData &metric_data, const std::function<void()> &cb);
   void stats(const std::function<void(stats::MetricData&)> &cb);
+  void stats(const std::vector<std::string> &names, const std::function<void(stats::MetricData&)> &cb);
   void recycle();
   void reload(const std::function<void(bool)> &cb);
   void reload_done(bool ok);
@@ -128,6 +130,7 @@ public:
   bool status(const std::function<void(Status&)> &cb);
   auto stats() -> stats::MetricDataSum&;
   bool stats(const std::function<void(stats::MetricDataSum&)> &cb);
+  void stats(const std::function<void(stats::MetricDataSum&)> &cb, const std::vector<std::string> &names);
   void recycle();
   void reload();
   bool admin(pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond);
@@ -136,6 +139,29 @@ public:
   bool stop(bool force = false);
 
 private:
+  class StatsRequest {
+  public:
+    StatsRequest(
+      WorkerManager *manager,
+      const std::vector<std::string> &names,
+      const std::function<void(stats::MetricDataSum&)> &cb
+    ) : m_manager(manager)
+      , m_from(&Net::current())
+      , m_names(names)
+      , m_threads(manager->m_worker_threads.size())
+      , m_cb(cb) {}
+
+    void start();
+
+  private:
+    WorkerManager* m_manager;
+    Net* m_from;
+    std::vector<std::string> m_names;
+    std::vector<stats::MetricData> m_threads;
+    int m_counter = 0;
+    std::function<void(stats::MetricDataSum&)> m_cb;
+  };
+
   class AdminRequest : public List<AdminRequest>::Item {
   public:
     AdminRequest(WorkerManager *manager, pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond);

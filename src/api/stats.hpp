@@ -30,6 +30,7 @@
 #include "api/algo.hpp"
 #include "api/json.hpp"
 #include "data.hpp"
+#include "signal.hpp"
 
 #include <chrono>
 #include <memory>
@@ -59,11 +60,14 @@ public:
   auto shape() const -> pjs::Str* { return m_root ? m_root->m_shape : m_shape; }
   auto type() -> pjs::Str*;
   auto dimensions() -> int { return get_dim(); }
+  auto value(int dim) -> double { return get_value(dim); }
+  auto submetrics() -> pjs::Array*;
   auto with_labels(pjs::Str *const *labels, int count) -> Metric*;
   void zero_all();
   void clear();
 
   virtual void zero() = 0;
+  virtual void collect() {}
 
 protected:
   Metric(pjs::Str *name, pjs::Array *label_names, MetricSet *set = nullptr);
@@ -79,7 +83,6 @@ protected:
   virtual auto get_dim() -> int { return 1; }
   virtual auto get_value(int dim) -> double = 0;
   virtual void set_value(int dim, double value) = 0;
-  virtual void collect() {}
 
 private:
   auto get_sub(pjs::Str **labels) -> Metric*;
@@ -99,6 +102,7 @@ private:
 
   friend class pjs::ObjectTemplate<Metric>;
   friend class MetricData;
+  friend class MetricDataSum;
   friend class MetricSet;
 };
 
@@ -109,15 +113,15 @@ private:
 class MetricSet {
 public:
   auto get(pjs::Str *name) -> Metric*;
-  void collect_all();
+  void add(Metric *metric);
   void clear();
+  void collect();
 
 private:
   std::vector<pjs::Ref<Metric>> m_metrics;
   std::unordered_map<pjs::Ref<pjs::Str>, int> m_metric_map;
 
   auto get(int i) -> Metric*;
-  void add(Metric *metric);
 
   friend class Metric;
   friend class MetricData;
@@ -283,6 +287,7 @@ public:
 
   void sum(MetricData &data, bool initial);
   void serialize(Data::Builder &db, bool initial);
+  auto to_object() -> pjs::Object*;
   void to_prometheus(const std::function<void(const void *, size_t)> &out) const;
 
 private:
@@ -327,6 +332,8 @@ private:
   List<Entry> m_entries;
   std::unordered_map<pjs::Str*, Entry*> m_entry_map;
   uint64_t m_version = 0;
+
+  static void create_metrics(Entry *ent, Node *node, Metric *metric);
 
   friend class MetricHistory;
 };
@@ -380,6 +387,27 @@ private:
 
   void step();
   void serialize(Data::Builder &db, Entry *entry, Node *node, int level, bool recursive);
+};
+
+//
+// MetricSumRequest
+//
+
+class MetricSumRequest {
+public:
+  MetricSumRequest(const std::vector<std::string> &names)
+    : m_names(names)
+    , m_signal([this]() { on_finish(); }) {}
+
+  auto start() -> pjs::Promise*;
+
+private:
+  std::vector<std::string> m_names;
+  pjs::Ref<pjs::Promise::Settler> m_settler;
+  pjs::Ref<pjs::Object> m_metrics;
+  Signal m_signal;
+
+  void on_finish();
 };
 
 //
@@ -494,8 +522,12 @@ private:
 
 class Histogram : public MetricTemplate<Histogram> {
 public:
+  static auto encode_type(pjs::Array *buckets) -> std::string;
+  static auto decode_type(const std::string &type) -> pjs::Array*;
+
   virtual void zero() override;
 
+  auto percentile() const -> algo::Percentile* { return m_percentile; }
   void observe(double n);
 
 private:

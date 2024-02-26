@@ -25,6 +25,7 @@
 
 #include "stats.hpp"
 #include "worker.hpp"
+#include "worker-thread.hpp"
 #include "utils.hpp"
 #include "log.hpp"
 
@@ -69,7 +70,7 @@
 namespace pipy {
 namespace stats {
 
-static std::string s_prefix_histogram("Histogram[");
+static const std::string s_prefix_histogram("Histogram[");
 thread_local static pjs::ConstStr s_str_Counter("Counter");
 thread_local static pjs::ConstStr s_str_Gauge("Gauge");
 thread_local static pjs::ConstStr s_str_count("count");
@@ -125,6 +126,14 @@ Metric::Metric(Metric *parent, pjs::Str **labels)
   parent->m_subs.emplace_back();
   parent->m_subs.back() = this;
   parent->m_sub_map[m_label] = this;
+}
+
+auto Metric::submetrics() -> pjs::Array* {
+  auto a = pjs::Array::make(m_subs.size());
+  for (size_t i = 0, n = m_subs.size(); i < n; i++) {
+    a->set(i, m_subs[i].get());
+  }
+  return a;
 }
 
 auto Metric::with_labels(pjs::Str *const *labels, int count) -> Metric* {
@@ -195,6 +204,17 @@ auto Metric::get_sub(int i) -> Metric* {
 // MetricSet
 //
 
+void MetricSet::add(Metric *metric) {
+  auto i = m_metric_map.find(metric->name());
+  if (i == m_metric_map.end()) {
+    m_metric_map[metric->name()] = m_metrics.size();
+    m_metrics.emplace_back();
+    m_metrics.back() = metric;
+  } else {
+    m_metrics[i->second] = metric;
+  }
+}
+
 auto MetricSet::get(pjs::Str *name) -> Metric* {
   auto i = m_metric_map.find(name);
   if (i == m_metric_map.end()) return nullptr;
@@ -209,26 +229,15 @@ auto MetricSet::get(int i) -> Metric* {
   }
 }
 
-void MetricSet::add(Metric *metric) {
-  auto i = m_metric_map.find(metric->name());
-  if (i == m_metric_map.end()) {
-    m_metric_map[metric->name()] = m_metrics.size();
-    m_metrics.emplace_back();
-    m_metrics.back() = metric;
-  } else {
-    m_metrics[i->second] = metric;
-  }
-}
-
-void MetricSet::collect_all() {
-  for (const auto &m : m_metrics) {
-    m->collect();
-  }
-}
-
 void MetricSet::clear() {
   m_metric_map.clear();
   m_metrics.clear();
+}
+
+void MetricSet::collect() {
+  for (const auto &m : m_metrics) {
+    m->collect();
+  }
 }
 
 //
@@ -957,6 +966,49 @@ void MetricDataSum::serialize(Data::Builder &db, bool initial) {
   db.push('}');
 }
 
+auto MetricDataSum::to_object() -> pjs::Object* {
+  MetricSet ms;
+  auto obj = pjs::Object::make();
+  for (const auto &p : m_entry_map) {
+    auto ent = p.second;
+    auto root = ent->root.get();
+    if (!root) continue;
+
+    pjs::Ref<pjs::Array> labels = pjs::Array::make();
+    for (const auto &l : utils::split(ent->shape->str(), '/')) {
+      labels->push(l);
+    }
+
+    Metric *m = nullptr;
+    if (ent->type == s_str_Counter) {
+      m = Counter::make(ent->name, labels, nullptr, &ms);
+    } else if (ent->type == s_str_Gauge) {
+      m = Gauge::make(ent->name, labels, nullptr, &ms);
+    } else if (utils::starts_with(ent->type->str(), s_prefix_histogram)) {
+      m = Histogram::make(ent->name, Histogram::decode_type(ent->type->str()), labels, &ms);
+    }
+
+    if (m) {
+      obj->set(ent->name, m);
+      create_metrics(ent, root, m);
+    }
+  }
+  return obj;
+}
+
+void MetricDataSum::create_metrics(Entry *ent, Node *node, Metric *metric) {
+  for (int i = 0, n = ent->dimensions; i < n; i++) {
+    metric->set_value(i, node->values[i]);
+  }
+  node->for_subs(
+    [&](Node *sub) {
+      auto k = sub->key.get();
+      auto m = metric->with_labels(&k, 1);
+      create_metrics(ent, sub, m);
+    }
+  );
+}
+
 void MetricDataSum::to_prometheus(const std::function<void(const void *, size_t)> &out) const {
   static const std::string s_prefix_TYPE("# TYPE ");
   static const std::string s_type_counter(" counter\n");
@@ -1250,6 +1302,29 @@ MetricHistory::Node::~Node() {
 }
 
 //
+// MetricSumRequest
+//
+
+auto MetricSumRequest::start() -> pjs::Promise* {
+  auto promise = pjs::Promise::make();
+  auto settler = pjs::Promise::Settler::make(promise);
+  m_settler = settler;
+  WorkerManager::get().stats(
+    [this](MetricDataSum &sum) {
+      m_metrics = sum.to_object();
+      m_signal.fire();
+    },
+    m_names
+  );
+  return promise;
+}
+
+void MetricSumRequest::on_finish() {
+  m_settler->resolve(m_metrics.get());
+  delete this;
+}
+
+//
 // Counter
 //
 
@@ -1344,6 +1419,48 @@ Histogram::Histogram(Metric *parent, pjs::Str **labels)
   m_percentile = algo::Percentile::make(root->m_buckets);
 }
 
+auto Histogram::encode_type(pjs::Array *buckets) -> std::string {
+  std::string type;
+  buckets->iterate_all(
+    [&](pjs::Value &v, int) {
+      if (type.empty()) {
+        type = s_prefix_histogram;
+      } else {
+        type += ',';
+      }
+      auto n = v.to_number();
+      if (std::isnan(n)) {
+        type += "\"NaN\"";
+      } else if (std::isinf(n)) {
+        type += n > 0 ? "\"Inf\"" : "\"-Inf\"";
+      } else {
+        char str[100];
+        auto len = pjs::Number::to_string(str, sizeof(str), v.to_number());
+        type += std::string(str, len);
+      }
+    }
+  );
+  type += ']';
+  return type;
+}
+
+auto Histogram::decode_type(const std::string &type) -> pjs::Array* {
+  auto p = type.find('[');
+  if (p == std::string::npos) return nullptr;
+  auto s = type.substr(p + 1);
+  if (s.length() > 0 && s.back() == ']') s.pop_back();
+  auto numbers = utils::split(s, ',');
+  auto buckets = pjs::Array::make(numbers.size());
+  auto i = 0;
+  for (const auto &n : numbers) {
+    if (n == "\"NaN\"") buckets->set(i++, std::numeric_limits<double>::quiet_NaN());
+    else if (n == "\"Inf\"") buckets->set(i++, std::numeric_limits<double>::infinity());
+    else if (n == "\"-Inf\"") buckets->set(i++, -std::numeric_limits<double>::infinity());
+    else buckets->set(i++, std::atof(n.c_str()));
+  }
+  return buckets;
+}
+
 void Histogram::zero() {
   m_sum = 0;
   m_count = 0;
@@ -1371,28 +1488,7 @@ void Histogram::value_of(pjs::Value &out) {
 }
 
 auto Histogram::get_type() -> pjs::Str* {
-  std::string type;
-  m_buckets->iterate_all(
-    [&](pjs::Value &v, int) {
-      if (type.empty()) {
-        type = "Histogram[";
-      } else {
-        type += ',';
-      }
-      auto n = v.to_number();
-      if (std::isnan(n)) {
-        type += "\"NaN\"";
-      } else if (std::isinf(n)) {
-        type += n > 0 ? "\"Inf\"" : "\"-Inf\"";
-      } else {
-        char str[100];
-        auto len = pjs::Number::to_string(str, sizeof(str), v.to_number());
-        type += std::string(str, len);
-      }
-    }
-  );
-  type += ']';
-  return pjs::Str::make(std::move(type));
+  return pjs::Str::make(encode_type(m_buckets));
 }
 
 auto Histogram::get_dim() -> int {
@@ -1438,6 +1534,34 @@ using namespace pipy::stats;
 template<> void ClassDef<Metric>::init() {
   accessor("name", [](Object *obj, Value &val) {
     val.set(obj->as<Metric>()->name());
+  });
+
+  accessor("type", [](Object *obj, Value &val) {
+    val.set(obj->as<Metric>()->type());
+  });
+
+  accessor("dimensions", [](Object *obj, Value &val) {
+    val.set(obj->as<Metric>()->dimensions());
+  });
+
+  accessor("label", [](Object *obj, Value &val) {
+    val.set(obj->as<Metric>()->label());
+  });
+
+  accessor("value", [](Object *obj, Value &val) {
+    auto m = obj->as<Metric>();
+    auto d = m->dimensions();
+    if (d > 1) {
+      auto a = Array::make(d);
+      for (int i = 0; i < d; i++) a->set(i, m->value(i));
+      val.set(a);
+    } else {
+      val.set(m->value(0));
+    }
+  });
+
+  method("submetrics", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<Metric>()->submetrics());
   });
 
   method("withLabels", [](Context &ctx, Object *obj, Value &ret) {
@@ -1564,6 +1688,10 @@ template<> void ClassDef<Histogram>::init() {
     }
   });
 
+  accessor("percentile", [](Object *obj, Value &val) {
+    val.set(obj->as<Histogram>()->percentile());
+  });
+
   method("zero", [](Context &ctx, Object *obj, Value &ret) {
     obj->as<Histogram>()->zero();
   });
@@ -1586,9 +1714,25 @@ template<> void ClassDef<Constructor<Histogram>>::init() {
 
 template<> void ClassDef<Stats>::init() {
   ctor();
+
   variable("Counter", class_of<Constructor<Counter>>());
   variable("Gauge", class_of<Constructor<Gauge>>());
   variable("Histogram", class_of<Constructor<Histogram>>());
+
+  method("sum", [](Context &ctx, Object *, Value &ret) {
+    Array *names = nullptr;
+    if (!ctx.arguments(1, &names)) return;
+    std::vector<std::string> vec;
+    names->iterate_all(
+      [&](Value &v, int) {
+        auto s = v.to_string();
+        vec.push_back(s->str());
+        s->release();
+      }
+    );
+    auto r = new MetricSumRequest(vec);
+    ret.set(r->start());
+  });
 }
 
 } // namespace pjs
