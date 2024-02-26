@@ -167,6 +167,7 @@ PooledClass::~PooledClass() {
 //
 
 thread_local const Ref<Str> Str::empty(Str::make(""));
+thread_local const Ref<Str> Str::space(Str::make(" "));
 thread_local const Ref<Str> Str::nan(Str::make("NaN"));
 thread_local const Ref<Str> Str::pos_inf(Str::make("Infinity"));
 thread_local const Ref<Str> Str::neg_inf(Str::make("-Infinity"));
@@ -1563,14 +1564,14 @@ template<> void ClassDef<String>::init() {
 
   method("padEnd", [](Context &ctx, Object *obj, Value &ret) {
     int length;
-    Str *padding = nullptr;
+    Str *padding = Str::space;
     if (!ctx.arguments(1, &length, &padding)) return;
     ret.set(obj->as<String>()->padEnd(length, padding));
   });
 
   method("padStart", [](Context &ctx, Object *obj, Value &ret) {
     int length;
-    Str *padding = nullptr;
+    Str *padding = Str::space;
     if (!ctx.arguments(1, &length, &padding)) return;
     ret.set(obj->as<String>()->padStart(length, padding));
   });

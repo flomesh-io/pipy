@@ -760,6 +760,7 @@ private:
 class Str : public Pooled<Str, RefCount<Str>> {
 public:
   thread_local static const Ref<Str> empty;
+  thread_local static const Ref<Str> space;
   thread_local static const Ref<Str> nan;
   thread_local static const Ref<Str> pos_inf;
   thread_local static const Ref<Str> neg_inf;
