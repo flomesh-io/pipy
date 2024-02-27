@@ -17,15 +17,16 @@ option(PIPY_BROTLI "external brotli location" "")
 option(PIPY_STATIC "statically link to libc" OFF)
 option(PIPY_LTO "enable LTO" ON)
 option(PIPY_USE_NTLS, "Use externally compiled TongSuo Crypto library instead of OpenSSL. Used with PIPY_OPENSSL" OFF)
+option(PIPY_USE_SYSTEM_ZLIB "Use system installed zlib" "")
 
 set(BUILD_SHARED_LIBS OFF)
 set(BUILD_TESTING OFF)
 
 if(MSVC)
   add_compile_options(/W0
-  $<$<CONFIG:>:/MT>
-  $<$<CONFIG:Debug>:/MTd>
-  $<$<CONFIG:Release>:/MT>
+    $<$<CONFIG:>:/MT>
+    $<$<CONFIG:Debug>:/MTd>
+    $<$<CONFIG:Release>:/MT>
   )
 endif(MSVC)
 
@@ -104,9 +105,15 @@ if(PIPY_ZLIB)
   set(ZLIB_INC_DIR ${PIPY_ZLIB}/include)
   set(ZLIB_LIB ${PIPY_ZLIB}/lib/${LIB_Z})
 else()
-  add_subdirectory(deps/zlib-1.3)
-  set(ZLIB_INC_DIR "${CMAKE_SOURCE_DIR}/deps/zlib-1.3" "${CMAKE_BINARY_DIR}/deps/zlib-1.3")
-  set(ZLIB_LIB zlibstatic)
+  if(PIPY_USE_SYSTEM_ZLIB)
+    SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+    find_package(ZLIB REQUIRED)
+    set(ZLIB_LIB -lz)
+  else(PIPY_USE_SYSTEM_ZLIB)
+    add_subdirectory(deps/zlib-1.3)
+    set(ZLIB_INC_DIR "${CMAKE_SOURCE_DIR}/deps/zlib-1.3" "${CMAKE_BINARY_DIR}/deps/zlib-1.3")
+    set(ZLIB_LIB zlibstatic)
+  endif(PIPY_USE_SYSTEM_ZLIB)
 endif()
 
 if(PIPY_OPENSSL)
@@ -181,7 +188,7 @@ if(NOT MSVC)
     -Wno-sign-compare
     -Wno-deprecated-declarations
   )
-endif(MSVC)
+endif()
 
 include_directories(
   "${CMAKE_SOURCE_DIR}/src"
@@ -194,10 +201,13 @@ include_directories(
   "${CMAKE_SOURCE_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/leveldb-1.23/include"
   "${CMAKE_SOURCE_DIR}/deps/sqlite-3.43.2"
-  "${ZLIB_INC_DIR}"
   "${OPENSSL_INC_DIR}"
   "${BROTLI_INC_DIR}"
 )
+
+if(NOT PIPY_USE_SYSTEM_ZLIB)
+  include_directories("${ZLIB_INC_DIR}")
+endif()
 
 add_subdirectory(test/benchmark/baseline)
 
@@ -353,7 +363,11 @@ add_custom_command(
 
 add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
 
-add_dependencies(pipy yajl_s expat ${ZLIB_LIB} OpenSSL ${BROTLI_LIB} GenVer)
+add_dependencies(pipy yajl_s expat OpenSSL ${BROTLI_LIB} GenVer)
+
+if(NOT PIPY_USE_SYSTEM_ZLIB)
+  add_dependencies(pipy ${ZLIB_LIB})
+endif()
 
 if(PIPY_GUI)
   add_definitions(-DPIPY_USE_GUI)
@@ -422,12 +436,17 @@ target_link_libraries(
   yajl_s
   yaml
   expat
-  ${ZLIB_LIB}
   ${OPENSSL_LIB_DIR}/${LIB_SSL}
   ${OPENSSL_LIB_DIR}/${LIB_CRYPTO}
   ${BROTLI_LIB}
   leveldb
 )
+
+if(NOT PIPY_USE_SYSTEM_ZLIB)
+  target_link_libraries(pipy ${ZLIB_LIB})
+else()
+  target_link_libraries(pipy -lz)
+endif()
 
 if(WIN32)
   target_link_libraries(pipy crypt32)

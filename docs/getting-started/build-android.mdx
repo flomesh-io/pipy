@@ -1,0 +1,74 @@
+---
+title: "Build for Android"
+---
+
+### Build from Sources
+
+Before building, the following prerequisites are required to be installed on your machine where you will be building Pipy:
+
+* Android NDK
+* CMake 3.0+
+* Ninja build
+* Node.js v12+ (only required if the builtin web UI is enabled)
+
+```sh
+$ git clone https://github.com/flomesh-io/pipy.git
+$ cd pipy
+```
+
+> Make sure `cmake` and `ninja` is in system PATH and you set environment variable `NDK` pointing to the root of installed Android NDK and `PIPY` pointing to cloned pipy source folder
+
+#### Build GUI (Optional)
+
+Perform this step if you want to build Pipy with builtin Web UI
+
+```sh
+$ npm install
+$ npm run build
+```
+
+#### Build OpenSSL
+
+```sh
+$ cd deps/openssl-3.2.0
+$ mkdir -p android && cd android
+$ ANDROID_TARGET_API=34
+$ ANDROID_TARGET_ABI=arm64-v8a
+$ OUTPUT=${PWD}/${ANDROID_TARGET_ABI}
+$ export ANDROID_NDK_ROOT=$NDK
+$ PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+$ ../config android-arm64 -D__ANDROID_API__=${ANDROID_TARGET_API} -static no-asm no-shared no-tests --prefix=${OUTPUT}
+$ make -j
+$ make install_sw
+```
+
+> Note: Adjust `ANDROID_TARGET_API` and `ANDROID_TARGET_ABI` to your specific needs
+
+### Build 
+
+```sh
+$ cd $PIPY
+$ mkdir build && cd build
+$ cmake -DCMAKE_TOOLCHAIN_FILE=${NDK}/build/cmake/android.toolchain.cmake \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-34 -DCMAKE_ANDROID_STL_TYPE=c++_static \
+  -DANDROID_ALLOW_UNDEFINED_SYMBOLS=TRUE \
+  -DPIPY_OPENSSL=${PIPY}/deps/openssl-3.2.0/android/arm64-v8a  \
+  -DPIPY_USE_SYSTEM_ZLIB=ON \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_FLAGS_RELEASE=-g0 \
+  -DPIPY_LTO=OFF  -GNinja .. 
+```
+
+Make sure `PIPY_OPENSSL` is pointing to the folder, where openssl was built in above step.
+
+> `PIPY_GUI` and `PIPY_SAMPLES` are turned on by default. if you don't want to include them, ensure you turn them off by providing
+`-DPIPY_GUI=OFF -DPIPY_SAMPLES=OFF` to the `cmake` command.
+
+Once cmake is done with configuration and generated of `ninja.build`
+
+```sh
+$ ninja
+```
+
+After successful compilation, `pipy` binary will be generated under `$PIPY/bin` folder.
