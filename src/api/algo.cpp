@@ -1216,9 +1216,10 @@ auto Percentile::calculate(int percentage) -> double {
   size_t total = m_sample_count * percentage / 100;
   size_t count = 0;
   for (size_t i = 0, n = m_buckets.size(); i < n; i++) {
-    count += m_buckets[i];
+    count += m_counts[i];
     if (count >= total) {
-      return m_buckets[i];
+      auto last = (i > 0 ? m_buckets[i-1] : 0);
+      return m_buckets[i] - (m_buckets[i] - last) * (count - total) / m_counts[i];
     }
   }
   return std::numeric_limits<double>::infinity();
