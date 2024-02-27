@@ -409,6 +409,7 @@ int main(int argc, char *argv[]) {
     Log::set_filename(opts.log_file);
     Log::set_level(opts.log_level);
     Log::set_topics(opts.log_topics);
+    Log::set_local_output(opts.log_local);
     Log::set_local_only(opts.log_local_only);
     Log::init();
     logging::Logger::set_history_length(opts.log_history_limit);

@@ -38,6 +38,12 @@ class Data;
 
 class Log {
 public:
+  enum Output {
+    OUTPUT_NULL,
+    OUTPUT_STDOUT,
+    OUTPUT_STDERR,
+  };
+
   enum Level {
     DEBUG,
     WARN,
@@ -69,6 +75,7 @@ public:
   static void set_filename(const std::string &filename);
   static void set_level(Level level);
   static void set_topics(int topics);
+  static void set_local_output(Output output);
   static void set_local_only(bool b);
   static bool is_enabled(Level level);
   static bool is_enabled(Topic topic);

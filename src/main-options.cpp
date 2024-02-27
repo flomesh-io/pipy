@@ -52,6 +52,7 @@ void MainOptions::show_help() {
   std::cout << "  --log-file=<filename>                Set the pathname of the log file" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --log-history-limit=<size>           Set size limit of log history" << std::endl;
+  std::cout << "  --log-local=<stdout|stderr|null>     Select local output for system log" << std::endl;
   std::cout << "  --log-local-only                     Do not send out system log" << std::endl;
   std::cout << "  --no-graph                           Do not print pipeline graphs to the log" << std::endl;
   std::cout << "  --no-status                          Do not report current status to the repo" << std::endl;
@@ -194,14 +195,16 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         else if (v == "warn") log_level = Log::WARN;
         else if (v == "error") log_level = Log::ERROR;
         else if (v == "info") log_level = Log::INFO;
-        else {
-          std::string msg("unknown log level: ");
-          throw std::runtime_error(msg + v);
-        }
+        else throw std::runtime_error("unknown log level: " + v);
       } else if (k == "--log-history-limit") {
         char *end;
         log_history_limit = std::strtol(v.c_str(), &end, 10);
         if (*end || log_history_limit < 0) throw std::runtime_error("--log-history-limit expects a non-negative number");
+      } else if (k == "--log-local") {
+        if (v == "null") log_local = Log::OUTPUT_NULL;
+        else if (v == "stdout") log_local = Log::OUTPUT_STDOUT;
+        else if (v == "stderr") log_local = Log::OUTPUT_STDERR;
+        else throw std::runtime_error("unknown log output: " + v);
       } else if (k == "--log-local-only") {
         log_local_only = true;
       } else if (k == "--no-graph") {

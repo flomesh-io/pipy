@@ -42,6 +42,7 @@ namespace pipy {
 
 static std::string s_log_filename;
 static Log::Level s_log_level = Log::INFO;
+static Log::Output s_log_local_output = Log::OUTPUT_STDERR;
 static int s_log_topics = 0;
 static bool s_log_local_only = false;
 
@@ -60,9 +61,12 @@ static void logf(Log::Level level, const char *fmt, va_list ap) {
   if (Log::is_enabled(level)) {
     char header[100], msg[1000];
     if (!s_logger || s_is_logging || s_log_local_only) {
-      Log::format_header(level, header, sizeof(header));
-      std::vsnprintf(msg, sizeof(msg), fmt, ap);
-      std::cerr << header << msg << std::endl;
+      if (s_log_local_output != Log::OUTPUT_NULL) {
+        Log::format_header(level, header, sizeof(header));
+        std::vsnprintf(msg, sizeof(msg), fmt, ap);
+        auto &out = (s_log_local_output == Log::OUTPUT_STDERR ? std::cerr : std::cout);
+        out << header << msg << std::endl;
+      }
     } else {
       s_is_logging = true;
       Data buf;
@@ -79,7 +83,9 @@ static void logf(Log::Level level, const char *fmt, va_list ap) {
 void Log::init() {
   s_logger = logging::TextLogger::make(pjs::Str::make("pipy_log"));
   s_logger->retain();
-  s_logger->add_target(new logging::Logger::StdoutTarget(true));
+  if (s_log_local_output != OUTPUT_NULL) {
+    s_logger->add_target(new logging::Logger::StdoutTarget(s_log_local_output == OUTPUT_STDERR));
+  }
   if (!s_log_filename.empty()) {
     pjs::Ref<pjs::Str> s(pjs::Str::make(s_log_filename));
     s_logger->add_target(new logging::Logger::FileTarget(s));
@@ -101,6 +107,10 @@ void Log::set_level(Level level) {
 
 void Log::set_topics(int topics) {
   s_log_topics = topics;
+}
+
+void Log::set_local_output(Output output) {
+  s_log_local_output = output;
 }
 
 void Log::set_local_only(bool b) {
@@ -190,12 +200,15 @@ auto Log::format_location(char *buf, size_t len, const pjs::Context::Location &l
 
 void Log::write(const Data &data) {
   if (s_log_local_only) {
-    for (const auto &c : data.chunks()) {
-      auto ptr = std::get<0>(c);
-      auto len = std::get<1>(c);
-      std::cerr.write(ptr, len);
+    if (s_log_local_output != OUTPUT_NULL) {
+      auto &out = (s_log_local_output == OUTPUT_STDERR ? std::cerr : std::cout);
+      for (const auto &c : data.chunks()) {
+        auto ptr = std::get<0>(c);
+        auto len = std::get<1>(c);
+        out.write(ptr, len);
+      }
+      out << std::endl;
     }
-    std::cerr << std::endl;
   } else {
     s_logger->write(data);
   }
@@ -203,7 +216,8 @@ void Log::write(const Data &data) {
 
 void Log::write(const std::string &data) {
   if (s_log_local_only) {
-    std::cerr << data << std::endl;
+    auto &out = (s_log_local_output == OUTPUT_STDERR ? std::cerr : std::cout);
+    out << data << std::endl;
   } else {
     Data buf;
     s_dp.push(&buf, data);
