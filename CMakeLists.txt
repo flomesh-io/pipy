@@ -436,17 +436,12 @@ target_link_libraries(
   yajl_s
   yaml
   expat
+  ${ZLIB_LIB}
   ${OPENSSL_LIB_DIR}/${LIB_SSL}
   ${OPENSSL_LIB_DIR}/${LIB_CRYPTO}
   ${BROTLI_LIB}
   leveldb
 )
-
-if(NOT PIPY_USE_SYSTEM_ZLIB)
-  target_link_libraries(pipy ${ZLIB_LIB})
-else()
-  target_link_libraries(pipy -lz)
-endif()
 
 if(WIN32)
   target_link_libraries(pipy crypt32)
