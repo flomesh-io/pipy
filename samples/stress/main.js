@@ -1,4 +1,4 @@
-#!/usr/bin/env -S pipy --skip-redundant-arguments --skip-unknown-arguments --log-level=error
+#!/usr/bin/env -S pipy --skip-redundant-arguments --skip-unknown-arguments --log-local=null
 
 var options = parseOptions({
   defaults: {
@@ -71,7 +71,6 @@ function parseOptions({ defaults, shorthands }) {
 if (options.args.length !== 1) {
   println('Usage: stress <options> <URL>')
   println('Options:')
-  println('  -h, --help                  Show usage info')
   println('  -c, --connections <number>  Number of connections')
   println('  -d, --duration    <number>  Duration of test in seconds')
   println('  -X, --method      <string>  HTTP request method such as GET, POST, ...')
