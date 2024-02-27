@@ -106,6 +106,13 @@ auto now() -> double {
   return double(ms);
 }
 
+auto now_since(double origin) -> double {
+  auto t0 = std::chrono::time_point<std::chrono::system_clock>(std::chrono::milliseconds((long long)origin));
+  auto t = std::chrono::system_clock::now();
+  auto us = std::chrono::duration_cast<std::chrono::microseconds>(t - t0).count();
+  return double(us) / 1000;
+}
+
 bool is_host_port(const std::string &str) {
   std::string host;
   int port;

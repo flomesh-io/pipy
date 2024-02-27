@@ -562,6 +562,10 @@ template<> void ClassDef<Pipy>::init() {
     ret.set(Thread::current());
   });
 
+  method("now", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(utils::now_since(Status::LocalInstance::since));
+  });
+
   method("fork", [](Context &ctx, Object *obj, Value &ret) {
     Function *func;
     if (!ctx.arguments(1, &func)) return;
