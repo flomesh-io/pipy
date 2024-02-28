@@ -460,7 +460,7 @@ void WorkerThread::main() {
   bool started = !Net::context().stopped();
 
   if (!started) {
-    if (mod->is_expression() && !result.is<Configuration>()) {
+    if (mod && mod->is_expression() && !result.is<Configuration>()) {
       if (result.is_string()) {
         std::cout << result.s()->str();
       } else {
