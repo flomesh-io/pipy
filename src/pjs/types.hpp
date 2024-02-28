@@ -116,8 +116,8 @@ public:
   T& at(size_t i) { return *(data() + i); }
 
   operator T*() { return data(); }
-  T* operator + (ssize_t n) { return data() + n; }
-  T& operator [](ssize_t i) { return at(i); }
+  T* operator + (int n) { return data() + n; }
+  T& operator [](int i) { return at(i); }
 
 private:
   size_t m_size;
