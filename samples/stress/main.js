@@ -110,20 +110,13 @@ var request = new Message(
   payload > 0 ? 'x'.repeat(payload) : null
 )
 
-var connections = Array(options['--connections']).fill().map(
-  function () {
-    var resolve
-    var promise = new Promise(r => resolve = r)
-    return { promise, resolve }
-  }
-)
-
+var connections = options['--connections']
 var duration = options['--duration']
 var endTime = Date.now() + options['--duration'] * 1000
 
 if (pipy.thread.id === 0) {
   println('Stress testing', url.href)
-  println(`Running ${pipy.thread.concurrency} threads for ${duration} seconds with ${connections.length} connections each`)
+  println(`Running ${pipy.thread.concurrency} threads for ${duration} seconds with ${connections} connections each`)
 }
 
 var counts = new stats.Counter('counts', ['status'])
@@ -137,18 +130,21 @@ var latency = new stats.Histogram('latency', [
   Number.POSITIVE_INFINITY
 ])
 
+var stopAll
+var stopPromise = new Promise(r => stopAll = r)
+
 var $time
 var $conn
 
 pipeline($=>$
   .onStart(request)
-  .fork(connections).to($=>$
-    .onStart(c => void ($conn = c))
+  .forkJoin(Array(connections)).to($=>$
+    .onStart((_, i) => void ($conn = i))
     .encodeHTTPRequest()
     .repeat(() => Date.now() < endTime).to($=>$
       .handleMessageStart(() => void ($time = pipy.now()))
       .mux(() => $conn).to($=>$
-        .insert(() => $conn.promise.then(new StreamEnd))
+        .insert(() => stopPromise.then(new StreamEnd))
         .pipe(url.protocol === 'https:' ? tls : tcp)
         .connect(`${url.hostname}:${url.port}`)
         .decodeHTTPResponse()
@@ -162,10 +158,11 @@ pipeline($=>$
       )
       .replaceMessage(new StreamEnd)
     )
-    .handleStreamEnd(() => $conn.resolve())
   )
-  .wait(() => Promise.all(connections.map(c => c.promise)))
-  .replaceMessage(new StreamEnd)
+  .replaceStreamStart(() => {
+    stopAll()
+    return new StreamEnd
+  })
 
 ).spawn().then(
   function () {

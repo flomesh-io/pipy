@@ -80,24 +80,14 @@ var endPort = ports[1] || 65535
 var currentPort = startPort
 var timeout = options['--timeout']
 
-var $session
 var $port
 var $data
-
-var sessions = new Array(options['--concurrency']).fill().map(
-  function () {
-    var resolve
-    var promise = new Promise(r => resolve = r)
-    return { promise, resolve }
-  }
-)
 
 var results = []
 
 pipeline($=>$
   .onStart(new Data)
-  .fork(sessions).to($=>$
-    .onStart(s => void ($session = s))
+  .forkJoin(Array(options['--concurrency'])).to($=>$
     .repeat(() => currentPort <= endPort).to($=>$
       .onStart(() => {
         $port = currentPort++
@@ -122,9 +112,7 @@ pipeline($=>$
         }
       )
     )
-    .handleStreamEnd(() => $session.resolve())
   )
-  .wait(() => Promise.all(sessions.map(s => s.promise)))
   .replaceStreamStart(new StreamEnd)
 
 ).spawn().then(() => {
