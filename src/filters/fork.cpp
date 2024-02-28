@@ -35,17 +35,25 @@ namespace pipy {
 // Fork
 //
 
-Fork::Fork()
+Fork::Fork() : m_mode(FORK)
 {
 }
 
 Fork::Fork(const pjs::Value &init_arg)
-  : m_init_arg(init_arg)
+  : m_mode(FORK)
+  , m_init_arg(init_arg)
+{
+}
+
+Fork::Fork(Mode mode, const pjs::Value &init_arg)
+  : m_mode(mode)
+  , m_init_arg(init_arg)
 {
 }
 
 Fork::Fork(const Fork &r)
   : Filter(r)
+  , m_mode(r.m_mode)
   , m_init_arg(r.m_init_arg)
 {
 }
@@ -55,8 +63,20 @@ Fork::~Fork() {
 
 void Fork::dump(Dump &d) {
   Filter::dump(d);
-  d.name = "fork";
-  d.out_type = Dump::OUTPUT_FROM_SELF;
+  switch (m_mode) {
+    case JOIN:
+      d.name = "forkJoin";
+      d.out_type = Dump::OUTPUT_FROM_SUBS;
+      break;
+    case RACE:
+      d.name = "forkRace";
+      d.out_type = Dump::OUTPUT_FROM_SUBS;
+      break;
+    default:
+      d.name = "fork";
+      d.out_type = Dump::OUTPUT_FROM_SELF;
+      break;
+  }
 }
 
 auto Fork::clone() -> Filter* {
@@ -65,42 +85,80 @@ auto Fork::clone() -> Filter* {
 
 void Fork::reset() {
   Filter::reset();
-  if (m_pipelines) {
-    m_pipelines->free();
-    m_pipelines = nullptr;
+  if (m_branches) {
+    m_branches->free();
+    m_branches = nullptr;
   }
+  m_buffer.clear();
+  m_counter = 0;
+  m_waiting = false;
 }
 
 void Fork::process(Event *evt) {
-  if (!m_pipelines) {
+  if (!m_branches) {
     pjs::Value init_arg;
     if (!eval(m_init_arg, init_arg)) return;
     if (init_arg.is_array()) {
       auto arr = init_arg.as<pjs::Array>();
       auto len = arr->length();
-      m_pipelines = pjs::PooledArray<pjs::Ref<Pipeline>>::make(len);
+      m_branches = pjs::PooledArray<Branch>::make(len);
+      if (m_mode != FORK) m_waiting = true;
       for (int i = 0; i < len; i++) {
+        auto pipeline = sub_pipeline(0, true);
+        auto &branch = m_branches->at(i);
+        branch.fork = this;
+        branch.pipeline = pipeline;
         pjs::Value args[2];
         arr->get(i, args[0]);
         args[1].set(i);
-        auto pipeline = sub_pipeline(0, true)->start(2, args);
-        m_pipelines->at(i) = pipeline;
+        pipeline->chain(branch.input());
+        pipeline->start(2, args);
       }
     } else {
-      m_pipelines = pjs::PooledArray<pjs::Ref<Pipeline>>::make(1);
+      m_branches = pjs::PooledArray<Branch>::make(1);
       auto pipeline = sub_pipeline(0, false)->start(1, &init_arg);
-      m_pipelines->at(0) = pipeline;
+      auto &branch = m_branches->at(0);
+      branch.fork = this;
+      branch.pipeline = pipeline;
+      pipeline->start(1, &init_arg);
     }
   }
 
-  if (m_pipelines) {
-    for (int i = 0; i < m_pipelines->size(); i++) {
-      auto out = m_pipelines->at(i)->input();
-      output(evt->clone(), out);
+  if (m_branches) {
+    for (int i = 0; i < m_branches->size(); i++) {
+      m_branches->at(i).pipeline->input()->input(evt->clone());
     }
   }
 
-  output(evt);
+  if (m_waiting) {
+    m_buffer.push(evt);
+  } else {
+    Filter::output(evt);
+  }
+}
+
+void Fork::on_branch_end(Branch *branch) {
+  m_counter++;
+  if (m_mode == JOIN) {
+    if (m_counter >= m_branches->size()) {
+      m_waiting = false;
+    }
+  } else {
+    m_waiting = false;
+  }
+  if (!m_waiting) {
+    m_buffer.flush(
+      [this](Event *evt) {
+        Filter::output(evt);
+      }
+    );
+  }
+}
+
+void Fork::Branch::on_event(Event *evt) {
+  if (evt->is<StreamEnd>()) {
+    fork->on_branch_end(this);
+  }
 }
 
 } // namespace pipy

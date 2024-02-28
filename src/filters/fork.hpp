@@ -36,8 +36,15 @@ namespace pipy {
 
 class Fork : public Filter {
 public:
+  enum Mode {
+    FORK,
+    JOIN,
+    RACE,
+  };
+
   Fork();
   Fork(const pjs::Value &init_arg);
+  Fork(Mode mode, const pjs::Value &init_arg);
 
 private:
   Fork(const Fork &r);
@@ -48,9 +55,20 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-private:
+  struct Branch : public EventTarget {
+    Fork *fork;
+    pjs::Ref<Pipeline> pipeline;
+    virtual void on_event(Event *evt) override;
+  };
+
+  Mode m_mode;
   pjs::Value m_init_arg;
-  pjs::PooledArray<pjs::Ref<Pipeline>>* m_pipelines = nullptr;
+  pjs::PooledArray<Branch>* m_branches = nullptr;
+  EventBuffer m_buffer;
+  int m_counter = 0;
+  bool m_waiting = false;
+
+  void on_branch_end(Branch *branch);
 };
 
 } // namespace pipy
