@@ -148,7 +148,6 @@ private:
     ) : m_manager(manager)
       , m_from(&Net::current())
       , m_names(names)
-      , m_threads(manager->m_worker_threads.size())
       , m_cb(cb) {}
 
     void start();

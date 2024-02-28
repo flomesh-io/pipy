@@ -863,7 +863,8 @@ void WorkerManager::StatsRequest::start() {
         m_cb(sum);
       }
     );
-  } else {
+  } else if (auto thread_count = m_manager->m_worker_threads.size()) {
+    m_threads.resize(thread_count);
     m_manager->m_querying_stats = true;
     for (auto *wt : m_manager->m_worker_threads) {
       wt->stats(
@@ -888,6 +889,14 @@ void WorkerManager::StatsRequest::start() {
         }
       );
     }
+  } else {
+    m_from->post(
+      [=]() {
+        stats::MetricDataSum sum;
+        m_cb(sum);
+        delete this;
+      }
+    );
   }
 }
 
