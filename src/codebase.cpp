@@ -63,7 +63,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override;
-  virtual auto watch(const std::string &path, const std::function<void()> &on_update) -> Watch* override;
+  virtual auto watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* override;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
 private:
@@ -162,7 +162,7 @@ void CodebaseFromFS::set(const std::string &path, SharedData *data) {
   }
 }
 
-auto CodebaseFromFS::watch(const std::string &path, const std::function<void()> &on_update) -> Watch* {
+auto CodebaseFromFS::watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* {
   std::lock_guard<std::mutex> lock(m_mutex);
   auto w = new Watch(on_update);
   auto &wf = m_watched_files[path];
@@ -175,6 +175,12 @@ auto CodebaseFromFS::watch(const std::string &path, const std::function<void()> 
 
 void CodebaseFromFS::sync(bool force, const std::function<void(bool)> &on_update) {
   if (force || m_version.empty()) {
+    for (auto &p : m_watched_files) {
+      for (auto &w : p.second.watches) {
+        cancel(w);
+      }
+    }
+    m_watched_files.clear();
     m_version = "1";
     on_update(true);
   } else {
@@ -218,7 +224,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override {}
-  virtual auto watch(const std::string &path, const std::function<void()> &on_update) -> Watch* override;
+  virtual auto watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* override;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override {}
 
 private:
@@ -281,7 +287,7 @@ auto CodebsaeFromStore::get(const std::string &path) -> SharedData* {
   return i->second->retain();
 }
 
-auto CodebsaeFromStore::watch(const std::string &path, const std::function<void()> &on_update) -> Watch* {
+auto CodebsaeFromStore::watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* {
   return new Watch(on_update);
 }
 
@@ -301,7 +307,7 @@ private:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override {}
-  virtual auto watch(const std::string &path, const std::function<void()> &on_update) -> Watch* override;
+  virtual auto watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* override;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
   struct WatchedFile {
@@ -328,6 +334,7 @@ private:
   void download(const std::function<void(bool)> &on_update);
   void download_next(const std::function<void(bool)> &on_update);
   void watch_next();
+  void cancel_watches();
   void response_error(const char *method, const char *path, http::ResponseHead *head);
 };
 
@@ -380,7 +387,7 @@ auto CodebaseFromHTTP::get(const std::string &path) -> SharedData* {
   return i->second->retain();
 }
 
-auto CodebaseFromHTTP::watch(const std::string &path, const std::function<void()> &on_update) -> Watch* {
+auto CodebaseFromHTTP::watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* {
   std::lock_guard<std::mutex> lock(m_mutex);
   auto w = new Watch(on_update);
   auto &wf = m_watched_files[path];
@@ -490,6 +497,7 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
         m_downloaded = true;
         m_mutex.unlock();
         m_fetch.close();
+        cancel_watches();
         on_update(true);
       }
     }
@@ -507,6 +515,7 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
     }
     m_mutex.unlock();
     m_fetch.close();
+    cancel_watches();
     on_update(true);
     return;
   }
@@ -611,6 +620,15 @@ void CodebaseFromHTTP::watch_next() {
       if (!m_fetch.busy()) watch_next();
     }
   );
+}
+
+void CodebaseFromHTTP::cancel_watches() {
+  for (auto &p : m_watched_files) {
+    for (auto &w : p.second.watches) {
+      cancel(w);
+    }
+  }
+  m_watched_files.clear();
 }
 
 void CodebaseFromHTTP::response_error(const char *method, const char *path, http::ResponseHead *head) {

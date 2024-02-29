@@ -448,6 +448,11 @@ void Pipy::listen(pjs::Context &ctx) {
   }
 }
 
+auto Pipy::watch(pjs::Str *pathname) -> pjs::Promise* {
+  auto w = new FileWatcher(pathname);
+  return w->start();
+}
+
 void Pipy::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
   pjs::Value ret_obj;
   pjs::Object *context_prototype = nullptr;
@@ -513,6 +518,38 @@ void Pipy::FileReader::on_event(Event *evt) {
 void Pipy::FileReader::on_pipeline_result(Pipeline *p, pjs::Value &result) {
   m_settler->resolve(result);
   release();
+}
+
+//
+// Pipy::FileWatcher
+//
+
+Pipy::FileWatcher::FileWatcher(pjs::Str *pathname)
+  : m_net(Net::current())
+  , m_pathname(pathname)
+{
+}
+
+auto Pipy::FileWatcher::start() -> pjs::Promise* {
+  auto promise = pjs::Promise::make();
+  m_settler = pjs::Promise::Settler::make(promise);
+  m_codebase_watch = Codebase::current()->watch(
+    m_pathname->str(),
+    [this](bool changed) { on_file_changed(changed); }
+  );
+  retain();
+  return promise;
+}
+
+void Pipy::FileWatcher::on_file_changed(bool changed) {
+  if (changed) {
+    m_net.post([this]() {
+      InputContext ic;
+      m_settler->resolve(pjs::Value::undefined);
+      m_codebase_watch->close();
+      release();
+    });
+  }
 }
 
 } // namespace pipy
@@ -604,6 +641,12 @@ template<> void ClassDef<Pipy>::init() {
     };
     list_dir(utils::path_normalize(pathname), "");
     ret.set(a);
+  });
+
+  method("watch", [](Context &ctx, Object*, Value &ret) {
+    Str *pathname;
+    if (!ctx.arguments(1, &pathname)) return;
+    ret.set(Pipy::watch(pathname));
   });
 
   method("import", [](Context &ctx, Object*, Value &ret) {

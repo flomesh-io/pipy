@@ -47,7 +47,7 @@ bool Watch::active() const {
 void Watch::start() {
   m_watch = Codebase::current()->watch(
     m_filename->str(),
-    [this]() { on_update(); }
+    [this](bool changed) { on_update(changed); }
   );
 }
 
@@ -55,20 +55,22 @@ void Watch::end() {
   delete this;
 }
 
-void Watch::on_update() {
-  m_net.post(
-    [this]() {
-      InputContext ic;
-      if (!active()) {
-        m_pipeline = Pipeline::make(
-          m_pipeline_layout,
-          m_pipeline_layout->new_context()
-        );
-        m_pipeline->chain(EventTarget::input());
-        m_pipeline->start();
+void Watch::on_update(bool changed) {
+  if (changed) {
+    m_net.post(
+      [this]() {
+        InputContext ic;
+        if (!active()) {
+          m_pipeline = Pipeline::make(
+            m_pipeline_layout,
+            m_pipeline_layout->new_context()
+          );
+          m_pipeline->chain(EventTarget::input());
+          m_pipeline->start();
+        }
       }
-    }
-  );
+    );
+  }
 }
 
 void Watch::on_event(Event *evt) {

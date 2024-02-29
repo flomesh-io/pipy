@@ -29,6 +29,7 @@
 #include "pjs/pjs.hpp"
 #include "data.hpp"
 #include "pipeline.hpp"
+#include "codebase.hpp"
 
 #include <functional>
 #include <string>
@@ -86,12 +87,32 @@ public:
     virtual void on_pipeline_result(Pipeline *p, pjs::Value &result) override;
   };
 
+  class FileWatcher :
+    public pjs::RefCount<FileWatcher>,
+    public pjs::Pooled<FileWatcher>
+  {
+  public:
+    FileWatcher(pjs::Str *pathname);
+
+    auto start() -> pjs::Promise*;
+
+  private:
+    Net& m_net;
+    pjs::Ref<pjs::Str> m_pathname;
+    pjs::Ref<pjs::Promise> m_promise;
+    pjs::Ref<pjs::Promise::Settler> m_settler;
+    pjs::Ref<Codebase::Watch> m_codebase_watch;
+
+    void on_file_changed(bool changed);
+  };
+
   static auto argv() -> pjs::Array*;
   static void argv(const std::vector<std::string> &argv);
   static void on_exit(const std::function<void(int)> &on_exit);
   static auto exec(const std::string &cmd, const ExecOptions &options = ExecOptions()) -> ExecResult;
   static auto exec(pjs::Array *args, const ExecOptions &options = ExecOptions()) -> ExecResult;
   static void listen(pjs::Context &ctx);
+  static auto watch(pjs::Str *pathname) -> pjs::Promise*;
 
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
 

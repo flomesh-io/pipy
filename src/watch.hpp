@@ -61,7 +61,7 @@ private:
   pjs::Ref<Pipeline> m_pipeline;
   Net& m_net;
 
-  void on_update();
+  void on_update(bool changed);
 
   virtual void on_event(Event *evt) override;
 };
