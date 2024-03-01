@@ -2312,12 +2312,16 @@ void Promise::Period::pause() {
   m_paused = true;
 }
 
-void Promise::Period::end() {
+void Promise::Period::cancel() {
   for (auto p = m_settled_queue_head; p; p = p->m_next) {
     p->dequeue(false);
   }
   m_settled_queue_head = nullptr;
   m_settled_queue_tail = nullptr;
+}
+
+void Promise::Period::end() {
+  cancel();
   m_ended = true;
 }
 

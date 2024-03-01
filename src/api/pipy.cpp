@@ -52,6 +52,7 @@
 namespace pipy {
 
 thread_local static pjs::Ref<pjs::Array> s_argv;
+thread_local static std::list<pjs::Ref<pjs::Function>> s_exit_callbacks;
 
 auto Pipy::argv() -> pjs::Array* {
   return s_argv;
@@ -453,6 +454,46 @@ auto Pipy::watch(pjs::Str *pathname) -> pjs::Promise* {
   return w->start();
 }
 
+void Pipy::exit(int code) {
+  Net::main().post(
+    [=]() {
+      WorkerManager::get().stop(true);
+      if (s_on_exit) s_on_exit(code);
+    }
+  );
+}
+
+void Pipy::exit(pjs::Function *cb) {
+  s_exit_callbacks.push_back(cb);
+}
+
+bool Pipy::has_exit_callbacks() {
+  return s_exit_callbacks.size() > 0;
+}
+
+bool Pipy::start_exiting(pjs::Context &ctx, const std::function<void()> &on_done) {
+  thread_local static size_t s_exit_callbacks_counter = 0;
+  std::list<pjs::Ref<pjs::Function>> callbacks(std::move(s_exit_callbacks));
+  for (auto &cb : callbacks) {
+    pjs::Value ret;
+    (*cb)(ctx, 0, nullptr, ret);
+    if (!ctx.ok()) return false;
+    if (ret.is_promise()) {
+      auto pcb = pjs::Promise::Callback::make(
+        [=](pjs::Promise::State state, const pjs::Value &value) {
+          printf("promise callback\n");
+          if (!--s_exit_callbacks_counter) {
+            on_done();
+          }
+        }
+      );
+      ret.as<pjs::Promise>()->then(&ctx, pcb->resolved(), pcb->rejected());
+      s_exit_callbacks_counter++;
+    }
+  }
+  return s_exit_callbacks_counter > 0;
+}
+
 void Pipy::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
   pjs::Value ret_obj;
   pjs::Object *context_prototype = nullptr;
@@ -684,14 +725,15 @@ template<> void ClassDef<Pipy>::init() {
   });
 
   method("exit", [](Context &ctx, Object*, Value&) {
+    Function *callback = nullptr;
     int exit_code = 0;
-    if (!ctx.arguments(0, &exit_code)) return;
-    Net::main().post(
-      [=]() {
-        WorkerManager::get().stop(true);
-        if (s_on_exit) s_on_exit(exit_code);
-      }
-    );
+    if (ctx.try_arguments(1, &callback)) {
+      Pipy::exit(callback);
+    } else if (ctx.try_arguments(0, &exit_code)) {
+      Pipy::exit(exit_code);
+    } else {
+      ctx.error_argument_type(0, "a number or a function");
+    }
   });
 
   method("exec", [](Context &ctx, Object*, Value &ret) {

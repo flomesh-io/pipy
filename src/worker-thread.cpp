@@ -42,7 +42,6 @@ thread_local WorkerThread* WorkerThread::s_current = nullptr;
 WorkerThread::WorkerThread(WorkerManager *manager, int index)
   : m_manager(manager)
   , m_index(index)
-  , m_active_pipeline_count(0)
   , m_working(false)
   , m_recycling(false)
   , m_shutdown(false)
@@ -141,9 +140,6 @@ void WorkerThread::recycle() {
         for (const auto &p : pjs::Pool::all()) {
           p.second->clean();
         }
-        auto n = PipelineLayout::active_pipeline_count();
-        if (!n && m_shutdown) Net::current().stop();
-        m_active_pipeline_count = n;
         m_recycling = false;
       }
     );
@@ -165,13 +161,12 @@ void WorkerThread::reload(const std::function<void(bool)> &cb) {
       Log::info("[restart] Reloading codebase on thread %d...", m_index);
 
       m_new_version = codebase->version();
-      m_new_worker = Worker::make(m_manager->loading_pipeline_lb());
+      m_new_period = pjs::Promise::Period::make();
+      m_new_worker = Worker::make(m_new_period, m_manager->loading_pipeline_lb());
       m_new_worker->set_forced();
 
       pjs::Ref<pjs::Promise::Period> old_period = pjs::Promise::Period::current();
       old_period->pause();
-
-      m_new_period = pjs::Promise::Period::make();
       m_new_period->pause();
       m_new_period->set_current();
 
@@ -426,7 +421,7 @@ void WorkerThread::init_metrics() {
 }
 
 void WorkerThread::shutdown_all(bool force) {
-  if (auto period = pjs::Promise::Period::current()) period->end();
+  if (auto period = pjs::Promise::Period::current()) period->cancel();
   if (auto worker = Worker::current()) worker->stop(force);
   Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); return true; });
 }
@@ -436,6 +431,7 @@ void WorkerThread::main() {
   Pipy::argv(m_manager->m_argv);
 
   m_new_worker = Worker::make(
+    pjs::Promise::Period::current(),
     m_manager->loading_pipeline_lb(),
     m_manager->is_graph_enabled() && m_index == 0
   );
@@ -784,17 +780,8 @@ void WorkerManager::start_reloading() {
   }
 }
 
-auto WorkerManager::active_pipeline_count() -> size_t {
-  size_t n = 0;
-  for (auto *wt : m_worker_threads) {
-    if (wt) {
-      n += wt->active_pipeline_count();
-    }
-  }
-  return n;
-}
-
 bool WorkerManager::stop(bool force) {
+  if (m_stopped) return true;
   bool pending = false;
   for (auto *wt : m_worker_threads) {
     if (wt) {
@@ -808,6 +795,7 @@ bool WorkerManager::stop(bool force) {
   m_worker_threads.clear();
   m_status_counter = 0;
   m_metric_data_sum_counter = 0;
+  m_stopped = true;
   return true;
 }
 

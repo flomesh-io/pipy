@@ -51,8 +51,8 @@ class Watch;
 
 class Worker : public pjs::RefCount<Worker>, public pjs::Instance {
 public:
-  static auto make(PipelineLoadBalancer *plb, bool is_graph_enabled = false) -> Worker* {
-    return new Worker(plb, is_graph_enabled);
+  static auto make(pjs::Promise::Period *period, PipelineLoadBalancer *plb, bool is_graph_enabled = false) -> Worker* {
+    return new Worker(period, plb, is_graph_enabled);
   }
 
   static auto current() -> Worker* {
@@ -89,7 +89,7 @@ public:
   bool admin(Message *request, const std::function<void(Message*)> &respond);
 
 private:
-  Worker(PipelineLoadBalancer *plb, bool is_graph_enabled);
+  Worker(pjs::Promise::Period *period, PipelineLoadBalancer *plb, bool is_graph_enabled);
   ~Worker();
 
   typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
@@ -157,6 +157,7 @@ private:
   };
 
   Module* m_root = nullptr;
+  pjs::Ref<pjs::Promise::Period> m_period;
   pjs::Ref<pjs::Fiber> m_root_fiber;
   pjs::Ref<PipelineLoadBalancer> m_pipeline_lb;
   std::set<PipelineLayout*> m_pipeline_templates;
@@ -176,6 +177,7 @@ private:
   bool m_started = false;
   bool m_graph_enabled = false;
   bool m_unloading = false;
+  bool m_waiting_for_exit_callbacks = false;
 
   auto new_module_index() -> int;
   void add_module(Module *m);

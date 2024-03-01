@@ -331,13 +331,13 @@ private:
           if (s_has_shutdown) {
             Log::info("[shutdown] Forcing to shut down...");
             WorkerManager::get().stop(true);
-            drain_events();
+            stop_all();
           } else {
             Log::info("[shutdown] Shutting down...");
-            wait_pipelines();
+            wait_workers();
           }
         } else {
-          drain_events();
+          stop_all();
         }
 
         s_has_shutdown = true;
@@ -352,19 +352,17 @@ private:
     }
   }
 
-  void wait_pipelines() {
+  void wait_workers() {
     if (WorkerManager::get().stop()) {
-      drain_events();
+      stop_all();
     } else {
-      int n = WorkerManager::get().active_pipeline_count();
-      Log::info("[shutdown] Waiting for remaining %d pipelines...", n);
-      m_timer.schedule(1, [this]() { wait_pipelines(); });
+      Log::info("[shutdown] Waiting for workers to drain...");
+      m_timer.schedule(1, [this]() { wait_workers(); });
     }
   }
 
-  void drain_events() {
+  void stop_all() {
     Net::current().stop();
-    Log::info("[shutdown] Draining event loop...");
     s_pool_cleaner.stop();
     s_code_updater.stop();
     s_status_reporter.stop();

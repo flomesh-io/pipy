@@ -2939,6 +2939,7 @@ public:
     void run(int max_iterations = 1);
     void resume(int max_iterations = 1);
     void pause();
+    void cancel();
     void end();
 
   private:

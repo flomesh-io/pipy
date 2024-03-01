@@ -61,7 +61,6 @@ public:
   auto index() const -> int { return m_index; }
   bool done() const { return m_done; }
   bool ended() const { return m_ended; }
-  auto active_pipeline_count() const -> size_t { return m_active_pipeline_count.load(std::memory_order_relaxed); }
 
   bool start(bool force);
   void status(Status &status, const std::function<void()> &cb);
@@ -86,7 +85,6 @@ private:
   pjs::Ref<Worker> m_new_worker;
   Status m_status;
   stats::MetricData m_metric_data;
-  std::atomic<size_t> m_active_pipeline_count;
   std::atomic<bool> m_working;
   std::atomic<bool> m_recycling;
   std::atomic<bool> m_shutdown;
@@ -135,7 +133,6 @@ public:
   void reload();
   bool admin(pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond);
   auto concurrency() const -> int { return m_concurrency; }
-  auto active_pipeline_count() -> size_t;
   bool stop(bool force = false);
 
 private:
@@ -193,6 +190,7 @@ private:
   bool m_reloading = false;
   bool m_querying_status = false;
   bool m_querying_stats = false;
+  bool m_stopped = false;
   List<AdminRequest> m_admin_requests;
   AdminRequest* m_current_admin_request = nullptr;
   std::function<void()> m_on_done;

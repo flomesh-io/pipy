@@ -216,8 +216,9 @@ namespace pipy {
 
 thread_local pjs::Ref<Worker> Worker::s_current;
 
-Worker::Worker(PipelineLoadBalancer *plb, bool is_graph_enabled)
+Worker::Worker(pjs::Promise::Period *period, PipelineLoadBalancer *plb, bool is_graph_enabled)
   : pjs::Instance(Global::make(this))
+  , m_period(period)
   , m_root_fiber(new_fiber())
   , m_pipeline_lb(plb)
   , m_graph_enabled(is_graph_enabled)
@@ -552,13 +553,25 @@ bool Worker::start(bool force) {
 }
 
 void Worker::stop(bool force) {
-  if (force || m_exits.empty()) {
+  if (force || (!Pipy::has_exit_callbacks() && m_exits.empty())) {
     end_all();
-  } else {
+  } else if (!m_exit_signal) {
     m_exit_signal = std::unique_ptr<Signal>(new Signal);
-    std::list<Exit*> exits = m_exits;
-    for (auto *exit : exits) {
-      exit->start();
+    if (Pipy::has_exit_callbacks()) {
+      pjs::Ref<Context> ctx = new_context();
+      m_waiting_for_exit_callbacks = Pipy::start_exiting(*ctx, [this]() {
+        m_waiting_for_exit_callbacks = false;
+        on_exit(nullptr);
+      });
+    }
+    if (m_exits.size() > 0) {
+      std::list<Exit*> exits = m_exits;
+      for (auto *exit : exits) {
+        exit->start();
+      }
+    } else if (!m_waiting_for_exit_callbacks) {
+      m_exit_signal->fire();
+      end_all();
     }
   }
 }
@@ -600,13 +613,14 @@ void Worker::on_exit(Exit *exit) {
       break;
     }
   }
-  if (done) {
+  if (done && !m_waiting_for_exit_callbacks) {
     if (m_exit_signal) m_exit_signal->fire();
     end_all();
   }
 }
 
 void Worker::end_all() {
+  m_period->end();
   if (s_current == this) s_current = nullptr;
   for (auto *pt : m_pipeline_templates) pt->shutdown();
   for (auto *task : m_tasks) task->end();

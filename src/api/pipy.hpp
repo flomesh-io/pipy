@@ -113,6 +113,10 @@ public:
   static auto exec(pjs::Array *args, const ExecOptions &options = ExecOptions()) -> ExecResult;
   static void listen(pjs::Context &ctx);
   static auto watch(pjs::Str *pathname) -> pjs::Promise*;
+  static void exit(int code);
+  static void exit(pjs::Function *cb);
+  static bool has_exit_callbacks();
+  static bool start_exiting(pjs::Context &ctx, const std::function<void()> &on_done);
 
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
 
