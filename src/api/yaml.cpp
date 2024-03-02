@@ -195,7 +195,6 @@ static void yaml_parse(
         scalar(anchors[(const char *)e.data.alias.anchor], nullptr);
         break;
       case YAML_SCALAR_EVENT:
-        if (e.data.scalar.tag) printf("tag: %s\n", e.data.scalar.tag);
         scalar(
           pjs::Str::make((const char *)e.data.scalar.value, e.data.scalar.length),
           e.data.scalar.anchor

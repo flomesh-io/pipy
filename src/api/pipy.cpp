@@ -481,7 +481,6 @@ bool Pipy::start_exiting(pjs::Context &ctx, const std::function<void()> &on_done
     if (ret.is_promise()) {
       auto pcb = pjs::Promise::Callback::make(
         [=](pjs::Promise::State state, const pjs::Value &value) {
-          printf("promise callback\n");
           if (!--s_exit_callbacks_counter) {
             on_done();
           }
