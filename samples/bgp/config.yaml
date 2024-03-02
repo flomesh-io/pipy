@@ -1,0 +1,20 @@
+# My AS (Autonomous System) number
+as: 0
+
+# BGP identifier, usually the speaker's IP address
+id: 0.0.0.0
+
+# IP addresses of the peers
+peers: []
+
+# IPv4 routing information
+ipv4:
+  nextHop: 0.0.0.0 # IP address
+  reachable: []    # List of IP ranges in CIDR notation
+  unreachable: []  # List of IP ranges in CIDR notation
+
+# IPv6 routing information
+ipv6:
+  nextHop: "::"    # IP address
+  reachable: []    # List of IP ranges in CIDR notation
+  unreachable: []  # List of IP ranges in CIDR notation
