@@ -54,6 +54,8 @@ public:
   void to(pjs::Str *name);
   void to(PipelineLayout *layout);
 
+  void close();
+
   void accept_http_tunnel(pjs::Function *handler);
   void accept_proxy_protocol(pjs::Function *handler);
   void accept_socks(pjs::Function *handler);
@@ -124,8 +126,6 @@ public:
   void throttle_data_rate(pjs::Object *quota, pjs::Object *options);
   void throttle_message_rate(pjs::Object *quota, pjs::Object *options);
   void wait(pjs::Function *condition, pjs::Object *options);
-
-  void close();
 
 private:
   PipelineDesigner(PipelineLayout *layout)

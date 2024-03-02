@@ -131,6 +131,12 @@ void PipelineDesigner::to(PipelineLayout *layout) {
   m_current_joint_filter = nullptr;
 }
 
+void PipelineDesigner::close() {
+  m_current_filter = nullptr;
+  m_current_joint_filter = nullptr;
+  m_layout = nullptr;
+}
+
 void PipelineDesigner::accept_http_tunnel(pjs::Function *handler) {
   require_sub_pipeline(append_filter(new http::TunnelServer(handler)));
 }
@@ -425,12 +431,6 @@ void PipelineDesigner::throttle_message_rate(pjs::Object *quota, pjs::Object *op
 
 void PipelineDesigner::wait(pjs::Function *condition, pjs::Object *options) {
   append_filter(new Wait(condition, options));
-}
-
-void PipelineDesigner::close() {
-  m_current_filter = nullptr;
-  m_current_joint_filter = nullptr;
-  m_layout = nullptr;
 }
 
 void PipelineDesigner::check_integrity() {
@@ -773,7 +773,7 @@ template<> void ClassDef<PipelineDesigner>::init() {
   // PipelineDesigner.demux
   filter("demux", [](Context &ctx, PipelineDesigner *obj) {
     Object *options = nullptr;
-    if (!ctx.arguments(1, &options)) return;
+    if (!ctx.arguments(0, &options)) return;
     obj->demux(options);
   });
 
