@@ -32,6 +32,7 @@
 #include "thread.hpp"
 #include "status.hpp"
 #include "net.hpp"
+#include "input.hpp"
 #include "listener.hpp"
 #include "outbound.hpp"
 #include "file.hpp"
@@ -473,6 +474,7 @@ bool Pipy::has_exit_callbacks() {
 
 bool Pipy::start_exiting(pjs::Context &ctx, const std::function<void()> &on_done) {
   thread_local static size_t s_exit_callbacks_counter = 0;
+  InputContext ic;
   std::list<pjs::Ref<pjs::Function>> callbacks(std::move(s_exit_callbacks));
   for (auto &cb : callbacks) {
     pjs::Value ret;
