@@ -1733,6 +1733,7 @@ public:
 
   bool is_function() const { return is_instance_of<Function>(); }
   bool is_array() const { return is_instance_of<Array>(); }
+  bool is_promise() const { return is_instance_of<Promise>(); }
 
   bool has(Str *key);
   bool get(Str *key, Value &val);

@@ -454,7 +454,7 @@ void PipelineDesigner::require_sub_pipeline(Filter *filter) {
 // PipelineLayoutWrapper
 //
 
-auto PipelineLayoutWrapper::spawn(Context *ctx) -> Pipeline* {
+auto PipelineLayoutWrapper::instantiate(Context *ctx) -> Pipeline* {
   return Pipeline::make(m_layout, ctx);
 }
 
@@ -474,7 +474,7 @@ void PipelineLayoutWrapper::Constructor::operator()(pjs::Context &ctx, pjs::Obje
 // PipelineWrapper
 //
 
-auto PipelineWrapper::start(int argc, pjs::Value argv[]) -> pjs::Promise* {
+auto PipelineWrapper::spawn(int argc, pjs::Value argv[]) -> pjs::Promise* {
   retain();
   auto p = m_pipeline.get();
   auto promise = pjs::Promise::make();
@@ -485,14 +485,89 @@ auto PipelineWrapper::start(int argc, pjs::Value argv[]) -> pjs::Promise* {
   return promise;
 }
 
+auto PipelineWrapper::process(pjs::Object *events) -> pjs::Promise* {
+  retain();
+  auto p = m_pipeline.get();
+  auto promise = pjs::Promise::make();
+  m_settler = pjs::Promise::Settler::make(promise);
+  p->on_end(this);
+  p->chain(EventTarget::input());
+  p->start();
+
+  if (events->is_function()) {
+    InputContext ic;
+    m_generator = events->as<pjs::Function>();
+    generate();
+  } else if (events->is_promise()) {
+    auto ctx = p->context();
+    auto cb = pjs::Promise::Callback::make(
+      [this](pjs::Promise::State state, const pjs::Value &value) {
+        if (state == pjs::Promise::RESOLVED) {
+          feed(value);
+        }
+      }
+    );
+    events->as<pjs::Promise>()->then(ctx, cb->resolved(), cb->rejected());
+    m_events_callback = cb;
+  } else if (events->is<Hub>()) {
+    // TODO
+  } else {
+    InputContext ic;
+    feed(events);
+  }
+
+  return promise;
+}
+
+void PipelineWrapper::generate() {
+  auto ctx = m_pipeline->context();
+  do {
+    pjs::Value events;
+    (*m_generator)(*ctx, 0, nullptr, events);
+    if (!ctx->ok()) break;
+    if (events.is_promise()) {
+      auto cb = pjs::Promise::Callback::make(
+        [this](pjs::Promise::State state, const pjs::Value &value) {
+          if (state == pjs::Promise::RESOLVED && feed(value)) {
+            generate();
+          }
+        }
+      );
+      events.as<pjs::Promise>()->then(ctx, cb->resolved(), cb->rejected());
+      m_events_callback = cb;
+      break;
+    }
+    if (!feed(events)) break;
+  } while (m_generator);
+}
+
+bool PipelineWrapper::feed(const pjs::Value &events) {
+  auto input = m_pipeline->input();
+  return Message::to_events(
+    events, [&](Event *evt) {
+      input->input(evt);
+      return true;
+    }
+  );
+}
+
+void PipelineWrapper::close() {
+  if (m_events_callback) {
+    m_events_callback->discard();
+    m_events_callback = nullptr;
+  }
+  m_pipeline = nullptr;
+}
+
 void PipelineWrapper::on_event(Event *evt) {
   if (evt->is<StreamEnd>()) {
-    m_pipeline = nullptr;
+    close();
   }
 }
 
 void PipelineWrapper::on_pipeline_result(Pipeline *p, pjs::Value &result) {
   m_settler->resolve(result);
+  close();
   release();
 }
 
@@ -1212,9 +1287,27 @@ template<> void ClassDef<PipelineLayoutWrapper>::init() {
   method("spawn", [](Context &ctx, Object *thiz, Value &ret) {
     auto worker = static_cast<Worker*>(ctx.instance());
     auto context = worker->new_context();
-    auto p = thiz->as<PipelineLayoutWrapper>()->spawn(context);
+    auto p = thiz->as<PipelineLayoutWrapper>()->instantiate(context);
     auto pw = new PipelineWrapper(p);
-    ret.set(pw->start(ctx.argc(), ctx.argv()));
+    ret.set(pw->spawn(ctx.argc(), ctx.argv()));
+  });
+  method("process", [](Context &ctx, Object *thiz, Value &ret) {
+    Function *generator = nullptr;
+    Hub *hub = nullptr;
+    Object *events = nullptr;
+    if (ctx.get(0, generator) && generator) {
+      events = generator;
+    } else if (ctx.get(0, hub) && hub) {
+      events = hub;
+    } else if (!ctx.get(0, events) || !Message::is_events(events)) {
+      ctx.error_argument_type(0, "events, a function or a hub");
+      return;
+    }
+    auto worker = static_cast<Worker*>(ctx.instance());
+    auto context = worker->new_context();
+    auto p = thiz->as<PipelineLayoutWrapper>()->instantiate(context);
+    auto pw = new PipelineWrapper(p);
+    ret.set(pw->process(events));
   });
 }
 

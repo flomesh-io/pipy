@@ -161,7 +161,7 @@ public:
   };
 
   auto get() const -> PipelineLayout* { return m_layout; }
-  auto spawn(Context *ctx) -> Pipeline*;
+  auto instantiate(Context *ctx) -> Pipeline*;
 
 private:
   PipelineLayoutWrapper(PipelineLayout *layout)
@@ -186,11 +186,18 @@ public:
   PipelineWrapper(Pipeline *pipeline)
     : m_pipeline(pipeline) {}
 
-  auto start(int argc, pjs::Value argv[]) -> pjs::Promise*;
+  auto spawn(int argc, pjs::Value argv[]) -> pjs::Promise*;
+  auto process(pjs::Object *events) -> pjs::Promise*;
 
 private:
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<pjs::Promise::Settler> m_settler;
+  pjs::Ref<pjs::Function> m_generator;
+  pjs::Ref<pjs::Promise::Callback> m_events_callback;
+
+  void generate();
+  bool feed(const pjs::Value &events);
+  void close();
 
   virtual void on_event(Event *evt) override;
   virtual void on_pipeline_result(Pipeline *p, pjs::Value &result) override;
