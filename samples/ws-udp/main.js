@@ -122,7 +122,7 @@ function runClient() {
     function ({ target }) {
       pipeline($=>$
         .onStart(new Data)
-        .replay({ delay: 1 }).to($=>$
+        .repeat(() => new Timeout(1).wait().then(true)).to($=>$
           .loop($=>$
             .replaceStreamEnd()
             .replaceData(data => new Message(data))
@@ -143,7 +143,6 @@ function runClient() {
             .decodeWebSocket()
             .connect(target, { protocol: 'udp' })
           )
-          .replaceStreamEnd(new StreamEnd('Replay'))
         )
       ).spawn()
     }

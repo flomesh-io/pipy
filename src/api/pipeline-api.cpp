@@ -61,7 +61,6 @@
 #include "filters/replace-event.hpp"
 #include "filters/replace-message.hpp"
 #include "filters/replace-start.hpp"
-#include "filters/replay.hpp"
 #include "filters/resp.hpp"
 #include "filters/socks.hpp"
 #include "filters/split.hpp"
@@ -383,10 +382,6 @@ void PipelineDesigner::replace_message(pjs::Object *replacement, pjs::Object *op
 
 void PipelineDesigner::replace_start(pjs::Object *replacement) {
   append_filter(new ReplaceStart(replacement));
-}
-
-void PipelineDesigner::replay(pjs::Object *options) {
-  require_sub_pipeline(append_filter(new Replay(options)));
 }
 
 void PipelineDesigner::pipe(const pjs::Value &target, pjs::Object *target_map, pjs::Object *init_args) {
@@ -1144,13 +1139,6 @@ template<> void ClassDef<PipelineDesigner>::init() {
     Object *replacement = nullptr;
     if (!ctx.arguments(0, &replacement)) return;
     obj->replace_start(replacement);
-  });
-
-  // PipelineDesigner.replay
-  filter("replay", [](Context &ctx, PipelineDesigner *obj) {
-    Object *options = nullptr;
-    if (!ctx.arguments(0, &options)) return;
-    obj->replay(options);
   });
 
   // PipelineDesigner.serveHTTP

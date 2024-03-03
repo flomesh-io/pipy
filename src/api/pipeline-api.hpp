@@ -117,7 +117,6 @@ public:
   void replace_body(pjs::Object *replacement, pjs::Object *options);
   void replace_message(pjs::Object *replacement, pjs::Object *options);
   void replace_start(pjs::Object *replacement);
-  void replay(pjs::Object *options);
   void serve_http(pjs::Object *handler, pjs::Object *options);
   void split(const pjs::Value &separator);
   void swap(const pjs::Value &hub);
