@@ -190,6 +190,21 @@ auto CStructBase::decode(const Data &data) -> pjs::Object* {
   return decode(dr, this);
 }
 
+auto CStructBase::reflect() -> pjs::Object* {
+  auto obj = pjs::Object::make();
+  for (const auto &f : m_fields) {
+    auto fr = FieldReflection::make();
+    fr->offset = f.offset;
+    fr->size = f.size;
+    fr->count = f.count;
+    fr->isArray = f.is_array;
+    fr->isIntegral = f.is_integral;
+    fr->isUnsigned = f.is_unsigned;
+    obj->set(f.name, fr);
+  }
+  return obj;
+}
+
 auto CStructBase::align(size_t offset, size_t alignment) -> size_t {
   return (offset + alignment - 1) / alignment * alignment;
 }
@@ -370,6 +385,10 @@ template<> void ClassDef<CStructBase>::init() {
     if (!data) { ret = Value::null; return; }
     ret.set(obj->as<CStructBase>()->decode(*data));
   });
+
+  method("reflect", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<CStructBase>()->reflect());
+  });
 }
 
 template<> void ClassDef<CStruct>::init() {
@@ -416,6 +435,15 @@ template<> void ClassDef<Constructor<CStruct>>::init() {
 template<> void ClassDef<Constructor<CUnion>>::init() {
   super<Function>();
   ctor();
+}
+
+template<> void ClassDef<CStructBase::FieldReflection>::init() {
+  field<int>("offset", [](CStructBase::FieldReflection *obj) { return &obj->offset; });
+  field<int>("size", [](CStructBase::FieldReflection *obj) { return &obj->size; });
+  field<int>("count", [](CStructBase::FieldReflection *obj) { return &obj->count; });
+  field<bool>("isArray", [](CStructBase::FieldReflection *obj) { return &obj->isArray; });
+  field<bool>("isIntegral", [](CStructBase::FieldReflection *obj) { return &obj->isIntegral; });
+  field<bool>("isUnsigned", [](CStructBase::FieldReflection *obj) { return &obj->isUnsigned; });
 }
 
 } // namespace pjs

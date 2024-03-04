@@ -44,6 +44,17 @@ public:
   void add_field(pjs::Str *name, CStructBase *type);
   auto encode(pjs::Object *values) -> Data*;
   auto decode(const Data &data) -> pjs::Object*;
+  auto reflect() -> pjs::Object*;
+
+  class FieldReflection : public pjs::ObjectTemplate<FieldReflection> {
+  public:
+    int offset = 0;
+    int size = 0;
+    int count = 0;
+    bool isArray = false;
+    bool isIntegral = false;
+    bool isUnsigned = false;
+  };
 
 protected:
   CStructBase(bool is_union)
