@@ -5,3 +5,9 @@ balancers:
       - ip: 10.0.1.200
         port: 8080
         weight: 100
+      - ip: 10.0.2.200
+        port: 8080
+        weight: 100
+      - ip: 10.0.3.200
+        port: 8080
+        weight: 100

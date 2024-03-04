@@ -16,7 +16,7 @@
 #define MAX_BALANCERS 1024
 #define MAX_UPSTREAMS 65536
 #define MAX_CONNECTIONS 65536
-#define RING_SIZE 16
+#define RING_SIZE 128
 
 //
 // BPF map structures
@@ -413,7 +413,7 @@ int xdp_main(struct xdp_md *ctx) {
 
   struct Balancer *balancer = bpf_map_lookup_elem(&map_balancers, &ep);
   if (balancer) {
-    __u32 sel = balancer->hint % RING_SIZE;
+    __u32 sel = (balancer->hint++) % RING_SIZE; // TODO: Use atomic operations
     struct Upstream *upstream = bpf_map_lookup_elem(&map_upstreams, &balancer->ring[sel]);
     if (upstream) {
       struct Address fwd_src, fwd_dst;

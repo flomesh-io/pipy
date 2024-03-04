@@ -9,6 +9,8 @@ var maps = Object.fromEntries(
   )
 )
 
+var RING_SIZE = maps.balancers.valueType.reflect().ring.count
+
 var epFromIPPort = (ip, port) => `${ip}/${port}`
 var epFromUpstream = (upstream) => epFromIPPort(upstream.ip, upstream.port)
 var ipFromString = (str) => ({ v4: { u8: new Netmask(str).toBytes() }})
@@ -102,23 +104,22 @@ function setupBalancers() {
   console.log('Setting up balancers...')
   YAML.decode(pipy.load('config.yml')).balancers.forEach(
     function ({ ip, port, targets }) {
-      var balancer = {
-        ip, port,
-        targets: targets.map(
+      var balancer = { ip, port }
+      var ring = new algo.LoadBalancer(
+        targets.map(
           function ({ ip, port, weight }) {
             var upstream = upstreams.make(ip, port)
             newUpstreams[upstream.id] = upstream
             return { upstream, weight }
+          }, {
+            weight: t => t.weight
           }
         )
-      }
+      ).schedule(RING_SIZE).map(t => t.upstream.id)
       console.log('  Update balancer', ip, port)
       newBalancers[epFromIPPort(ip, port)] = balancer
       maps.balancers.update(
-        balancerKey(ip, port, 6), {
-          ring: [balancer.targets[0].upstream.id],
-          hint: 0,
-        }
+        balancerKey(ip, port, 6), { ring }
       )
     }
   )
