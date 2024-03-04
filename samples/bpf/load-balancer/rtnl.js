@@ -1,3 +1,7 @@
+import queue from './queue.js'
+
+var i32Struct = new CStruct({ i: 'int32' })
+
 // struct rtattr (linux/rtnetlink.h)
 var rtattr = new CStruct({
   len: 'uint16',
@@ -46,6 +50,8 @@ var ndmsg = new CStruct({
   flags: 'uint8',
   type: 'uint8',
 })
+
+var netlinkRequests = queue()
 
 function align(size) {
   return (size + 3) & ~3
@@ -221,3 +227,33 @@ export default function(cb) {
     }
   }
 }
+
+export function setLinkXDP(index, fd) {
+  netlinkRequests.enqueue(
+    new Message(
+      {
+        type: 19, // RTM_SETLINK
+        flags: 0x01 | 0x04, // NLM_F_REQUEST | NLM_F_ACK
+      },
+      encodeLink({
+        index,
+        attrs: {
+          [43]: { // IFLA_XDP
+            [1]: i32Struct.encode({ i: fd }), // IFLA_XDP_FD
+            [3]: i32Struct.encode({ i: 1 << 1 }), // IFLA_XDP_FLAGS: XDP_FLAGS_SKB_MODE
+          },
+        }
+      })
+    )
+  )
+}
+
+pipeline($=>$
+  .encodeNetlink()
+  .connect('pid=0;groups=0', {
+    protocol: 'netlink',
+    netlinkFamily: 0,
+  })
+).process(
+  () => netlinkRequests.dequeue()
+)
