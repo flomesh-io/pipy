@@ -10,14 +10,9 @@ interface PublicKeyConstructor {
    * Creates an instance of _PublicKey_.
    *
    * @param pem A string or a _Data_ object containing the public key in PEM format.
-   * @param options Options including:
-   *   - _aliasType_ - Can be `"sm2"` if the key is to be used in SM2 algorithm as ISO/IEC 14888.
    * @returns A _PublicKey_ object created from the PEM file.
    */
-  new(
-    pem: string | Data,
-    options?: { aliasType?: 'sm2' }
-  ): PublicKey;
+  new(pem: string | Data): PublicKey;
 }
 
 /**
@@ -32,14 +27,9 @@ interface PrivateKeyConstructor {
    * Creates an instance of _PrivateKey_.
    *
    * @param pem A string or a _Data_ object containing the public key in PEM format.
-   * @param options Options including:
-   *   - _aliasType_ - Can be `"sm2"` if the key is to be used in SM2 algorithm as ISO/IEC 14888.
    * @returns A _PrivateKey_ object created from the PEM file.
    */
-  new(
-    pem: string | Data,
-    options?: { aliasType?: 'sm2' }
-  ): PrivateKey;
+  new(pem: string | Data): PrivateKey;
 }
 
 /**
