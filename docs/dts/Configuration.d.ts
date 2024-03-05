@@ -602,7 +602,6 @@ interface Configuration {
    */
   decodeThrift(): Configuration;
 
-
   /**
    * Appends a _decodeWebSocket_ filter to the current pipeline layout.
    *

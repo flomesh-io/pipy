@@ -1,0 +1,33 @@
+---
+title: algo.LoadBalancer()
+api: algo.LoadBalancer.new
+---
+
+## Description
+
+<Summary/>
+
+## Syntax
+
+``` js
+new algo.LoadBalancer([...targets])
+
+new algo.LoadBalancer(
+  [...targets],
+  {
+    algorithm, // 'round-robin' or 'least-load'
+    key: (target) => getTargetKey(target),
+    weight: (target) => getTargetWeight(target),
+    capacity,
+    sessionCache,
+  }
+)
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [algo.LoadBalancer](/reference/api/algo/LoadBalancer)

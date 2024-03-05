@@ -151,7 +151,7 @@ interface URLRouterConstructor {
 /**
  * Load-balancer base class.
  */
-interface LoadBalancer {
+interface LoadBalancerBase {
 
   /**
    * Allocates an resource item for the next selected target.
@@ -169,7 +169,7 @@ interface LoadBalancer {
 /**
  * Load-balancer using consistent hashing.
  */
-interface HashingLoadBalancer extends LoadBalancer {
+interface HashingLoadBalancer extends LoadBalancerBase {
 
   /**
    * Adds a target.
@@ -194,7 +194,7 @@ interface HashingLoadBalancerConstructor {
 /**
  * Load-balancer that rotates targets by round-robin algorithm.
  */
-interface RoundRobinLoadBalancer extends LoadBalancer {
+interface RoundRobinLoadBalancer extends LoadBalancerBase {
 
   /**
    * Sets weight of a target.
@@ -221,7 +221,7 @@ interface RoundRobinLoadBalancerConstructor {
 /**
  * Load-balancer that evens out workload among targets.
  */
-interface LeastWorkLoadBalancer extends LoadBalancer {
+interface LeastWorkLoadBalancer extends LoadBalancerBase {
 
   /**
    * Sets weight of a target.
@@ -245,6 +245,82 @@ interface LeastWorkLoadBalancerConstructor {
   new(targets: string[] | { [id: string]: number }, unhealthy?: Cache): LeastWorkLoadBalancer;
 }
 
+/**
+ * Provides load balancing and resource pooling functionalities.
+ */
+interface LoadBalancer {
+
+  /**
+   * Updates all targets.
+   *
+   * @param targets An array of targets. Targets can be of any type and carry any information one might need.
+   */
+  provision(targets: any[]): void;
+
+  /**
+   * Fills up an array with targets that would be selected in turn by consecutive allocations.
+   *
+   * @param size Length of the returned array.
+   * @returns An array filled with targets that would be selected in turn.
+   */
+  schedule(size: number): any[];
+
+  /**
+   * Selects a target and allocates a resource from its pool.
+   *
+   * @param tag An optional value as the identifier for sticky sessions.
+   * @param exclusive An optional _Cache_ object providing a set of keys for targets that should not be selected.
+   * @returns A _LoadBalancerResource_ object with its _target_ property pointing to the selected target.
+   *   It also contains a _free()_ method that you can call to return the resource back to the pool.
+   */
+  allocate(tag?: any, exclusive?: Cache): LoadBalancerResource | null;
+}
+
+interface LoadBalancerConstructor {
+
+  /**
+   * Creates an instance of _LoadBalancer_.
+   *
+   * @param targets An array of targets. Targets can be of any type and carry any information one might need.
+   * @param options Options including:
+   *   - _algorithm_ - Can be `'round-robin'` or `'least-load'`. Defaults to `'round-robin'`.
+   *   - _key_ - A user-provided callback function that receives a target and returns a unique key representing it.
+   *   - _weight_ - A user-provided callback function that receives a target and returns its weight.
+   *   - _capacity_ - Maximum number of allocated resources allowed by each target, or a user-provided callback function
+   *       that receives each target as parameter and returns their respective capacity.
+   *   - _sessionCache_ - A user-provided Cache object for storing sticky sessions.
+   * @returns A _LoadBalancer_ object with the specified targets and options.
+   */
+  new(
+    targets: any[],
+    options?: {
+      algorithm?: 'round-robin' | 'least-load',
+      key?: (target: any) => any,
+      weight?: (target: any) => number,
+      capacity?: number | ((target: any) => number),
+      sessionCache?: Cache,
+    }
+  ): LoadBalancer;
+}
+
+/**
+ * A representative object for allocated resources from a _LoadBalancer_.
+ *
+ * This object can only be constructed by a _LoadBalancer_ internally.
+ */
+interface LoadBalancerResource {
+
+  /**
+   * The target this resource was allocated from.
+   */
+  target: any;
+
+  /**
+   * Returns this resource back to the pool.
+   */
+  free(): void;
+}
+
 interface Algo {
   Cache: CacheConstructor;
   Quota: QuotaConstructor;
@@ -252,6 +328,7 @@ interface Algo {
   HashingLoadBalancer: HashingLoadBalancerConstructor;
   RoundRobinLoadBalancer: RoundRobinLoadBalancerConstructor;
   LeastWorkLoadBalancer: LeastWorkLoadBalancerConstructor;
+  LoadBalancer: LoadBalancerConstructor;
 
   /**
    * Gets the hash of a value of any type.
