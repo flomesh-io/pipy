@@ -43,8 +43,8 @@ public:
   auto pkey() const -> EVP_PKEY* { return m_pkey; }
 
 private:
-  PublicKey(Data *data, pjs::Object *options);
-  PublicKey(pjs::Str *data, pjs::Object *options);
+  PublicKey(Data *data);
+  PublicKey(pjs::Str *data);
   ~PublicKey();
 
   EVP_PKEY* m_pkey = nullptr;
@@ -64,8 +64,8 @@ public:
   auto pkey() const -> EVP_PKEY* { return m_pkey; }
 
 private:
-  PrivateKey(Data *data, pjs::Object *options = nullptr);
-  PrivateKey(pjs::Str *data, pjs::Object *options = nullptr);
+  PrivateKey(Data *data);
+  PrivateKey(pjs::Str *data);
   ~PrivateKey();
 
   EVP_PKEY* m_pkey = nullptr;

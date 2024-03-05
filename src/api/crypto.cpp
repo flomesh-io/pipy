@@ -24,6 +24,7 @@
  */
 
 #include "crypto.hpp"
+#include "options.hpp"
 #include "utils.hpp"
 #include "api/json.hpp"
 
@@ -96,65 +97,44 @@ void Crypto::free() {
 }
 
 //
-// Options
+// CipherOptions
 //
 
-enum class Options {
-  id,
-  key,
-  iv,
+struct CipherOptions : public Options {
+  uint8_t key[EVP_MAX_KEY_LENGTH];
+  uint8_t iv[EVP_MAX_IV_LENGTH];
+  size_t key_size = 0;
+  size_t iv_size = 0;
+
+  CipherOptions() {}
+
+  CipherOptions(pjs::Object *options) {
+    pjs::Ref<Data> key_data, iv_data;
+    pjs::Ref<pjs::Str> key_str, iv_str;
+    std::memset(key, 0, sizeof(key));
+    std::memset(iv, 0, sizeof(iv));
+    Value(options, "key")
+      .get(key_data)
+      .get(key_str)
+      .check();
+    Value(options, "iv")
+      .get(iv_data)
+      .get(iv_str)
+      .check_nullable();
+    key_size = (key_data ? key_data->size() : key_str->size());
+    if (key_size > EVP_MAX_KEY_LENGTH) throw std::runtime_error("options.key is too long");
+    if (key_data) key_data->to_bytes(key); else std::memcpy(key, key_str->c_str(), key_size);
+    iv_size = (iv_data ? iv_data->size() : iv_str->size());
+    if (iv_size > EVP_MAX_KEY_LENGTH) throw std::runtime_error("options.key is too long");
+    if (iv_data) iv_data->to_bytes(iv); else std::memcpy(iv, iv_str->c_str(), iv_size);
+  }
 };
-
-static auto get_cipher_key(const EVP_CIPHER *cipher, pjs::Object *options, uint8_t *key) -> size_t {
-  pjs::Value val;
-  options->get(pjs::EnumDef<Options>::name(Options::key), val);
-  if (val.is<Data>()) {
-    auto *data = val.as<Data>();
-    if (data->size() > EVP_MAX_KEY_LENGTH) throw std::runtime_error("options.key is too long");
-    data->to_bytes(key);
-    return data->size();
-  } else if (val.is_string()) {
-    auto *str = val.s();
-    if (str->size() > EVP_MAX_KEY_LENGTH) throw std::runtime_error("options.key is too long");
-    std::memcpy(key, str->c_str(), str->size());
-    return str->size();
-  } else {
-    throw std::runtime_error("options.key requires a Data object or a string");
-  }
-}
-
-static auto get_cipher_iv(const EVP_CIPHER *cipher, pjs::Object *options, uint8_t *iv) -> size_t {
-  pjs::Value val;
-  auto iv_size = EVP_CIPHER_iv_length(cipher);
-  options->get(pjs::EnumDef<Options>::name(Options::iv), val);
-  if (val.is<Data>()) {
-    auto *data = val.as<Data>();
-    if (data->size() != iv_size) {
-      std::string msg("options.iv length should be ");
-      throw std::runtime_error(msg + std::to_string(iv_size));
-    }
-    data->to_bytes(iv);
-    return iv_size;
-  } else if (val.is_string()) {
-    auto *str = val.s();
-    if (str->size() != iv_size) {
-      std::string msg("options.iv length should be ");
-      throw std::runtime_error(msg + std::to_string(iv_size));
-    }
-    std::memcpy(iv, str->c_str(), str->size());
-    return iv_size;
-  } else if (iv_size > 0) {
-    throw std::runtime_error("options.iv requires a Data object or a string");
-  } else {
-    return 0;
-  }
-}
 
 //
 // PublicKey
 //
 
-PublicKey::PublicKey(Data *data, pjs::Object *options) {
+PublicKey::PublicKey(Data *data) {
   if (s_openssl_engine) {
     m_pkey = load_by_engine(data->to_string());
   } else {
@@ -163,7 +143,7 @@ PublicKey::PublicKey(Data *data, pjs::Object *options) {
   }
 }
 
-PublicKey::PublicKey(pjs::Str *data, pjs::Object *options) {
+PublicKey::PublicKey(pjs::Str *data) {
   if (s_openssl_engine) {
     m_pkey = load_by_engine(data->str());
   } else {
@@ -197,7 +177,7 @@ auto PublicKey::load_by_engine(const std::string &id) -> EVP_PKEY* {
 // PrivateKey
 //
 
-PrivateKey::PrivateKey(Data *data, pjs::Object *options) {
+PrivateKey::PrivateKey(Data *data) {
   if (s_openssl_engine) {
     m_pkey = load_by_engine(data->to_string());
   } else {
@@ -206,7 +186,7 @@ PrivateKey::PrivateKey(Data *data, pjs::Object *options) {
   }
 }
 
-PrivateKey::PrivateKey(pjs::Str *data, pjs::Object *options) {
+PrivateKey::PrivateKey(pjs::Str *data) {
   if (s_openssl_engine) {
     m_pkey = load_by_engine(data->str());
   } else {
@@ -389,18 +369,18 @@ auto Cipher::cipher(const std::string &algorithm) -> const EVP_CIPHER* {
 }
 
 Cipher::Cipher(const std::string &algorithm, pjs::Object *options) {
-  uint8_t key[EVP_MAX_KEY_LENGTH];
-  uint8_t iv[EVP_MAX_IV_LENGTH];
-
   auto cipher = Cipher::cipher(algorithm);
+  auto key_size = EVP_CIPHER_key_length(cipher);
+  auto iv_size = EVP_CIPHER_iv_length(cipher);
 
-  get_cipher_key(cipher, options, key);
-  get_cipher_iv(cipher, options, iv);
+  CipherOptions co(options);
+  if (co.key_size != key_size) throw std::runtime_error("options.key expected to have a length of " + std::to_string(key_size));
+  if (co.iv_size > 0 && co.iv_size != iv_size) throw std::runtime_error("options.iv expected to have a length of " + std::to_string(iv_size));
 
   m_ctx = EVP_CIPHER_CTX_new();
   if (!m_ctx) throw_error();
 
-  if (!EVP_EncryptInit_ex(m_ctx, cipher, nullptr, key, iv)) throw_error();
+  if (!EVP_EncryptInit_ex(m_ctx, cipher, nullptr, co.key, co.iv)) throw_error();
 }
 
 Cipher::~Cipher() {
@@ -456,18 +436,18 @@ auto Cipher::final() -> Data* {
 //
 
 Decipher::Decipher(const std::string &algorithm, pjs::Object *options) {
-  uint8_t key[EVP_MAX_KEY_LENGTH];
-  uint8_t iv[EVP_MAX_IV_LENGTH];
-
   auto cipher = Cipher::cipher(algorithm);
+  auto key_size = EVP_CIPHER_key_length(cipher);
+  auto iv_size = EVP_CIPHER_iv_length(cipher);
 
-  get_cipher_key(cipher, options, key);
-  get_cipher_iv(cipher, options, iv);
+  CipherOptions co(options);
+  if (co.key_size != key_size) throw std::runtime_error("options.key expected to have a length of " + std::to_string(key_size));
+  if (co.iv_size > 0 && co.iv_size != iv_size) throw std::runtime_error("options.iv expected to have a length of " + std::to_string(iv_size));
 
   m_ctx = EVP_CIPHER_CTX_new();
   if (!m_ctx) throw_error();
 
-  if (!EVP_DecryptInit_ex(m_ctx, cipher, nullptr, key, iv)) throw_error();
+  if (!EVP_DecryptInit_ex(m_ctx, cipher, nullptr, co.key, co.iv)) throw_error();
 }
 
 Decipher::~Decipher() {
@@ -1074,16 +1054,6 @@ namespace pjs {
 using namespace pipy::crypto;
 
 //
-// Options
-//
-
-template<> void EnumDef<Options>::init() {
-  define(Options::id, "id");
-  define(Options::key, "key");
-  define(Options::iv, "iv");
-}
-
-//
 // PublicKey
 //
 
@@ -1091,12 +1061,11 @@ template<> void ClassDef<PublicKey>::init() {
   ctor([](Context &ctx) -> Object* {
     Str *data_str;
     pipy::Data *data = nullptr;
-    Object *options = nullptr;
     try {
-      if (ctx.try_arguments(1, &data_str, &options)) {
-        return PublicKey::make(data_str, options);
-      } else if (ctx.arguments(1, &data, &options) && data) {
-        return PublicKey::make(data, options);
+      if (ctx.try_arguments(1, &data_str)) {
+        return PublicKey::make(data_str);
+      } else if (ctx.arguments(1, &data) && data) {
+        return PublicKey::make(data);
       } else {
         ctx.error_argument_type(0, "a string or a Data object");
         return nullptr;
@@ -1121,12 +1090,11 @@ template<> void ClassDef<PrivateKey>::init() {
   ctor([](Context &ctx) -> Object* {
     Str *data_str;
     pipy::Data *data = nullptr;
-    Object *options = nullptr;
     try {
-      if (ctx.try_arguments(1, &data_str, &options)) {
-        return PrivateKey::make(data_str, options);
-      } else if (ctx.arguments(1, &data, &options) && data) {
-        return PrivateKey::make(data, options);
+      if (ctx.try_arguments(1, &data_str)) {
+        return PrivateKey::make(data_str);
+      } else if (ctx.arguments(1, &data) && data) {
+        return PrivateKey::make(data);
       } else {
         ctx.error_argument_type(0, "a string or a Data object");
         return nullptr;
