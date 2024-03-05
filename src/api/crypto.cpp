@@ -131,6 +131,20 @@ struct CipherOptions : public Options {
 };
 
 //
+// SignOptions
+//
+
+struct SignOptions : public Options {
+  pjs::Ref<Data> id;
+  SignOptions() {}
+  SignOptions(pjs::Object *options) {
+    Value(options, "id")
+      .get(id)
+      .check();
+  }
+};
+
+//
 // PublicKey
 //
 
@@ -696,8 +710,13 @@ auto Sign::sign(PrivateKey *key, Object *options) -> Data* {
   unsigned int size;
   if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
 
+  SignOptions so(options);
   auto ctx = EVP_PKEY_CTX_new(key->pkey(), nullptr);
   if (!ctx) throw_error();
+  if (so.id) {
+    auto id = so.id->to_bytes();
+    EVP_PKEY_CTX_set1_id(ctx, id.data(), id.size());
+  }
   if (EVP_PKEY_sign_init(ctx) <= 0) throw_error();
   if (EVP_PKEY_CTX_set_signature_md(ctx, m_md) <= 0) throw_error();
 
@@ -758,8 +777,13 @@ bool Verify::verify(PublicKey *key, Data *signature, Object *options) {
   unsigned int size;
   if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
 
+  SignOptions so(options);
   auto ctx = EVP_PKEY_CTX_new(key->pkey(), nullptr);
   if (!ctx) throw_error();
+  if (so.id) {
+    auto id = so.id->to_bytes();
+    EVP_PKEY_CTX_set1_id(ctx, id.data(), id.size());
+  }
   if (EVP_PKEY_verify_init(ctx) <= 0) throw_error();
   if (EVP_PKEY_CTX_set_signature_md(ctx, m_md) < 0) throw_error();
 
