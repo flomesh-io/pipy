@@ -72,7 +72,7 @@ Open the browser of your choice, point to `http://localhost:6060`. You will now 
   * [Docker Desktop Extension](https://open.docker.com/extensions/marketplace?extensionId=flomesh/pipy-docker-ext) - Flomesh Pipy Docker Desktop Extension
   * [InfoQ article](https://www.infoq.com/articles/network-proxy-stream-processor-pipy/) - Brief Introduction
 * [Copyright](COPYRIGHT)
-* [Licence](LICENCE)
+* [License](LICENSE)
 
 ## Compatibility
 
@@ -99,7 +99,7 @@ Pipy runs on the following architectures:
 
 ## Copyright & License
 
-Please refer to [COPYRIGHT](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT) and [LICENCE](https://github.com/flomesh-io/pipy/blob/main/LICENCE).
+Please refer to [COPYRIGHT](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT) and [LICENSE](https://github.com/flomesh-io/pipy/blob/main/LICENSE).
 
 ## Contact
 
