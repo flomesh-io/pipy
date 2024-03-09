@@ -47,7 +47,7 @@ if [[ "$1" == "pipy" || "$1" == "/usr/local/bin/pipy" ]]; then
   if [[ "$2" == "docker-start" ]]; then
     shift 2
     if [ "${PIPY_CONFIG_FILE}x" == 'x' ]; then
-      PIPY_CONFIG_FILE=/etc/pipy/tutorial/02-echo/hello.js
+      PIPY_CONFIG_FILE=/etc/pipy/tutorial/02-echo/main.js
     fi
     if [ "$(id -u)" != "0" ]; then
       exec /usr/local/bin/pipy $THREAD_ARGS ${PIPY_CONFIG_FILE}
