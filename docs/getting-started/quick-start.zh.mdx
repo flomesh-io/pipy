@@ -8,16 +8,16 @@ title: "快速入门"
 
 ### 通过 CLI 运行
 
-要启动 Pipy 代理，请使用 PipyJS 脚本文件运行 `pipy`，例如，如果需要一个简单的每次请求都返回同样结果的回声服务，可以使用脚本 `tutorial/01-hello/hello.js`：
+要启动 Pipy 代理，请使用 PipyJS 脚本文件运行 `pipy`，例如，如果需要一个简单的每次请求都返回同样结果的回声服务，可以使用脚本 `tutorial/01-hello/main.js`：
 
 ```sh
-$ pipy tutorial/01-hello/hello.js
+$ pipy tutorial/01-hello/main.js
 ```
 
 或者，在开发和调试时，可以启动 Pipy 并打开 web 界面：
 
 ```sh
-$ pipy tutorial/01-hello/hello.js --admin-port=6060
+$ pipy tutorial/01-hello/main.js --admin-port=6060
 ```
 
 ### 通过 Docker 运行
@@ -25,7 +25,7 @@ $ pipy tutorial/01-hello/hello.js --admin-port=6060
 另一种方式是通过 Docker 来运行 Pipy。注意：这个镜像并没有内置的管理控制台。
 
 ```sh
-docker run --rm -v $PWD/tutorial:/tutorial -p 8080:8080 flomesh/pipy-pjs:latest pipy /tutorial/01-hello/hello.js
+docker run --rm -v $PWD/tutorial:/tutorial -p 8080:8080 flomesh/pipy-pjs:latest pipy /tutorial/01-hello/main.js
 ```
 
 ### 查看命令行选项

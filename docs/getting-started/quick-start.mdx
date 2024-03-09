@@ -26,17 +26,17 @@ $ brew upgrade pipy
 ### Run via CLI
 
 To start a Pipy proxy, run `pipy` with a PipyJS script file, for example, the script
-in `tutorial/01-hello/hello.js` if you need a simple echo server that responds with the same message
+in `tutorial/01-hello/main.js` if you need a simple echo server that responds with the same message
 body as in every incoming request:
 
 ```sh
-$ pipy tutorial/01-hello/hello.js
+$ pipy tutorial/01-hello/main.js
 ```
 
 Alternatively, while developing and debugging, one can start Pipy with a builtin web UI:
 
 ```sh
-$ pipy tutorial/01-hello/hello.js --admin-port=6060
+$ pipy tutorial/01-hello/main.js --admin-port=6060
 ```
 
 ### Run via Docker
@@ -44,7 +44,7 @@ $ pipy tutorial/01-hello/hello.js --admin-port=6060
 Annother approach is running with Docker. Note: this image has no builtin admin console.
 
 ```sh
-docker run --rm -v $PWD/tutorial:/tutorial -p 8080:8080 flomesh/pipy-pjs:latest pipy /tutorial/01-hello/hello.js
+docker run --rm -v $PWD/tutorial:/tutorial -p 8080:8080 flomesh/pipy-pjs:latest pipy /tutorial/01-hello/main.js
 ```
 
 ### Show Command-Line Options
