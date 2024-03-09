@@ -72,7 +72,7 @@ $ bin/pipy
   * [Katacoda](https://katacoda.com/flomesh-io) - Katacoda 场景
   * [InfoQ 文章](https://www.infoq.com/articles/network-proxy-stream-processor-pipy/) - 简要介绍
 * [版权](COPYRIGHT)
-* [许可](LICENCE)
+* [许可](LICENSE)
 
 ## 兼容性
 
@@ -99,7 +99,7 @@ Pipy 可以在以下架构上运行：
 
 ## 版权许可
 
-参考 [版权](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT) 和 [许可](https://github.com/flomesh-io/pipy/blob/main/LICENCE)
+参考 [版权](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT) 和 [许可](https://github.com/flomesh-io/pipy/blob/main/LICENSE)
 
 ## 联系方式
 
