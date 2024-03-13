@@ -1,0 +1,7 @@
+interceptors:
+  # Pairs of (port, originalPort)
+  # Traffic to 'originalPort' is redirected to 'port'
+  - port: 9000
+    originalPort: 8000
+  - port: 9443
+    originalPort: 8443

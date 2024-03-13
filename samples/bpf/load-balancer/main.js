@@ -86,7 +86,7 @@ rtnl(
 watchConfig()
 
 function watchConfig() {
-  pipy.watch('config.yml', () => {
+  pipy.watch('config.yml').then(() => {
     setupBalancers()
     watchConfig()
   })

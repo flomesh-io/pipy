@@ -5,7 +5,7 @@ var obj = bpf.object(
 var prog = obj.programs[0].load(6, 'GPL') // BPF_PROG_TYPE_XDP
 var map = obj.maps[0]
 
-var PINNING_PATHNAME = '/sys/fs/bpf/packet-counter'
+var PIN_PATH = '/sys/fs/bpf/packet-counter'
 
 pipy.listen(8080, $=>$
   .serveHTTP(
@@ -13,8 +13,8 @@ pipy.listen(8080, $=>$
   )
 )
 
-bpf.pin(PINNING_PATHNAME, prog.fd),
-pipy.exec(`ip link set dev lo xdpgeneric pinned ${PINNING_PATHNAME}`)
+bpf.pin(PIN_PATH, prog.fd)
+pipy.exec(`ip link set dev lo xdpgeneric pinned ${PIN_PATH}`)
 dumpStats()
 
 function dumpStats() {
@@ -30,6 +30,6 @@ function dumpStats() {
 pipy.exit(
   function () {
     pipy.exec('ip link set dev lo xdpgeneric off')
-    pipy.exec(`rm ${PINNING_PATHNAME}`)
+    pipy.exec(`rm ${PIN_PATH}`)
   }
 )
