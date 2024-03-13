@@ -1,5 +1,3 @@
-import queue from './queue.js'
-
 var i32Struct = new CStruct({ i: 'int32' })
 
 // struct rtattr (linux/rtnetlink.h)
@@ -51,7 +49,7 @@ var ndmsg = new CStruct({
   type: 'uint8',
 })
 
-var netlinkRequests = queue()
+var netlinkRequests = makeQueue()
 
 function align(size) {
   return (size + 3) & ~3
@@ -257,3 +255,26 @@ pipeline($=>$
 ).process(
   () => netlinkRequests.dequeue()
 )
+
+function makeQueue() {
+  var queue = []
+  var consumers = []
+
+  function enqueue(req) {
+    if (consumers.length > 0) {
+      consumers.shift()(req)
+    } else {
+      queue.push(req)
+    }
+  }
+
+  function dequeue() {
+    if (queue.length > 0) {
+      return queue.shift()
+    } else {
+      return new Promise(r => consumers.push(r))
+    }
+  }
+
+  return { enqueue, dequeue }
+}

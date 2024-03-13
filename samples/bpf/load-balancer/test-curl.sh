@@ -8,5 +8,9 @@ sleep 1
 
 echo 'Testing proxy...'
 ip netns exec client curl http://10.0.0.100:8080
+ip netns exec client curl http://10.0.0.100:8080
+ip netns exec client curl http://10.0.0.100:8080
+ip netns exec client curl http://10.0.0.100:8080
+ip netns exec client curl http://10.0.0.100:8080
 
 echo 'Done.'

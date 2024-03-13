@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/in.h>
@@ -144,6 +143,7 @@ struct IPInfo {
 struct TCPInfo {
   struct tcphdr *hdr;
   __u16 src, dst;
+  __u8 is_syn;
 };
 
 struct UDPInfo {
@@ -192,6 +192,7 @@ INLINE int parse_tcp(struct Packet *pkt) {
 
   pkt->tcp.src = ntohs(tcp->source);
   pkt->tcp.dst = ntohs(tcp->dest);
+  pkt->tcp.is_syn = (tcp->syn && !tcp->ack);
 
   return 1;
 }
@@ -387,23 +388,22 @@ int xdp_main(struct xdp_md *ctx) {
     default: return XDP_PASS;
   }
 
-  struct NATKey nat_key;
-  struct NATVal *nat;
+  if (!pkt.tcp.is_syn) {
+    struct NATKey nat_key;
+    __builtin_memset(&nat_key, 0, sizeof(nat_key));
+    nat_key.proto = pkt.ip.proto;
+    nat_key.src = src;
+    nat_key.dst = dst;
 
-  __builtin_memset(&nat_key, 0, sizeof(nat_key));
-
-  nat_key.proto = pkt.ip.proto;
-  nat_key.src = src;
-  nat_key.dst = dst;
-  nat = bpf_map_lookup_elem(&map_nat, &nat_key);
-
-  if (nat) {
-    alter_eth_src(&pkt, nat->src_mac);
-    alter_eth_dst(&pkt, nat->dst_mac);
-    alter_l4_src(&pkt, &nat->src);
-    alter_l4_dst(&pkt, &nat->dst);
-    TRACE("translate");
-    return redirect_packet(ctx, nat->interface);
+    struct NATVal *nat = bpf_map_lookup_elem(&map_nat, &nat_key);
+    if (nat) {
+      alter_eth_src(&pkt, nat->src_mac);
+      alter_eth_dst(&pkt, nat->dst_mac);
+      alter_l4_src(&pkt, &nat->src);
+      alter_l4_dst(&pkt, &nat->dst);
+      TRACE("translate");
+      return redirect_packet(ctx, nat->interface);
+    }
   }
 
   struct Endpoint ep;

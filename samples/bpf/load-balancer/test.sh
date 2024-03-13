@@ -1,11 +1,5 @@
 #!/bin/bash
 
-on_exit() {
-  ./test-clean.sh
-}
-
-trap on_exit SIGINT
-
 setup_net() {
   ip netns add $1
   ip link add $2 type veth peer name veth0 netns $1
@@ -30,3 +24,8 @@ sleep 1
 
 echo 'Starting proxy...'
 ../../../bin/pipy main.js
+
+echo 'Cleaning up...'
+./test-clean.sh
+
+echo 'Done.'
