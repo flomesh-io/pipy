@@ -862,6 +862,30 @@ void BPF::pin(const std::string &pathname, int fd) {
   unsupported();
 }
 
+void BPF::attach(int attach_type, int fd) {
+  unsupported();
+}
+
+void BPF::detach(int attach_type, int fd) {
+  unsupported();
+}
+
+void BPF::attach(int attach_type, int fd, const std::string &cgroup) {
+  unsupported();
+}
+
+void BPF::detach(int attach_type, int fd, const std::string &cgroup) {
+  unsupported();
+}
+
+void BPF::attach(int attach_type, int fd, int map_fd) {
+  unsupported();
+}
+
+void BPF::detach(int attach_type, int fd, int map_fd) {
+  unsupported();
+}
+
 #endif // PIPY_USE_BPF
 
 } // namespace bpf
