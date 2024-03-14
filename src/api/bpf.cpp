@@ -31,6 +31,7 @@
 
 #ifdef PIPY_USE_BPF
 
+#include <fcntl.h>
 #include <unistd.h>
 #include <elf.h>
 #include <sys/syscall.h>
@@ -735,6 +736,64 @@ void BPF::pin(const std::string &pathname, int fd) {
   )) syscall_error("BPF_OBJ_PIN");
 }
 
+static void bpf_prog_attach(int attach_type, int fd, int target_fd = 0) {
+  union bpf_attr attr;
+  if (syscall_bpf(
+    BPF_PROG_ATTACH, &attr, attr_size(attach_flags),
+    [&](union bpf_attr &attr) {
+      attr.target_fd = target_fd;
+      attr.attach_bpf_fd = fd;
+      attr.attach_type = attach_type;
+    }
+  )) syscall_error("BPF_PROG_ATTACH");
+}
+
+static void bpf_prog_detach(int attach_type, int fd, int target_fd = 0) {
+  union bpf_attr attr;
+  if (syscall_bpf(
+    BPF_PROG_DETACH, &attr, attr_size(attach_flags),
+    [&](union bpf_attr &attr) {
+      attr.target_fd = target_fd;
+      attr.attach_bpf_fd = fd;
+      attr.attach_type = attach_type;
+    }
+  )) syscall_error("BPF_PROG_DETACH");
+}
+
+void BPF::attach(int attach_type, int fd) {
+  bpf_prog_attach(attach_type, fd);
+}
+
+void BPF::detach(int attach_type, int fd) {
+  bpf_prog_detach(attach_type, fd);
+}
+
+void BPF::attach(int attach_type, int fd, const std::string &cgroup) {
+  auto target_fd = open(cgroup.c_str(), O_RDONLY);
+  if (target_fd < 0) {
+    throw std::runtime_error("Cannot open cgroup " + cgroup);
+  }
+  bpf_prog_attach(attach_type, fd, target_fd);
+  close(target_fd);
+}
+
+void BPF::detach(int attach_type, int fd, const std::string &cgroup) {
+  auto target_fd = open(cgroup.c_str(), O_RDONLY);
+  if (target_fd < 0) {
+    throw std::runtime_error("Cannot open cgroup " + cgroup);
+  }
+  bpf_prog_detach(attach_type, fd, target_fd);
+  close(target_fd);
+}
+
+void BPF::attach(int attach_type, int fd, int map_fd) {
+  bpf_prog_attach(attach_type, fd, map_fd);
+}
+
+void BPF::detach(int attach_type, int fd, int map_fd) {
+  bpf_prog_detach(attach_type, fd, map_fd);
+}
+
 #else // !PIPY_USE_BPF
 
 static void unsupported() {
@@ -983,9 +1042,53 @@ template<> void ClassDef<BPF>::init() {
   method("pin", [](Context &ctx, Object *obj, Value &ret) {
     Str *pathname;
     int fd;
-    if (!ctx.arguments(2, &pathname, &fd)) return;
     try {
+      if (!ctx.arguments(2, &pathname, &fd)) return;
       BPF::pin(pathname->str(), fd);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  method("attach", [](Context &ctx, Object *obj, Value &ret) {
+    int attach_type;
+    int fd;
+    int target_fd;
+    Str *cgroup;
+    try {
+      if (!ctx.check(0, attach_type)) return;
+      if (!ctx.check(1, fd)) return;
+      if (ctx.argc() == 2) {
+        BPF::attach(attach_type, fd);
+      } else if (ctx.get(2, cgroup)) {
+        BPF::attach(attach_type, fd, cgroup->str());
+      } else if (ctx.get(2, target_fd)) {
+        BPF::attach(attach_type, fd, target_fd);
+      } else {
+        return ctx.error_argument_type(2, "a number or a string");
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  method("detach", [](Context &ctx, Object *obj, Value &ret) {
+    int attach_type;
+    int fd;
+    int target_fd;
+    Str *cgroup;
+    try {
+      if (!ctx.check(0, attach_type)) return;
+      if (!ctx.check(1, fd)) return;
+      if (ctx.argc() == 2) {
+        BPF::detach(attach_type, fd);
+      } else if (ctx.get(2, cgroup)) {
+        BPF::detach(attach_type, fd, cgroup->str());
+      } else if (ctx.get(2, target_fd)) {
+        BPF::detach(attach_type, fd, target_fd);
+      } else {
+        return ctx.error_argument_type(2, "a number or a string");
+      }
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }

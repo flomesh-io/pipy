@@ -166,6 +166,12 @@ private:
 class BPF : public pjs::ObjectTemplate<BPF> {
 public:
   static void pin(const std::string &pathname, int fd);
+  static void attach(int attach_type, int fd);
+  static void detach(int attach_type, int fd);
+  static void attach(int attach_type, int fd, const std::string &cgroup);
+  static void detach(int attach_type, int fd, const std::string &cgroup);
+  static void attach(int attach_type, int fd, int map_fd);
+  static void detach(int attach_type, int fd, int map_fd);
 };
 
 } // namespace bpf
