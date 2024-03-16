@@ -74,7 +74,7 @@ public:
   auto fd() const -> int { return m_fd; }
   auto id() const -> int { return m_id; }
 
-  void load(int type, const std::string &license);
+  void load(int type, const std::string &license, int attach_type = 0);
 
 private:
   Program(

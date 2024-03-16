@@ -312,7 +312,7 @@ auto Program::size() const -> int {
   return m_insts.size() / sizeof(struct bpf_insn);
 }
 
-void Program::load(int type, const std::string &license) {
+void Program::load(int type, const std::string &license, int attach_type) {
   if (m_fd) return;
 
   std::vector<struct bpf_insn> insts(size());
@@ -338,6 +338,7 @@ void Program::load(int type, const std::string &license) {
       attr.log_level = 1;
       attr.log_size = log_buf.size();
       attr.log_buf = (uintptr_t)log_buf.data();
+      attr.expected_attach_type = attach_type;
     }
   );
   if (log_buf[0] && Log::is_enabled(Log::BPF)) {
@@ -813,7 +814,7 @@ auto Program::size() const -> int {
   return 0;
 }
 
-void Program::load(int type, const std::string &license) {
+void Program::load(int type, const std::string &license, int attach_type) {
   unsupported();
 }
 
@@ -927,11 +928,11 @@ template<> void ClassDef<Program>::init() {
   accessor("id", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()->id()); });
 
   method("load", [](Context &ctx, Object *obj, Value &ret) {
-    int type;
+    int type, attach_type = 0;
     Str* license;
-    if (!ctx.arguments(2, &type, &license)) return;
+    if (!ctx.arguments(2, &type, &license, &attach_type)) return;
     try {
-      obj->as<Program>()->load(type, license->str());
+      obj->as<Program>()->load(type, license->str(), attach_type);
       ret.set(obj);
     } catch (std::runtime_error &err) {
       ctx.error(err);
