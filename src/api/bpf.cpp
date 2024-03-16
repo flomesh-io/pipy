@@ -795,6 +795,16 @@ void BPF::detach(int attach_type, int fd, int map_fd) {
   bpf_prog_detach(attach_type, fd, map_fd);
 }
 
+auto BPF::cgroup(const std::string &pathname) -> uint64_t {
+  int mount_id;
+  struct file_handle *fh = nullptr;
+  char buf[sizeof(*fh) + sizeof(uint64_t)];
+  fh = (struct file_handle *)buf;
+  fh->handle_bytes = sizeof(uint64_t);
+  if (name_to_handle_at(0, pathname.c_str(), fh, &mount_id, 0)) return 0;
+  return *(uint64_t *)fh->f_handle;
+}
+
 #else // !PIPY_USE_BPF
 
 static void unsupported() {
@@ -885,6 +895,11 @@ void BPF::attach(int attach_type, int fd, int map_fd) {
 
 void BPF::detach(int attach_type, int fd, int map_fd) {
   unsupported();
+}
+
+auto BPF::cgroup(const std::string &pathname) -> uint64_t {
+  unsupported();
+  return 0;
 }
 
 #endif // PIPY_USE_BPF
@@ -1117,6 +1132,12 @@ template<> void ClassDef<BPF>::init() {
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
+  });
+
+  method("cgroup", [](Context &ctx, Object *obj, Value &ret) {
+    Str *pathname;
+    if (!ctx.arguments(1, &pathname)) return;
+    ret.set(BPF::cgroup(pathname->str()));
   });
 
   variable("Program", class_of<Constructor<Program>>());

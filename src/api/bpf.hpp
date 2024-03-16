@@ -172,6 +172,7 @@ public:
   static void detach(int attach_type, int fd, const std::string &cgroup);
   static void attach(int attach_type, int fd, int map_fd);
   static void detach(int attach_type, int fd, int map_fd);
+  static auto cgroup(const std::string &pathname) -> uint64_t;
 };
 
 } // namespace bpf
