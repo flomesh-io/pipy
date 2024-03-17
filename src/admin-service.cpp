@@ -24,6 +24,7 @@
  */
 
 #include "admin-service.hpp"
+#include "main-options.hpp"
 #include "codebase.hpp"
 #include "api/crypto.hpp"
 #include "api/json.hpp"
@@ -334,10 +335,19 @@ auto AdminService::handle(Context *ctx, Message *req) -> pjs::Object* {
       } else {
         return m_response_method_not_allowed;
       }
-    }
+
+    // GET|POST /options
+    } else if (path == "/options") {
+      if (method == "GET") {
+        return options_GET();
+      } else if (method == "POST") {
+        return options_POST(body);
+      } else {
+        return m_response_method_not_allowed;
+      }
 
     // GET /api/v1/metrics
-    if (path == "/api/v1/metrics") {
+    } else if (path == "/api/v1/metrics") {
       if (method == "GET") {
         return api_v1_metrics_GET("");
       } else {
@@ -694,6 +704,26 @@ Message* AdminService::metrics_GET(pjs::Object *headers) {
   return Message::make(
     use_gzip ? m_response_head_text_gzip : m_response_head_text,
     Data::make(std::move(data))
+  );
+}
+
+Message* AdminService::options_GET() {
+  return Message::make(
+    m_response_head_text,
+    Data::make(MainOptions::global().to_string() + '\n', &s_dp)
+  );
+}
+
+Message* AdminService::options_POST(Data *data) {
+  if (!data || !data->size()) return response(204, "");
+  try {
+    update_options(data->to_string());
+  } catch (std::runtime_error &err) {
+    return response(400, std::string(err.what()) + '\n');
+  }
+  return Message::make(
+    m_response_head_text,
+    Data::make(MainOptions::global().to_string() + '\n', &s_dp)
   );
 }
 
@@ -1411,6 +1441,22 @@ void AdminService::change_program(const std::string &path, bool reload) {
   }
 
   throw std::runtime_error("Failed to start up");
+}
+
+void AdminService::update_options(const std::string &opts) {
+  MainOptions o;
+  o.parse(opts);
+  auto &g = MainOptions::global();
+
+  if (o.log_level != g.log_level) {
+    Log::set_level(o.log_level);
+    g.log_level = o.log_level;
+  }
+
+  if (o.log_topics != g.log_topics) {
+    Log::set_topics(o.log_topics);
+    g.log_topics = o.log_topics;
+  }
 }
 
 void AdminService::metrics_history_step() {

@@ -380,7 +380,8 @@ int main(int argc, char *argv[]) {
   int exit_code = 0;
 
   try {
-    MainOptions opts(argc, argv);
+    auto &opts = MainOptions::global();
+    opts.parse(argc, argv);
 
     if (opts.version) {
       show_version();

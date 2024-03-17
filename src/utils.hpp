@@ -76,8 +76,6 @@ void escape(const std::string &str, const std::function<void(char)> &out);
 auto escape(const std::string &str) -> std::string;
 void unescape(const std::string &str, const std::function<void(char)> &out);
 auto unescape(const std::string &str) -> std::string;
-auto decode_argv(const std::string &str) -> std::list<std::string>;
-auto encode_argv(const std::list<std::string> &argv) -> std::string;
 auto decode_uri(const std::string &str) -> std::string;
 auto encode_uri(const std::string &str) -> std::string;
 auto encode_hex(char *out, const void *inp, int len) -> int;

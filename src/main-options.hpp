@@ -41,9 +41,8 @@ namespace pipy {
 
 class MainOptions {
 public:
+  static auto global() -> MainOptions&;
   static void show_help();
-
-  MainOptions(int argc, char *argv[]);
 
   std::vector<std::string> arguments;
 
@@ -80,6 +79,11 @@ public:
   pjs::Ref<crypto::Certificate>               tls_cert;
   pjs::Ref<crypto::PrivateKey>                tls_key;
   std::vector<pjs::Ref<crypto::Certificate>>  tls_trusted;
+
+  void parse(int argc, char *argv[]);
+  void parse(const std::list<std::string> &args);
+  void parse(const std::string &args);
+  auto to_string() -> std::string;
 
 private:
   auto load_private_key(const std::string &filename) -> crypto::PrivateKey*;

@@ -210,6 +210,8 @@ private:
   Message* log_GET();
   Message* log_GET(const std::string &path);
   Message* metrics_GET(pjs::Object *headers);
+  Message* options_GET();
+  Message* options_POST(Data *data);
 
   Message* repo_HEAD(const std::string &path);
   Message* repo_GET(const std::string &path);
@@ -260,6 +262,7 @@ private:
   void on_log_tail(Context *ctx, const std::string &name, const Data &data);
 
   void change_program(const std::string &path, bool reload);
+  void update_options(const std::string &opts);
   void metrics_history_step();
   void inactive_instance_removal_step();
 };

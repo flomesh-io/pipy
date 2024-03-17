@@ -36,6 +36,11 @@ namespace pipy {
 
 thread_local static Data::Producer s_dp("Command Line Options");
 
+auto MainOptions::global() -> MainOptions& {
+  static MainOptions s_global;
+  return s_global;
+}
+
 void MainOptions::show_help() {
   std::cout << "Usage: pipy [options] [<expression | pathname | URL>]" << std::endl;
   std::cout << std::endl;
@@ -97,17 +102,24 @@ static const struct {
   { Log::NO_TOPIC , nullptr },
 };
 
-MainOptions::MainOptions(int argc, char *argv[]) {
+void MainOptions::parse(int argc, char *argv[]) {
+  arguments.push_back(argv[0]);
+
+  std::list<std::string> args;
+  for (int i = 1; i < argc; i++) {
+    args.push_back(argv[i]);
+  }
+  parse(args);
+}
+
+void MainOptions::parse(const std::list<std::string> &args) {
   auto max_threads = std::thread::hardware_concurrency();
   bool end_of_options = false;
   bool pass_arguments = false;
   bool skip_redundant_arguments = false;
   bool skip_unknown_options = false;
 
-  arguments.push_back(argv[0]);
-
-  for (int i = 1; i < argc; i++) {
-    std::string term(argv[i]);
+  for (const auto &term : args) {
     if (pass_arguments) arguments.push_back(term);
     if (end_of_options) {
       if (filename.empty()) {
@@ -294,6 +306,72 @@ MainOptions::MainOptions(int argc, char *argv[]) {
   if (bool(tls_cert) != bool(tls_key)) {
     throw std::runtime_error("--tls-cert and --tls-key must be used in conjunction");
   }
+}
+
+void MainOptions::parse(const std::string &args) {
+  parse(utils::split(args, ' '));
+}
+
+auto MainOptions::to_string() -> std::string {
+  std::list<std::string> list;
+  std::string str;
+
+  if (threads > 1) list.push_back("--threads=" + std::to_string(threads));
+  if (!log_file.empty()) list.push_back("--log-file=" + log_file);
+  switch (log_level) {
+    case Log::DEBUG: {
+      std::list<std::string> topics;
+      bool missing = false;
+      for (int i = 0; s_topic_names[i].name; i++) {
+        const auto &tn = s_topic_names[i];
+        if (log_topics & tn.topic) {
+          topics.push_back(tn.name);
+        } else {
+          missing = true;
+        }
+      }
+      std::string topic_str;
+      if (missing) {
+        for (const auto &t : topics) {
+          topic_str += topic_str.empty() ? ':' : '+';
+          topic_str += t;
+        }
+      }
+      list.push_back("--log-level=debug" + topic_str);
+      break;
+    }
+    case Log::WARN: list.push_back("--log-level=warn"); break;
+    case Log::INFO: list.push_back("--log-level=info"); break;
+    case Log::ERROR: list.push_back("--log-level=error"); break;
+  }
+  list.push_back("--log-history-limit=" + std::to_string(log_history_limit));
+  switch (log_local) {
+    case Log::OUTPUT_NULL: list.push_back("--log-local=null"); break;
+    case Log::OUTPUT_STDOUT: list.push_back("--log-local=stdout"); break;
+    case Log::OUTPUT_STDERR: list.push_back("--log-local=stderr"); break;
+  }
+  if (log_local_only) list.push_back("--log-local-only");
+  if (no_graph) list.push_back("--no-graph");
+  if (no_status) list.push_back("--no-status");
+  if (no_metrics) list.push_back("--no-metrics");
+  if (force_start) list.push_back("--force-start");
+  if (!instance_uuid.empty()) list.push_back("--instance-uuid" + instance_uuid);
+  if (!instance_name.empty()) list.push_back("--instance-name" + instance_name);
+  if (reuse_port) list.push_back("--reuse-port");
+  if (admin_port_off) list.push_back("--admin-port-off");
+  if (!admin_port.empty()) list.push_back("--admin-port=" + admin_port);
+  if (!admin_gui.empty()) list.push_back("--admin-gui=" + admin_gui);
+  if (!admin_log_file.empty()) list.push_back("--admin-log-file=" + admin_log_file);
+  if (!init_repo.empty()) list.push_back("--init-repo=" + init_repo);
+  if (!init_code.empty()) list.push_back("--init-code=" + init_code);
+  if (!openssl_engine.empty()) list.push_back("--openssl-engine=" + openssl_engine);
+
+  for (const auto &opt : list) {
+    if (!str.empty()) str += ' ';
+    str += opt;
+  }
+
+  return str;
 }
 
 auto MainOptions::load_private_key(const std::string &filename) -> crypto::PrivateKey* {
