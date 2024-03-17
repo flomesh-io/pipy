@@ -68,6 +68,114 @@ static void syscall_error(const char *name) {
   throw std::runtime_error(std::string(msg) + std::strerror(errno));
 }
 
+#define MAKE_ENTRY(value) { #value, value }
+
+static struct {
+  const char *name;
+  int value;
+} s_prog_types[] = {
+	MAKE_ENTRY(BPF_PROG_TYPE_UNSPEC),
+	MAKE_ENTRY(BPF_PROG_TYPE_SOCKET_FILTER),
+	MAKE_ENTRY(BPF_PROG_TYPE_KPROBE),
+	MAKE_ENTRY(BPF_PROG_TYPE_SCHED_CLS),
+	MAKE_ENTRY(BPF_PROG_TYPE_SCHED_ACT),
+	MAKE_ENTRY(BPF_PROG_TYPE_TRACEPOINT),
+	MAKE_ENTRY(BPF_PROG_TYPE_XDP),
+	MAKE_ENTRY(BPF_PROG_TYPE_PERF_EVENT),
+	MAKE_ENTRY(BPF_PROG_TYPE_CGROUP_SKB),
+	MAKE_ENTRY(BPF_PROG_TYPE_CGROUP_SOCK),
+	MAKE_ENTRY(BPF_PROG_TYPE_LWT_IN),
+	MAKE_ENTRY(BPF_PROG_TYPE_LWT_OUT),
+	MAKE_ENTRY(BPF_PROG_TYPE_LWT_XMIT),
+	MAKE_ENTRY(BPF_PROG_TYPE_SOCK_OPS),
+	MAKE_ENTRY(BPF_PROG_TYPE_SK_SKB),
+	MAKE_ENTRY(BPF_PROG_TYPE_CGROUP_DEVICE),
+	MAKE_ENTRY(BPF_PROG_TYPE_SK_MSG),
+	MAKE_ENTRY(BPF_PROG_TYPE_RAW_TRACEPOINT),
+	MAKE_ENTRY(BPF_PROG_TYPE_CGROUP_SOCK_ADDR),
+	MAKE_ENTRY(BPF_PROG_TYPE_LWT_SEG6LOCAL),
+	MAKE_ENTRY(BPF_PROG_TYPE_LIRC_MODE2),
+	MAKE_ENTRY(BPF_PROG_TYPE_SK_REUSEPORT),
+	MAKE_ENTRY(BPF_PROG_TYPE_FLOW_DISSECTOR),
+	MAKE_ENTRY(BPF_PROG_TYPE_CGROUP_SYSCTL),
+	MAKE_ENTRY(BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE),
+	MAKE_ENTRY(BPF_PROG_TYPE_CGROUP_SOCKOPT),
+	MAKE_ENTRY(BPF_PROG_TYPE_TRACING),
+	MAKE_ENTRY(BPF_PROG_TYPE_STRUCT_OPS),
+	MAKE_ENTRY(BPF_PROG_TYPE_EXT),
+	MAKE_ENTRY(BPF_PROG_TYPE_LSM),
+	MAKE_ENTRY(BPF_PROG_TYPE_SK_LOOKUP),
+	MAKE_ENTRY(BPF_PROG_TYPE_SYSCALL),
+  {0,0}
+};
+
+static struct {
+  const char *name;
+  int value;
+} s_attach_types[] = {
+	MAKE_ENTRY(BPF_CGROUP_INET_INGRESS),
+	MAKE_ENTRY(BPF_CGROUP_INET_EGRESS),
+	MAKE_ENTRY(BPF_CGROUP_INET_SOCK_CREATE),
+	MAKE_ENTRY(BPF_CGROUP_SOCK_OPS),
+	MAKE_ENTRY(BPF_SK_SKB_STREAM_PARSER),
+	MAKE_ENTRY(BPF_SK_SKB_STREAM_VERDICT),
+	MAKE_ENTRY(BPF_CGROUP_DEVICE),
+	MAKE_ENTRY(BPF_SK_MSG_VERDICT),
+	MAKE_ENTRY(BPF_CGROUP_INET4_BIND),
+	MAKE_ENTRY(BPF_CGROUP_INET6_BIND),
+	MAKE_ENTRY(BPF_CGROUP_INET4_CONNECT),
+	MAKE_ENTRY(BPF_CGROUP_INET6_CONNECT),
+	MAKE_ENTRY(BPF_CGROUP_INET4_POST_BIND),
+	MAKE_ENTRY(BPF_CGROUP_INET6_POST_BIND),
+	MAKE_ENTRY(BPF_CGROUP_UDP4_SENDMSG),
+	MAKE_ENTRY(BPF_CGROUP_UDP6_SENDMSG),
+	MAKE_ENTRY(BPF_LIRC_MODE2),
+	MAKE_ENTRY(BPF_FLOW_DISSECTOR),
+	MAKE_ENTRY(BPF_CGROUP_SYSCTL),
+	MAKE_ENTRY(BPF_CGROUP_UDP4_RECVMSG),
+	MAKE_ENTRY(BPF_CGROUP_UDP6_RECVMSG),
+	MAKE_ENTRY(BPF_CGROUP_GETSOCKOPT),
+	MAKE_ENTRY(BPF_CGROUP_SETSOCKOPT),
+	MAKE_ENTRY(BPF_TRACE_RAW_TP),
+	MAKE_ENTRY(BPF_TRACE_FENTRY),
+	MAKE_ENTRY(BPF_TRACE_FEXIT),
+	MAKE_ENTRY(BPF_MODIFY_RETURN),
+	MAKE_ENTRY(BPF_LSM_MAC),
+	MAKE_ENTRY(BPF_TRACE_ITER),
+	MAKE_ENTRY(BPF_CGROUP_INET4_GETPEERNAME),
+	MAKE_ENTRY(BPF_CGROUP_INET6_GETPEERNAME),
+	MAKE_ENTRY(BPF_CGROUP_INET4_GETSOCKNAME),
+	MAKE_ENTRY(BPF_CGROUP_INET6_GETSOCKNAME),
+	MAKE_ENTRY(BPF_XDP_DEVMAP),
+	MAKE_ENTRY(BPF_CGROUP_INET_SOCK_RELEASE),
+	MAKE_ENTRY(BPF_XDP_CPUMAP),
+	MAKE_ENTRY(BPF_SK_LOOKUP),
+	MAKE_ENTRY(BPF_XDP),
+	MAKE_ENTRY(BPF_SK_SKB_VERDICT),
+	MAKE_ENTRY(BPF_SK_REUSEPORT_SELECT),
+	MAKE_ENTRY(BPF_SK_REUSEPORT_SELECT_OR_MIGRATE),
+	MAKE_ENTRY(BPF_PERF_EVENT),
+  {0,0}
+};
+
+static int string_to_prog_type(const std::string &s) {
+  for (int i = 0;; i++) {
+    const auto &ent = s_prog_types[i];
+    if (!ent.name) break;
+    if (s == ent.name) return ent.value;
+  }
+  return -1;
+}
+
+static int string_to_attach_type(const std::string &s) {
+  for (int i = 0;; i++) {
+    const auto &ent = s_attach_types[i];
+    if (!ent.name) break;
+    if (s == ent.name) return ent.value;
+  }
+  return -1;
+}
+
 //
 // ObjectFile
 //
@@ -312,7 +420,7 @@ auto Program::size() const -> int {
   return m_insts.size() / sizeof(struct bpf_insn);
 }
 
-void Program::load(int type, const std::string &license, int attach_type) {
+void Program::load(int type, int attach_type, const std::string &license) {
   if (m_fd) return;
 
   std::vector<struct bpf_insn> insts(size());
@@ -811,6 +919,14 @@ static void unsupported() {
   throw std::runtime_error("BPF not supported");
 }
 
+static int string_to_prog_type(const std::string &s) {
+  return -1;
+}
+
+static int string_to_attach_type(const std::string &s) {
+  return -1;
+}
+
 ObjectFile::ObjectFile(Data *data) {
   unsupported();
 }
@@ -943,11 +1059,29 @@ template<> void ClassDef<Program>::init() {
   accessor("id", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()->id()); });
 
   method("load", [](Context &ctx, Object *obj, Value &ret) {
-    int type, attach_type = 0;
-    Str* license;
-    if (!ctx.arguments(2, &type, &license, &attach_type)) return;
+    int type, attach_type = 0, i = 0;
+    Str *type_s = nullptr, *attach_type_s = nullptr, *license;
+    if (!ctx.get(i, type) && !ctx.get(i, type_s)) {
+      return ctx.error_argument_type(i, "a number or a string");
+    }
+    if (type_s) {
+      type = string_to_prog_type(type_s->str());
+      if (type < 0) return ctx.error("unknown bpf_prog_type");
+    }
+    i++;
+    if (ctx.argc() >= 3) {
+      if (!ctx.get(i, attach_type) && !ctx.get(i, attach_type_s)) {
+        return ctx.error_argument_type(i, "a number or a string");
+      }
+      if (attach_type_s) {
+        attach_type = string_to_attach_type(attach_type_s->str());
+        if (attach_type < 0) return ctx.error("unknown bpf_attach_type");
+      }
+      i++;
+    }
+    if (!ctx.check(i, license)) return;
     try {
-      obj->as<Program>()->load(type, license->str(), attach_type);
+      obj->as<Program>()->load(type, attach_type, license->str());
       ret.set(obj);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1095,8 +1229,15 @@ template<> void ClassDef<BPF>::init() {
     int fd;
     int target_fd;
     Str *cgroup;
+    Str *attach_type_s = nullptr;
     try {
-      if (!ctx.check(0, attach_type)) return;
+      if (!ctx.get(0, attach_type) && !ctx.get(0, attach_type_s)) {
+        return ctx.error_argument_type(0, "a number or a string");
+      }
+      if (attach_type_s) {
+        attach_type = string_to_attach_type(attach_type_s->str());
+        if (attach_type < 0) return ctx.error("unknown bpf_attach_type");
+      }
       if (!ctx.check(1, fd)) return;
       if (ctx.argc() == 2) {
         BPF::attach(attach_type, fd);
@@ -1117,8 +1258,15 @@ template<> void ClassDef<BPF>::init() {
     int fd;
     int target_fd;
     Str *cgroup;
+    Str *attach_type_s = nullptr;
     try {
-      if (!ctx.check(0, attach_type)) return;
+      if (!ctx.get(0, attach_type) && !ctx.get(0, attach_type_s)) {
+        return ctx.error_argument_type(0, "a number or a string");
+      }
+      if (attach_type_s) {
+        attach_type = string_to_attach_type(attach_type_s->str());
+        if (attach_type < 0) return ctx.error("unknown bpf_attach_type");
+      }
       if (!ctx.check(1, fd)) return;
       if (ctx.argc() == 2) {
         BPF::detach(attach_type, fd);

@@ -1,7 +1,7 @@
 import rtnl, { setLinkXDP } from './rtnl.js'
 
 var obj = bpf.object(os.readFile('../../../bin/load-balancer.o'))
-var program = obj.programs[0].load(6, 'GPL') // BPF_PROG_TYPE_XDP
+var program = obj.programs[0].load('BPF_PROG_TYPE_XDP', 'GPL')
 
 var maps = Object.fromEntries(
   obj.maps.map(

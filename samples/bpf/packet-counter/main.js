@@ -2,7 +2,7 @@ var obj = bpf.object(
   os.readFile('../../../bin/packet-counter.o')
 )
 
-var prog = obj.programs[0].load(6, 'GPL') // BPF_PROG_TYPE_XDP
+var prog = obj.programs[0].load('BPF_PROG_TYPE_XDP', 'GPL')
 var map = obj.maps[0]
 
 var PIN_PATH = '/sys/fs/bpf/packet-counter'
