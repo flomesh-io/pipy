@@ -35,8 +35,9 @@
 #include <unistd.h>
 #include <elf.h>
 #include <sys/syscall.h>
-#include <linux/bpf.h>
-#include <linux/btf.h>
+
+#include "api/linux/bpf.h"
+#include "api/linux/btf.h"
 
 #define attr_size(FIELD) \
   (offsetof(bpf_attr, FIELD) + sizeof(bpf_attr::FIELD))
