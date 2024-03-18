@@ -940,7 +940,7 @@ auto Program::size() const -> int {
   return 0;
 }
 
-void Program::load(int type, const std::string &license, int attach_type) {
+void Program::load(int type, int attach_type, const std::string &license) {
   unsupported();
 }
 
