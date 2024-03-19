@@ -55,7 +55,7 @@ public:
 
   AdminLink(const std::string &url, const TLSSettings *tls_settings = nullptr);
 
-  auto connect() -> int;
+  void connect();
   void add_handler(const Handler &handler);
   void send(const Data &data);
   void close();
@@ -99,7 +99,6 @@ private:
   pjs::Ref<PipelineLayout> m_ppl;
   pjs::Ref<Message> m_handshake;
   std::list<Handler> m_handlers;
-  int m_connection_id = 0;
 };
 
 } // namespace pipy

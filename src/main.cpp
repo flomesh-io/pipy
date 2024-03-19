@@ -236,6 +236,7 @@ private:
         }
       );
     }
+    if (s_admin_link) s_admin_link->connect();
     next();
   }
 

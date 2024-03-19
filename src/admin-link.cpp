@@ -26,6 +26,7 @@
 #include "admin-link.hpp"
 #include "context.hpp"
 #include "pipeline.hpp"
+#include "input.hpp"
 #include "filters/connect.hpp"
 #include "filters/http.hpp"
 #include "filters/tls.hpp"
@@ -88,14 +89,14 @@ AdminLink::AdminLink(const std::string &url, const TLSSettings *tls_settings)
   m_ppl->append(new Receiver(this));
 }
 
-auto AdminLink::connect() -> int {
+void AdminLink::connect() {
   if (!m_pipeline) {
     auto ctx = Context::make();
     m_pipeline = Pipeline::make(m_ppl, ctx);
-    m_connection_id++;
-    if (m_connection_id <= 0) m_connection_id = 1;
+    InputContext ic;
+    Data empty;
+    send(empty);
   }
-  return m_connection_id;
 }
 
 void AdminLink::add_handler(const Handler &handler) {
