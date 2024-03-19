@@ -55,6 +55,7 @@ bool exists(const std::string &filename);
 bool is_dir(const std::string &filename);
 bool is_file(const std::string &filename);
 auto get_file_time(const std::string &filename) -> double;
+auto current_dir() -> std::string;
 void change_dir(const std::string &filename);
 bool make_dir(const std::string &filename);
 bool read_dir(const std::string &filename, std::list<std::string> &list);

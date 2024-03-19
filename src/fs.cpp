@@ -24,6 +24,7 @@
  */
 
 #include "fs.hpp"
+#include "utils.hpp"
 #include "os-platform.hpp"
 
 #ifdef _WIN32
@@ -58,9 +59,10 @@ inline static auto ts2secs(const struct timespec &ts) -> double {
 }
 
 auto abs_path(const std::string &filename) -> std::string {
-  char full_path[PATH_MAX];
-  realpath(filename.c_str(), full_path);
-  return full_path;
+  if (filename.empty()) return filename;
+  if (filename[0] == '/') return utils::path_normalize(filename);
+  auto path = current_dir() + '/' + filename;
+  return utils::path_normalize(path);
 }
 
 bool stat(const std::string &filename, Stat &s) {
@@ -107,6 +109,26 @@ auto get_file_time(const std::string &filename) -> double {
   auto &ts = st.st_mtim;
 #endif
   return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
+auto current_dir() -> std::string {
+  char buf[PATH_MAX];
+  if (auto s = getcwd(buf, sizeof(buf))) {
+    return s;
+  }
+  if (errno != ERANGE) return std::string();
+  for (size_t size = PATH_MAX * 2;; size += PATH_MAX) {
+    auto buf = new char[size];
+    if (auto s = getcwd(buf, size)) {
+      std::string path(s);
+      delete [] buf;
+      return path;
+    } else {
+      delete [] buf;
+      if (errno != ERANGE) break;
+    }
+  }
+  return std::string();
 }
 
 void change_dir(const std::string &filename) {
