@@ -8,7 +8,7 @@ This sample project demonstrates how Pipy can intercept TCP traffic on layer 3 b
 make
 ```
 
-The final product will be located at `bin/port-interceptor.o` and be loaded by `main.js` later on.
+The final product is `port-interceptor.o` and will be loaded by `main.js` later on.
 
 ## Start the interceptor
 

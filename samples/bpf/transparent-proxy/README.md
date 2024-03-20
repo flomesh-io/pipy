@@ -12,6 +12,8 @@ This sample project demonstrates how Pipy can proxy outgoing TCP traffic transpa
 make
 ```
 
+The final product is `transparent-proxy.o` and will be loaded by `main.js` later on.
+
 ## Start the script
 
 ```sh

@@ -44,3 +44,5 @@ int xdp_main(struct xdp_md *ctx) {
 
   return XDP_PASS;
 }
+
+char __LICENSE[] SEC("license") = "GPL";

@@ -4,8 +4,8 @@ import rtnl from './rtnl.js'
 
 var PIN_PATH = '/sys/fs/bpf/port-interceptor'
 
-var obj = bpf.object(os.readFile('../../../bin/port-interceptor.o'))
-var prog = obj.programs[0].load('BPF_PROG_TYPE_SCHED_CLS', 'GPL')
+var obj = bpf.object(pipy.load('port-interceptor.o'))
+var prog = obj.programs[0].load('BPF_PROG_TYPE_SCHED_CLS')
 var maps = Object.fromEntries(obj.maps.map(m => [m.name, m]))
 var dnat = maps['map_dnat']
 var snat = maps['map_snat']

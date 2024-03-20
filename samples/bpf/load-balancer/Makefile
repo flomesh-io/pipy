@@ -1,6 +1,6 @@
 SRC_DIR = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-BIN_DIR = $(abspath ${SRC_DIR}/../../../bin)
-INC_DIR = $(abspath ${SRC_DIR}/include)
+BIN_DIR = $(abspath ${SRC_DIR})
+INC_DIR = $(abspath ${SRC_DIR})
 
 OUT = load-balancer.o
 SRC = $(patsubst %.o,%.c,${OUT})
@@ -18,6 +18,3 @@ ${BIN_DIR}/${OUT}: ${SRC_DIR}/${SRC}
 
 clean:
 	rm -f ${BIN_DIR}/${OUT}
-
-test:
-	cd ${SRC_DIR} && ./test.sh

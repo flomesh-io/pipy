@@ -185,6 +185,14 @@ ObjectFile::ObjectFile(Data *data) {
   auto bytes = data->to_bytes();
   ELF obj(std::move(bytes));
 
+  for (const auto &sec : obj.sections) {
+    if (sec.name == "license") {
+      std::string buf((const char *)sec.data, sec.size);
+      license = buf.c_str();
+      break;
+    }
+  }
+
   for (size_t i = 0; i < obj.sections.size(); i++) {
     if (obj.sections[i].name == ".BTF") {
       BTF btf(obj, i);
@@ -232,7 +240,7 @@ ObjectFile::ObjectFile(Data *data) {
       }
     }
 
-    programs.push_back(Program::make(sym.name, insts, relocs));
+    programs.push_back(Program::make(sym.name, license, insts, relocs));
   }
 }
 
@@ -406,8 +414,9 @@ auto ObjectFile::make_struct(const BTF &btf, size_t type) -> CStructBase* {
 // Program
 //
 
-Program::Program(const std::string &name, std::vector<uint8_t> &insts, std::vector<Reloc> &relocs)
+Program::Program(const std::string &name, const std::string &license, std::vector<uint8_t> &insts, std::vector<Reloc> &relocs)
   : m_name(pjs::Str::make(name))
+  , m_license(license)
   , m_insts(std::move(insts))
   , m_relocs(std::move(relocs))
 {
@@ -421,7 +430,7 @@ auto Program::size() const -> int {
   return m_insts.size() / sizeof(struct bpf_insn);
 }
 
-void Program::load(int type, int attach_type, const std::string &license) {
+void Program::load(int type, int attach_type) {
   if (m_fd) return;
 
   std::vector<struct bpf_insn> insts(size());
@@ -443,7 +452,7 @@ void Program::load(int type, int attach_type, const std::string &license) {
       attr.prog_type = type;
       attr.insn_cnt = insts.size();
       attr.insns = (uintptr_t)insts.data();
-      attr.license = (uintptr_t)license.c_str();
+      attr.license = (uintptr_t)m_license.c_str();
       attr.log_level = 1;
       attr.log_size = log_buf.size();
       attr.log_buf = (uintptr_t)log_buf.data();
@@ -941,7 +950,7 @@ auto Program::size() const -> int {
   return 0;
 }
 
-void Program::load(int type, int attach_type, const std::string &license) {
+void Program::load(int type, int attach_type) {
   unsupported();
 }
 
@@ -1060,29 +1069,20 @@ template<> void ClassDef<Program>::init() {
   accessor("id", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()->id()); });
 
   method("load", [](Context &ctx, Object *obj, Value &ret) {
-    int type, attach_type = 0, i = 0;
-    Str *type_s = nullptr, *attach_type_s = nullptr, *license;
-    if (!ctx.get(i, type) && !ctx.get(i, type_s)) {
-      return ctx.error_argument_type(i, "a number or a string");
-    }
+    int type, attach_type = 0;
+    Str *type_s = nullptr, *attach_type_s = nullptr;
+    if (!ctx.get(0, type) && !ctx.get(0, type_s)) return ctx.error_argument_type(0, "a number or a string");
+    if (ctx.argc() >= 2 && !ctx.get(1, attach_type) && !ctx.get(1, attach_type_s)) return ctx.error_argument_type(1, "a number or a string");
     if (type_s) {
       type = string_to_prog_type(type_s->str());
       if (type < 0) return ctx.error("unknown bpf_prog_type");
     }
-    i++;
-    if (ctx.argc() >= 3) {
-      if (!ctx.get(i, attach_type) && !ctx.get(i, attach_type_s)) {
-        return ctx.error_argument_type(i, "a number or a string");
-      }
-      if (attach_type_s) {
-        attach_type = string_to_attach_type(attach_type_s->str());
-        if (attach_type < 0) return ctx.error("unknown bpf_attach_type");
-      }
-      i++;
+    if (attach_type_s) {
+      attach_type = string_to_attach_type(attach_type_s->str());
+      if (attach_type < 0) return ctx.error("unknown bpf_attach_type");
     }
-    if (!ctx.check(i, license)) return;
     try {
-      obj->as<Program>()->load(type, attach_type, license->str());
+      obj->as<Program>()->load(type, attach_type);
       ret.set(obj);
     } catch (std::runtime_error &err) {
       ctx.error(err);

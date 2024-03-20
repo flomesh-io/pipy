@@ -106,3 +106,5 @@ int cg_sock_opt(struct bpf_sockopt *ctx) {
 
   return 1;
 }
+
+char __LICENSE[] SEC("license") = "GPL";

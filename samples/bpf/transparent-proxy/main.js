@@ -1,9 +1,9 @@
 #!/usr/bin/env pipy
 
 var obj = bpf.object(pipy.load('transparent-proxy.o'))
-var progCgConnect4 = obj.programs.find(p => p.name === 'cg_connect4').load('BPF_PROG_TYPE_CGROUP_SOCK_ADDR', 'BPF_CGROUP_INET4_CONNECT', 'GPL')
-var progCgSockOps = obj.programs.find(p => p.name === 'cg_sock_ops').load('BPF_PROG_TYPE_SOCK_OPS', 'GPL')
-var progCgSockOpt = obj.programs.find(p => p.name === 'cg_sock_opt').load('BPF_PROG_TYPE_CGROUP_SOCKOPT', 'BPF_CGROUP_GETSOCKOPT', 'GPL')
+var progCgConnect4 = obj.programs.find(p => p.name === 'cg_connect4').load('BPF_PROG_TYPE_CGROUP_SOCK_ADDR', 'BPF_CGROUP_INET4_CONNECT')
+var progCgSockOps = obj.programs.find(p => p.name === 'cg_sock_ops').load('BPF_PROG_TYPE_SOCK_OPS')
+var progCgSockOpt = obj.programs.find(p => p.name === 'cg_sock_opt').load('BPF_PROG_TYPE_CGROUP_SOCKOPT', 'BPF_CGROUP_GETSOCKOPT')
 
 var PROXY_PORT = 18000
 var CGRP = '/sys/fs/cgroup'

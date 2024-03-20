@@ -45,6 +45,7 @@ class ObjectFile : public pjs::ObjectTemplate<ObjectFile> {
 public:
   std::vector<pjs::Ref<Program>> programs;
   std::vector<pjs::Ref<Map>> maps;
+  std::string license;
 
 private:
   ObjectFile(Data *data);
@@ -74,16 +75,18 @@ public:
   auto fd() const -> int { return m_fd; }
   auto id() const -> int { return m_id; }
 
-  void load(int type, int attach_type, const std::string &license);
+  void load(int type, int attach_type);
 
 private:
   Program(
     const std::string &name,
+    const std::string &license,
     std::vector<uint8_t> &insts,
     std::vector<Reloc> &relocs
   );
 
   pjs::Ref<pjs::Str> m_name;
+  std::string m_license;
   std::vector<uint8_t> m_insts;
   std::vector<Reloc> m_relocs;
 

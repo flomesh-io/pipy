@@ -59,3 +59,5 @@ int tc_main(struct __sk_buff *skb) {
 
   return TC_ACT_OK;
 }
+
+char __LICENSE[] SEC("license") = "GPL";
