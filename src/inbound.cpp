@@ -243,6 +243,9 @@ InboundTCP::InboundTCP(Listener *listener, const Inbound::Options &options)
 }
 
 InboundTCP::~InboundTCP() {
+  if (m_socket) {
+    m_socket->discard();
+  }
   collect();
 }
 
@@ -270,6 +273,13 @@ void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
   );
 
   retain();
+}
+
+auto InboundTCP::get_socket() -> Socket* {
+  if (!m_socket) {
+    m_socket = Socket::make(SocketTCP::socket().native_handle());
+  }
+  return m_socket;
 }
 
 auto InboundTCP::get_traffic_in() -> size_t {
@@ -355,13 +365,18 @@ void InboundTCP::describe(char *buf, size_t len) {
 // InboundUDP
 //
 
-InboundUDP::InboundUDP(Listener* listener, const Options &options)
+InboundUDP::InboundUDP(Listener* listener, const Options &options, Socket *socket)
   : pjs::ObjectTemplate<InboundUDP, Inbound>(listener, options)
+  , m_socket(socket)
 {
 }
 
 InboundUDP::~InboundUDP() {
   Inbound::collect();
+}
+
+auto InboundUDP::get_socket() -> Socket* {
+  return m_socket;
 }
 
 auto InboundUDP::get_buffered() const -> size_t {
@@ -418,6 +433,7 @@ template<> void ClassDef<Inbound>::init() {
   accessor("remotePort"         , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->remote_port()); });
   accessor("destinationAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_address()); });
   accessor("destinationPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_port()); });
+  accessor("socket"             , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->get_socket()); });
 }
 
 template<> void ClassDef<InboundTCP>::init() {
@@ -436,6 +452,7 @@ template<> void ClassDef<InboundWrapper>::init() {
   accessor("remotePort"         , [](Object *obj, Value &ret) { if (auto i = obj->as<InboundWrapper>()->get()) ret.set(i->remote_port()); });
   accessor("destinationAddress" , [](Object *obj, Value &ret) { if (auto i = obj->as<InboundWrapper>()->get()) ret.set(i->ori_dst_address()); });
   accessor("destinationPort"    , [](Object *obj, Value &ret) { if (auto i = obj->as<InboundWrapper>()->get()) ret.set(i->ori_dst_port()); });
+  accessor("socket"             , [](Object *obj, Value &ret) { if (auto i = obj->as<InboundWrapper>()->get()) ret.set(i->get_socket()); });
 }
 
 } // namespace pjs

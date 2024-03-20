@@ -8,6 +8,14 @@ var progCgSockOpt = obj.programs.find(p => p.name === 'cg_sock_opt').load('BPF_P
 var PROXY_PORT = 18000
 var CGRP = '/sys/fs/cgroup'
 var CGRP_PIPY = `${CGRP}/pipy`
+var SOL_IP = 0
+var SO_ORIGINAL_DST = 80
+
+var sockaddr_in = new CStruct({
+  sin_family: 'uint16',
+  sin_port: 'uint8[2]',
+  sin_addr: 'uint8[4]',
+})
 
 pipy.exec(`mkdir ${CGRP_PIPY}`)
 os.writeFile(`${CGRP_PIPY}/cgroup.procs`, pipy.pid.toString())
@@ -35,11 +43,16 @@ pipy.exit(
 var $targetAddr
 var $targetPort
 
-pipy.listen(PROXY_PORT, { transparent: true }, $=>$
+pipy.listen(PROXY_PORT, $=>$
   .onStart(
     function (ib) {
-      $targetAddr = ib.destinationAddress
-      $targetPort = ib.destinationPort
+      var od = new Data
+      ib.socket.getRawOption(SOL_IP, SO_ORIGINAL_DST, od)
+      var sa = sockaddr_in.decode(od)
+      var addr = sa.sin_addr
+      var port = sa.sin_port
+      $targetAddr = addr.join('.')
+      $targetPort = (port[0] << 8) | port[1]
     }
   )
   .fork().to($=>$

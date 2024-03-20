@@ -834,4 +834,56 @@ void SocketNetlink::on_send(Data *data, const std::error_code &ec, std::size_t n
   close_async();
 }
 
+//
+// Socket
+//
+
+auto Socket::get_raw_option(int level, int option, Data *data) -> int {
+  if (!m_fd) throw std::runtime_error("socket is gone");
+  uint8_t buf[DATA_CHUNK_SIZE];
+  socklen_t len = sizeof(buf);
+  auto ret = getsockopt(m_fd, level, option, buf, &len);
+  data->push(buf, len, nullptr);
+  return ret;
+}
+
+auto Socket::set_raw_option(int level, int option, Data *data) -> int {
+  if (!m_fd) throw std::runtime_error("socket is gone");
+  pjs::vl_array<uint8_t, 1000> buf(data->size());
+  data->to_bytes(buf.data());
+  return setsockopt(m_fd, level, option, buf.data(), buf.size());
+}
+
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy;
+
+template<> void ClassDef<Socket>::init() {
+  method("getRawOption", [](Context &ctx, Object *obj, Value &ret) {
+    int level, option;
+    pipy::Data *data;
+    if (!ctx.arguments(3, &level, &option, &data)) return;
+    if (!data) return ctx.error_argument_type(2, "a non-null Data");
+    try {
+      ret.set(obj->as<Socket>()->get_raw_option(level, option, data));
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  method("setRawOption", [](Context &ctx, Object *obj, Value &ret) {
+    int level, option;
+    pipy::Data *data;
+    if (!ctx.arguments(3, &level, &option, &data)) return;
+    if (!data) return ctx.error_argument_type(2, "a non-null Data");
+    try {
+      ret.set(obj->as<Socket>()->set_raw_option(level, option, data));
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+}
+
+} // namespace pjs

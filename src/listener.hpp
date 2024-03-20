@@ -161,6 +161,7 @@ private:
 
   private:
     Listener* m_listener;
+    pjs::Ref<Socket> m_socket;
     std::string m_local_addr;
     int m_local_port = 0;
     bool m_accepting = false;

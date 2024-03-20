@@ -26,6 +26,7 @@
 #ifndef SOCKET_HPP
 #define SOCKET_HPP
 
+#include "pjs/pjs.hpp"
 #include "net.hpp"
 #include "input.hpp"
 #include "data.hpp"
@@ -312,6 +313,24 @@ private:
   };
 
   thread_local static Data::Producer s_dp;
+};
+
+//
+// Socket
+//
+
+class Socket : public pjs::ObjectTemplate<Socket> {
+public:
+  auto get_raw_option(int level, int option, Data *data) -> int;
+  auto set_raw_option(int level, int option, Data *data) -> int;
+  void discard() { m_fd = 0; }
+
+private:
+  Socket(int fd) : m_fd(fd) {}
+
+  int m_fd;
+
+  friend class pjs::ObjectTemplate<Socket>;
 };
 
 } // namespace pipy

@@ -71,6 +71,7 @@ public:
   auto ori_dst_port() -> int { address(); return m_ori_dst_port; }
   bool is_receiving() const { return m_receiving_state == RECEIVING; }
 
+  virtual auto get_socket() -> Socket* = 0;
   virtual auto get_buffered() const -> size_t = 0;
   virtual auto get_traffic_in() ->size_t = 0;
   virtual auto get_traffic_out() ->size_t = 0;
@@ -143,9 +144,11 @@ private:
   InboundTCP(Listener *listener, const Inbound::Options &options);
   ~InboundTCP();
 
+  pjs::Ref<Socket> m_socket;
   asio::ip::tcp::endpoint m_peer;
   bool m_canceled = false;
 
+  virtual auto get_socket() -> Socket* override;
   virtual auto get_buffered() const -> size_t override { return SocketTCP::buffered(); }
   virtual auto get_traffic_in() -> size_t override;
   virtual auto get_traffic_out() -> size_t override;
@@ -190,9 +193,10 @@ class InboundUDP :
   public pjs::ObjectTemplate<InboundUDP, Inbound>,
   public SocketUDP::Peer
 {
-  InboundUDP(Listener* listener, const Options &options);
+  InboundUDP(Listener* listener, const Options &options, Socket *socket);
   ~InboundUDP();
 
+  virtual auto get_socket() -> Socket* override;
   virtual auto get_buffered() const -> size_t override;
   virtual auto get_traffic_in() -> size_t override;
   virtual auto get_traffic_out() -> size_t override;
@@ -201,6 +205,8 @@ class InboundUDP :
   virtual void on_peer_open() override;
   virtual void on_peer_input(Event *evt) override;
   virtual void on_peer_close() override;
+
+  pjs::Ref<Socket> m_socket;
 
   friend class pjs::ObjectTemplate<InboundUDP, Inbound>;
 };

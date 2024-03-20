@@ -422,6 +422,9 @@ Listener::AcceptorUDP::AcceptorUDP(Listener *listener)
 }
 
 Listener::AcceptorUDP::~AcceptorUDP() {
+  if (m_socket) {
+    m_socket->discard();
+  }
   close();
 }
 
@@ -439,6 +442,8 @@ void Listener::AcceptorUDP::start(const asio::ip::udp::endpoint &endpoint) {
 
   retain();
   SocketUDP::open();
+
+  m_socket = Socket::make(SocketUDP::socket().native_handle());
 }
 
 void Listener::AcceptorUDP::accept() {
@@ -455,7 +460,7 @@ void Listener::AcceptorUDP::stop() {
 
 auto Listener::AcceptorUDP::on_socket_new_peer() -> Peer* {
   if (m_accepting) {
-    auto i = InboundUDP::make(m_listener, m_listener->m_options);
+    auto i = InboundUDP::make(m_listener, m_listener->m_options, m_socket);
     return i;
   } else {
     return nullptr;
