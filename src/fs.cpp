@@ -263,7 +263,8 @@ void change_dir(const std::string &filename) {
 }
 
 bool remove_dir(const std::string &filename) {
-  return false;
+  auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
+  return RemoveDirectoryW(wpath.c_str());
 }
 
 bool make_dir(const std::string &filename) {
@@ -333,7 +334,9 @@ bool write_file(const std::string &filename, const std::vector<uint8_t> &data) {
 }
 
 bool rename(const std::string &old_name, const std::string &new_name) {
-  return false;
+  auto old_wpath = os::windows::convert_slash(os::windows::a2w(old_name));
+  auto new_wpath = os::windows::convert_slash(os::windows::a2w(new_name));
+  return MoveFileW(old_wpath.c_str(), new_wpath.c_str());
 }
 
 bool unlink(const std::string &filename) {
