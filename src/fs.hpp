@@ -57,10 +57,12 @@ bool is_file(const std::string &filename);
 auto get_file_time(const std::string &filename) -> double;
 auto current_dir() -> std::string;
 void change_dir(const std::string &filename);
+bool remove_dir(const std::string &filename);
 bool make_dir(const std::string &filename);
 bool read_dir(const std::string &filename, std::list<std::string> &list);
 bool read_file(const std::string &filename, std::vector<uint8_t> &data);
 bool write_file(const std::string &filename, const std::vector<uint8_t> &data);
+bool rename(const std::string &old_name, const std::string &new_name);
 bool unlink(const std::string &filename);
 
 } // namespace fs

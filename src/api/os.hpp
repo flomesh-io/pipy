@@ -27,7 +27,9 @@
 #define API_OS_HPP
 
 #include "pjs/pjs.hpp"
+#include "options.hpp"
 #include "fs.hpp"
+#include "data.hpp"
 
 namespace pipy {
 
@@ -47,8 +49,31 @@ public:
   {
   };
 
+  struct MkdirOptions : public Options {
+    bool recursive = false;
+    MkdirOptions() {}
+    MkdirOptions(pjs::Object *options);
+  };
+
+  struct RmdirOptions : public MkdirOptions {
+    bool force = false;
+    RmdirOptions() {}
+    RmdirOptions(pjs::Object *options);
+  };
+
   auto env() -> pjs::Object* { return m_env; }
-  auto platform() -> Platform;
+
+  static auto platform() -> Platform;
+  static auto stat(const std::string &pathname) -> Stats*;
+  static auto list(const std::string &pathname) -> pjs::Array*;
+  static auto read(const std::string &pathname) -> Data*;
+  static void write(const std::string &pathname, Data *data);
+  static void write(const std::string &pathname, const std::string &data);
+  static void rename(const std::string &old_name, const std::string &new_name);
+  static bool unlink(const std::string &pathname);
+  static void mkdir(const std::string &pathname, const MkdirOptions &options = MkdirOptions());
+  static bool rmdir(const std::string &pathname, const RmdirOptions &options = RmdirOptions());
+  static bool rm(const std::string &pathname, const RmdirOptions &options = RmdirOptions());
 
 private:
   OS();

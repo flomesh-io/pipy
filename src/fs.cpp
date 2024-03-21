@@ -33,6 +33,7 @@
 
 #else // !_WIN32
 
+#include <stdio.h>
 #include <sys/stat.h>
 #include <limits.h>
 #include <dirent.h>
@@ -135,6 +136,10 @@ void change_dir(const std::string &filename) {
   chdir(filename.c_str());
 }
 
+bool remove_dir(const std::string &filename) {
+  return rmdir(filename.c_str()) == 0;
+}
+
 bool make_dir(const std::string &filename) {
   return mkdir(filename.c_str(), S_IRWXU | S_IRWXG | S_IRWXO) == 0;
 }
@@ -170,6 +175,10 @@ bool write_file(const std::string &filename, const std::vector<uint8_t> &data) {
   if (!fs.is_open()) return false;
   fs.write((const char *)data.data(), data.size());
   return true;
+}
+
+bool rename(const std::string &old_name, const std::string &new_name) {
+  return ::rename(old_name.c_str(), new_name.c_str()) == 0;
 }
 
 bool unlink(const std::string &filename) {
@@ -253,6 +262,10 @@ void change_dir(const std::string &filename) {
   SetCurrentDirectoryW(wpath.c_str());
 }
 
+bool remove_dir(const std::string &filename) {
+  return false;
+}
+
 bool make_dir(const std::string &filename) {
   auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
   return CreateDirectoryW(wpath.c_str(), NULL);
@@ -317,6 +330,10 @@ bool write_file(const std::string &filename, const std::vector<uint8_t> &data) {
   auto ok = WriteFile(h, data.data(), data.size(), &written, NULL);
   CloseHandle(h);
   return ok && written == data.size();
+}
+
+bool rename(const std::string &old_name, const std::string &new_name) {
+  return false;
 }
 
 bool unlink(const std::string &filename) {

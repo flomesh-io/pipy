@@ -17,8 +17,8 @@ var sockaddr_in = new CStruct({
   sin_addr: 'uint8[4]',
 })
 
-pipy.exec(`mkdir ${CGRP_PIPY}`)
-os.writeFile(`${CGRP_PIPY}/cgroup.procs`, pipy.pid.toString())
+os.mkdir(CGRP_PIPY)
+os.write(`${CGRP_PIPY}/cgroup.procs`, pipy.pid.toString())
 
 obj.maps.find(m => m.name === 'map_config').update(
   { i: 0 }, {
@@ -36,7 +36,8 @@ pipy.exit(
     bpf.detach('BPF_CGROUP_INET4_CONNECT', progCgConnect4.fd, CGRP)
     bpf.detach('BPF_CGROUP_SOCK_OPS', progCgSockOps.fd, CGRP)
     bpf.detach('BPF_CGROUP_GETSOCKOPT', progCgSockOpt.fd, CGRP)
-    pipy.exec(`rm ${CGRP_PIPY}`)
+    os.write(`${CGRP}/cgroup.procs`, pipy.pid.toString())
+    os.rmdir(CGRP_PIPY)
   }
 )
 
