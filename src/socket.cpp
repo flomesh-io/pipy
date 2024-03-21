@@ -840,7 +840,7 @@ void SocketNetlink::on_send(Data *data, const std::error_code &ec, std::size_t n
 
 auto Socket::get_raw_option(int level, int option, Data *data) -> int {
   if (!m_fd) throw std::runtime_error("socket is gone");
-  uint8_t buf[DATA_CHUNK_SIZE];
+  char buf[DATA_CHUNK_SIZE];
   socklen_t len = sizeof(buf);
   auto ret = getsockopt(m_fd, level, option, buf, &len);
   data->push(buf, len, nullptr);
@@ -849,8 +849,8 @@ auto Socket::get_raw_option(int level, int option, Data *data) -> int {
 
 auto Socket::set_raw_option(int level, int option, Data *data) -> int {
   if (!m_fd) throw std::runtime_error("socket is gone");
-  pjs::vl_array<uint8_t, 1000> buf(data->size());
-  data->to_bytes(buf.data());
+  pjs::vl_array<char, 1000> buf(data->size());
+  data->to_bytes((uint8_t *)buf.data());
   return setsockopt(m_fd, level, option, buf.data(), buf.size());
 }
 
