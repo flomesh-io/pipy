@@ -1,7 +1,4 @@
-var obj = bpf.object(
-  pipy.load('packet-counter.o')
-)
-
+var obj = bpf.object(pipy.load('packet-counter.o'))
 var prog = obj.programs[0].load('BPF_PROG_TYPE_XDP')
 var map = obj.maps[0]
 
@@ -13,8 +10,13 @@ pipy.listen(8080, $=>$
   )
 )
 
+// We don't have to rely on iproute2 to do the attaching.
+// We may as well do it directly by talking to Netlink directly.
+// However, we'll just go with iproute2 here for simplicity
+// as our focus now is on eBPF, not Netlink.
 bpf.pin(PIN_PATH, prog.fd)
 pipy.exec(`ip link set dev lo xdpgeneric pinned ${PIN_PATH}`)
+
 dumpStats()
 
 function dumpStats() {
@@ -30,6 +32,6 @@ function dumpStats() {
 pipy.exit(
   function () {
     pipy.exec('ip link set dev lo xdpgeneric off')
-    pipy.exec(`rm ${PIN_PATH}`)
+    os.rm(PIN_PATH, { force: true })
   }
 )
