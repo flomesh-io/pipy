@@ -1,0 +1,7 @@
+limits:
+  - path: /slow
+    rate: 1000
+  - path: /slow/slow
+    rate: 100
+  - path: /*
+    rate: null
