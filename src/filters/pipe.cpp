@@ -130,9 +130,8 @@ void Pipe::process(Event *evt) {
       }
 
       p->start(args);
+      m_is_started = true;
     }
-
-    m_is_started = true;
   }
 
   if (!m_is_started) {
