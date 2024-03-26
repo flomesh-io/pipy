@@ -251,10 +251,9 @@ void Logger::StdoutTarget::write(const Data &msg) {
     if (!m_file_stream) {
       m_file_stream = FileStream::make(
         false,
-        m_is_stderr ? STDERR_FILENO : STDOUT_FILENO,
+        dup(m_is_stderr ? STDERR_FILENO : STDOUT_FILENO),
         &s_dp_stdout
       );
-      m_file_stream->set_no_close();
     }
     Data *buf = Data::make();
     s_dp.push(buf, &msg);
