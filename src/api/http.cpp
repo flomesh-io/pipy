@@ -158,6 +158,103 @@ auto ResponseHead::error_to_status(StreamEnd::Error err, int &status) -> pjs::St
 }
 
 //
+// Match
+//
+
+Match::Match(const std::string &path) {
+  if (path.empty() || path[0] != '/') {
+    throw std::runtime_error("path pattern must begin with '/'");
+  }
+
+  auto segs = utils::split(path.substr(1), '/');
+  m_sections.resize(segs.size());
+
+  size_t i = 0;
+  for (const auto &seg : segs) {
+    auto &sec = m_sections[i++];
+    if (!seg.empty()) {
+      if (seg.front() == '{') {
+        if (seg.back() == '}') {
+          sec.name = pjs::Str::make(seg.substr(1, seg.length() - 2));
+          continue;
+        }
+      } else if (seg.front() == '*') {
+        if (seg.length() == 1) {
+          continue;
+        }
+      } else {
+        sec.match = seg;
+        continue;
+      }
+    }
+    throw std::runtime_error("invalid path pattern");
+  }
+}
+
+auto Match::exec(const std::string &path) -> pjs::Object* {
+  thread_local static pjs::ConstStr s_asterisk("*");
+  size_t i = 0, p = 0;
+  auto args = pjs::Object::make();
+  auto size = path.length();
+  if (size > 0 && path.back() == '/') size--;
+  while (i < m_sections.size() && p < size) {
+    if (path[p++] != '/') break;
+    auto q = p;
+    while (q < size) {
+      auto c = path[q];
+      if (c == '/' || c == '#' || c == '?') break; else q++;
+    }
+    auto s = path.c_str() + p;
+    auto n = q - p;
+    if (!n) break;
+    const auto &sec = m_sections[i];
+    if (sec.match.empty()) {
+      if (sec.name) {
+        args->set(sec.name, pjs::Str::make(s, n));
+      } else {
+        if (i + 1 == m_sections.size()) {
+          n = size - p;
+          args->set(s_asterisk, pjs::Str::make(s, n));
+        }
+      }
+    } else {
+      if (sec.match.length() != n) break;
+      if (!utils::iequals(sec.match.c_str(), s, n)) break;
+    }
+    p += n;
+    i += 1;
+  }
+  if (i < m_sections.size() || p < size) {
+    args->retain();
+    args->release();
+    return nullptr;
+  }
+  return args;
+}
+
+auto Match::exec(pjs::Object *head) -> pjs::Object* {
+  pjs::Ref<RequestHead> req(pjs::coerce<RequestHead>(head));
+  return exec(req->path->str());
+}
+
+void Match::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
+  pjs::Str *path;
+  pjs::Object *head = nullptr;
+  if (!ctx.get(0, path) && !ctx.get(0, head)) {
+    return ctx.error_argument_type(0, "a string or an object");
+  }
+  try {
+    if (path) {
+      ret.set(exec(path->str()));
+    } else {
+      ret.set(exec(head));
+    }
+  } catch (std::runtime_error &err) {
+    ctx.error(err);
+  }
+}
+
+//
 // Agent
 //
 
@@ -799,6 +896,25 @@ template<> void ClassDef<ResponseHead>::init() {
   field<Ref<Str>>("statusText", [](ResponseHead *obj) { return &obj->statusText; });
 }
 
+template<> void ClassDef<Match>::init() {
+  super<Function>();
+  ctor([](Context &ctx) -> Object* {
+    Str *path;
+    if (!ctx.arguments(1, &path)) return nullptr;
+    try {
+      return Match::make(path->str());
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+}
+
+template<> void ClassDef<Constructor<Match>>::init() {
+  super<Function>();
+  ctor();
+}
+
 template<> void ClassDef<Agent>::init() {
   ctor([](Context &ctx) -> Object* {
     Str *target;
@@ -902,6 +1018,7 @@ template<> void ClassDef<Constructor<File>>::init() {
 
 template<> void ClassDef<Http>::init() {
   ctor();
+  variable("Match", class_of<Constructor<Match>>());
   variable("Agent", class_of<Constructor<Agent>>());
   variable("Directory", class_of<Constructor<Directory>>());
   variable("File", class_of<Constructor<File>>());

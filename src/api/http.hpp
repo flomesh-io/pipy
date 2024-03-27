@@ -34,6 +34,7 @@
 #include "options.hpp"
 
 #include <string>
+#include <vector>
 #include <unordered_map>
 
 namespace pipy {
@@ -85,6 +86,30 @@ public:
   bool is_tunnel_ok(TunnelType requested);
 
   static auto error_to_status(StreamEnd::Error err, int &status) -> pjs::Str*;
+};
+
+//
+// Match
+//
+
+class Match : public pjs::FunctionTemplate<Match> {
+public:
+  auto exec(const std::string &path) -> pjs::Object*;
+  auto exec(pjs::Object *head) -> pjs::Object*;
+
+  void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
+
+private:
+  Match(const std::string &path);
+
+  struct Section {
+    pjs::Ref<pjs::Str> name;
+    std::string match;
+  };
+
+  std::vector<Section> m_sections;
+
+  friend class pjs::ObjectTemplate<Match, pjs::Function>;
 };
 
 //
