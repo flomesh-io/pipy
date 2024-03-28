@@ -2225,6 +2225,7 @@ public:
   };
 
   struct Error {
+    Value value;
     std::string message;
     std::vector<Location> backtrace;
     auto where() const -> const Location*;
@@ -2272,6 +2273,8 @@ public:
   bool ok() const { return !m_has_error; }
   auto error() const -> Error& { return *m_error; }
   void error(const Context &ctx);
+  void error(const Value &value);
+  void error(const char *msg);
   void error(const std::string &msg);
   void error(const std::runtime_error &err);
   void error_argument_count(int n);

@@ -105,6 +105,7 @@ public:
     enum Kind {
       MODULE,
       FUNCTION,
+      CATCH,
       BLOCK,
       LABEL,
       SWITCH,
@@ -117,6 +118,7 @@ public:
     auto kind() const -> Kind { return m_kind; }
     auto label() const -> Str* { return m_label; }
     auto parent() const -> Scope* { return m_parent; }
+    void parent(Scope *parent) { m_parent = parent; }
     bool is_root() const { return !m_parent; }
     void declare_arg(Expr *expr);
     void declare_var(Str *name, Expr *value = nullptr);

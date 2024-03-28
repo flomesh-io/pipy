@@ -563,9 +563,7 @@ void FunctionLiteral::resolve(Module *module, Context &ctx, int l, LegacyImports
       if (res.is_return()) {
         result = res.value;
       } else if (res.is_throw()) {
-        auto s = res.value.to_string();
-        ctx.error(s->str());
-        s->release();
+        ctx.error(res.value);
       } else {
         result = Value::undefined;
       }

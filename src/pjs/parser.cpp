@@ -802,6 +802,7 @@ private:
     InvalidString,
     InvalidLeftValue,
     InvalidArgumentList,
+    InvalidExceptionVariable,
     InvalidOptionalChain,
     IncompleteExpression,
     AmbiguousPrecedence,
@@ -1002,6 +1003,7 @@ private:
       case InvalidString: m_error = "invalid string encoding"; break;
       case InvalidLeftValue: m_error = "invalid left-value"; break;
       case InvalidArgumentList: m_error = "invalid argument list"; break;
+      case InvalidExceptionVariable: m_error = "invalid exception variable"; break;
       case InvalidOptionalChain: m_error = "invalid optional chain"; break;
       case IncompleteExpression: m_error = "incomplete expression"; break;
       case AmbiguousPrecedence: m_error = "ambiguous exponentiation precedence"; break;
@@ -1397,21 +1399,22 @@ Stmt* ScriptParser::statement() {
       if (!peek(Token::ID("{"), TokenExpected)) return nullptr;
       auto stmt = std::unique_ptr<Stmt>(statement());
       if (!stmt) return nullptr;
-      std::unique_ptr<Expr> catch_clause;
+      std::unique_ptr<Stmt> catch_clause;
       std::unique_ptr<Stmt> finally_clause;
+      std::unique_ptr<Expr> exception_variable;
       if (read(Token::ID("catch"))) {
-        std::string name;
         if (read(Token::ID("("))) {
-          auto name = read_identifier(MissingIdentifier);
-          if (!name) return nullptr;
+          exception_variable = std::unique_ptr<Expr>(expression());
           if (!read(Token::ID(")"), TokenExpected)) return nullptr;
+          if (!exception_variable->is_argument()) {
+            error(InvalidExceptionVariable);
+            return nullptr;
+          }
         }
         if (!peek(Token::ID("{"), TokenExpected)) return nullptr;
         auto stmt = statement();
         if (!stmt) return nullptr;
-        catch_clause = std::unique_ptr<Expr>(
-          function(name.empty() ? nullptr : identifier(name), stmt)
-        );
+        catch_clause = std::unique_ptr<Stmt>(stmt);
       }
       if (read(Token::ID("finally"))) {
         if (!peek(Token::ID("{"), TokenExpected)) return nullptr;
@@ -1423,7 +1426,7 @@ Stmt* ScriptParser::statement() {
         error(MissingCatchFinally);
         return nullptr;
       }
-      return locate(try_catch(stmt.release(), catch_clause.release(), finally_clause.release()), l);
+      return locate(try_catch(stmt.release(), catch_clause.release(), finally_clause.release(), exception_variable.release()), l);
     }
     default: {
       Expr *starting_operand = nullptr;

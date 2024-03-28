@@ -295,8 +295,7 @@ private:
 
 class Try : public Stmt {
 public:
-  Try(Stmt *try_clause, Expr *catch_clause, Stmt *finally_clause)
-    : m_try(try_clause), m_catch(catch_clause), m_finally(finally_clause) {}
+  Try(Stmt *try_clause, Stmt *catch_clause, Stmt *finally_clause, Expr *exception_variable);
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
   virtual void resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) override;
@@ -305,8 +304,10 @@ public:
 
 private:
   std::unique_ptr<Stmt> m_try;
-  std::unique_ptr<Expr> m_catch;
+  std::unique_ptr<Stmt> m_catch;
   std::unique_ptr<Stmt> m_finally;
+  std::unique_ptr<Expr> m_exception_variable;
+  Scope m_catch_scope;
 };
 
 //
@@ -362,7 +363,7 @@ inline Stmt* var(expr::Identifier *name, Expr *expr = nullptr) { return new stmt
 inline Stmt* function(expr::Identifier *name, Expr *expr) { return new stmt::Function(name, expr); }
 inline Stmt* if_else(Expr *cond, Stmt *then_clause, Stmt *else_clause = nullptr) { return new stmt::If(cond, then_clause, else_clause); }
 inline Stmt* switch_case(Expr *cond, std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> &&cases, Stmt *default_case = nullptr) { return new stmt::Switch(cond, std::move(cases), default_case); }
-inline Stmt* try_catch(Stmt *try_clause, Expr *catch_clause, Stmt *finally_clause) { return new stmt::Try(try_clause, catch_clause, finally_clause); }
+inline Stmt* try_catch(Stmt *try_clause, Stmt *catch_clause, Stmt *finally_clause, Expr *exception_variable) { return new stmt::Try(try_clause, catch_clause, finally_clause, exception_variable); }
 inline Stmt* flow_break() { return new stmt::Break(); }
 inline Stmt* flow_break(expr::Identifier *label) { return new stmt::Break(label); }
 inline Stmt* flow_return(Expr *expr = nullptr) { return new stmt::Return(expr); }

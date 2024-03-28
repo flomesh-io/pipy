@@ -140,7 +140,7 @@ void Evaluate::execute(Context &ctx, Result &result) {
       obj->type()->set(obj, m_export->id, result.value);
     }
   } else {
-    result.value.set(pjs::Error::make(ctx.error()));
+    result.value = ctx.error().value;
     result.set_throw();
   }
 }
@@ -187,7 +187,7 @@ void Var::execute(Context &ctx, Result &result) {
     if (m_expr->eval(ctx, val) && m_identifier->assign(ctx, val)) {
       result.set_done();
     } else {
-      result.value.set(pjs::Error::make(ctx.error()));
+      result.value = ctx.error().value;
       result.set_throw();
     }
   }
@@ -263,7 +263,7 @@ void Function::execute(Context &ctx, Result &result) {
     if (m_expr->eval(ctx, val) && m_identifier->assign(ctx, val)) {
       result.set_done();
     } else {
-      result.value.set(pjs::Error::make(ctx.error()));
+      result.value = ctx.error().value;
       result.set_throw();
     }
   }
@@ -310,7 +310,7 @@ void If::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *impor
 void If::execute(Context &ctx, Result &result) {
   Value val;
   if (!m_cond->eval(ctx, val)) {
-    result.value.set(pjs::Error::make(ctx.error()));
+    result.value = ctx.error().value;
     result.set_throw();
     return;
   }
@@ -359,7 +359,7 @@ void Switch::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *i
 void Switch::execute(Context &ctx, Result &result) {
   Value cond_val;
   if (!m_cond->eval(ctx, cond_val)) {
-    result.value.set(pjs::Error::make(ctx.error()));
+    result.value = ctx.error().value;
     result.set_throw();
     return;
   }
@@ -369,7 +369,7 @@ void Switch::execute(Context &ctx, Result &result) {
     auto e = p->first.get();
     Value val;
     if (!e->eval(ctx, val)) {
-      result.value.set(pjs::Error::make(ctx.error()));
+      result.value = ctx.error().value;
       result.set_throw();
       return;
     }
@@ -460,7 +460,7 @@ void Return::execute(Context &ctx, Result &result) {
     if (m_expr->eval(ctx, result.value)) {
       result.set_return();
     } else {
-      result.value.set(pjs::Error::make(ctx.error()));
+      result.value = ctx.error().value;
       result.set_throw();
     }
   } else {
@@ -493,7 +493,7 @@ void Throw::execute(Context &ctx, Result &result) {
       ctx.backtrace(source(), line(), column());
       result.set_throw();
     } else {
-      result.value.set(pjs::Error::make(ctx.error()));
+      result.value = ctx.error().value;
       result.set_throw();
     }
   } else {
@@ -511,32 +511,56 @@ void Throw::dump(std::ostream &out, const std::string &indent) {
 // Try
 //
 
+Try::Try(Stmt *try_clause, Stmt *catch_clause, Stmt *finally_clause, Expr *exception_variable)
+  : m_try(try_clause)
+  , m_catch(catch_clause)
+  , m_finally(finally_clause)
+  , m_exception_variable(exception_variable)
+  , m_catch_scope(Scope::CATCH)
+{
+  if (exception_variable) {
+    m_catch_scope.declare_arg(exception_variable);
+  }
+}
+
 bool Try::declare(Module *module, Tree::Scope &scope, Error &error) {
   if (!m_try->declare(module, scope, error)) return false;
-  if (m_catch && !m_catch->declare(module, scope, error)) return false;
+  if (m_catch) {
+    m_catch_scope.parent(&scope);
+    if (!m_catch->declare(module, m_catch_scope, error)) return false;
+  }
   if (m_finally && !m_finally->declare(module, scope, error)) return false;
   return true;
 }
 
 void Try::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
   m_try->resolve(module, ctx, l, imports);
-  if (m_catch) m_catch->resolve(module, ctx, l, imports);
+  if (m_catch) {
+    Context cctx(
+      ctx, 0, nullptr,
+      pjs::Scope::make(
+        ctx.instance(),
+        ctx.scope(),
+        m_catch_scope.size(),
+        m_catch_scope.variables()
+      )
+    );
+    m_catch->resolve(module, cctx, l, imports);
+  }
   if (m_finally) m_finally->resolve(module, ctx, l, imports);
 }
 
 void Try::execute(Context &ctx, Result &result) {
   m_try->execute(ctx, result);
   if (result.is_throw() && m_catch) {
-    Value f;
-    if (m_catch->eval(ctx, f) && f.is_function()) {
-      Value e(pjs::Error::make(ctx.error()));
-      (*f.f())(ctx, 1, &e, result.value);
-      if (!ctx.ok()) {
-        result.value.set(pjs::Error::make(ctx.error()));
-        result.set_throw();
-      } else {
-        result.set_done();
-      }
+    ctx.reset();
+    Context cctx(ctx, 1, &result.value, ctx.scope());
+    if (auto scope = m_catch_scope.instantiate(cctx)) {
+      m_catch->execute(cctx, result);
+      scope->clear();
+    } else {
+      result.value = ctx.error().value;
+      result.set_throw();
     }
   }
   if (m_finally) {
