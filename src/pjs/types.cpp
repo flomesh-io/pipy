@@ -2024,10 +2024,10 @@ template<> void ClassDef<Error>::init() {
     return Error::make(message, cause);
   });
 
-  accessor("name", [](Object *obj, Value &val) { val.set(obj->as<Error>()->name()); });
-  accessor("message", [](Object *obj, Value &val) { val.set(obj->as<Error>()->message()); });
-  accessor("cause", [](Object *obj, Value &val) { val.set(obj->as<Error>()->cause()); });
-  accessor("stack", [](Object *obj, Value &val) { val.set(obj->as<Error>()->stack()); });
+  accessor("name", [](Object *obj, Value &val) { val.set(obj->as<Error>()->name()); }, nullptr, Field::Enumerable);
+  accessor("message", [](Object *obj, Value &val) { val.set(obj->as<Error>()->message()); }, nullptr, Field::Enumerable);
+  accessor("cause", [](Object *obj, Value &val) { val.set(obj->as<Error>()->cause()); }, nullptr, Field::Enumerable);
+  accessor("stack", [](Object *obj, Value &val) { val.set(obj->as<Error>()->stack()); }, nullptr, Field::Enumerable);
 }
 
 template<> void ClassDef<Constructor<Error>>::init() {
