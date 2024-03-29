@@ -28,6 +28,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <cmath>
 
 namespace pjs {
 
@@ -1339,16 +1340,22 @@ template<> void ClassDef<Constructor<Number>>::init() {
   });
 
   method("parseFloat", [](Context &ctx, Object*, Value &ret) {
-    Str *s;
-    if (!ctx.arguments(1, &s)) return;
-    ret.set(s->parse_float());
+    Value v; ctx.get(0, v);
+    switch (v.type()) {
+      case Value::Type::Number: ret.set(v.n()); break;
+      case Value::Type::String: ret.set(v.s()->parse_float()); break;
+      default: ret.set(std::numeric_limits<double>::quiet_NaN()); break;
+    }
   });
 
   method("parseInt", [](Context &ctx, Object*, Value &ret) {
-    Str *s;
     int base = 10;
-    if (!ctx.arguments(1, &s, &base)) return;
-    ret.set(s->parse_int(base));
+    Value v; ctx.get(0, v); ctx.get(1, base);
+    switch (v.type()) {
+      case Value::Type::Number: ret.set(std::ceil(v.n())); break;
+      case Value::Type::String: ret.set(v.s()->parse_int(base)); break;
+      default: ret.set(std::numeric_limits<double>::quiet_NaN()); break;
+    }
   });
 }
 
