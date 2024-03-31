@@ -64,6 +64,7 @@ public:
   auto env() -> pjs::Object* { return m_env; }
 
   static auto platform() -> Platform;
+  static auto home() -> std::string;
   static auto stat(const std::string &pathname) -> Stats*;
   static auto list(const std::string &pathname) -> pjs::Array*;
   static auto read(const std::string &pathname) -> Data*;

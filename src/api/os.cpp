@@ -63,6 +63,10 @@ auto OS::platform() -> Platform {
 #endif
 }
 
+auto OS::home() -> std::string {
+  return fs::home();
+}
+
 auto OS::stat(const std::string &pathname) -> Stats* {
   auto s = OS::Stats::make();
   if (fs::stat(pathname, *s)) {
@@ -225,6 +229,11 @@ template<> void ClassDef<OS>::init() {
   // os.env
   accessor("env", [](Object *obj, Value &ret) {
     ret.set(obj->as<OS>()->env());
+  });
+
+  // os.home
+  method("home", [](Context &ctx, Object*, Value &ret) {
+    ret.set(OS::home());
   });
 
   // os.stat

@@ -38,6 +38,7 @@
 #include <limits.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <pwd.h>
 #include <fstream>
 
 #endif // _WIN32
@@ -57,6 +58,11 @@ bool Stat::is_socket()           const { return S_ISSOCK(mode); }
 
 inline static auto ts2secs(const struct timespec &ts) -> double {
   return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
+auto home() -> std::string {
+  auto pw = getpwuid(getuid());
+  return pw->pw_dir;
 }
 
 auto abs_path(const std::string &filename) -> std::string {
@@ -202,6 +208,10 @@ inline static auto ft2secs(const FILETIME &ft) -> double {
   ) / 10000;
   const double DAYS_FROM_1601_TO_1970 = 134774.0;
   return (double)msec / 1000.0 - DAYS_FROM_1601_TO_1970 * 24 * 60 * 60;
+}
+
+auto home() -> std::string {
+  return "";
 }
 
 auto abs_path(const std::string &filename) -> std::string {

@@ -49,6 +49,7 @@ struct Stat {
   bool is_socket() const;
 };
 
+auto home() -> std::string;
 auto abs_path(const std::string &filename) -> std::string;
 bool stat(const std::string &filename, Stat &s);
 bool exists(const std::string &filename);
