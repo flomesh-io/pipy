@@ -444,7 +444,7 @@ target_link_libraries(
 )
 
 if(WIN32)
-  target_link_libraries(pipy crypt32)
+  target_link_libraries(pipy crypt32 userenv)
 else()
   target_link_libraries(pipy -pthread -ldl)
 endif()

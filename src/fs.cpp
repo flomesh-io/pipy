@@ -211,7 +211,13 @@ inline static auto ft2secs(const FILETIME &ft) -> double {
 }
 
 auto home() -> std::string {
-  return "";
+  wchar_t buf[MAX_PATH];
+  DWORD buf_size = sizeof(buf) / sizeof(buf[0]);
+  HANDLE token_handle;
+  OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token_handle);
+  GetUserProfileDirectoryW(token_handle, buf, &buf_size);
+  CloseHandle(token_handle);
+  return os::windows::convert_slash(os::windows::w2a(std::wstring(buf, buf_size)));
 }
 
 auto abs_path(const std::string &filename) -> std::string {

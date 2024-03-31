@@ -41,6 +41,7 @@ auto process_id() -> int;
 #ifdef _WIN32
 
 #include <Windows.h>
+#include <UserEnv.h>
 
 #include <string>
 #include <list>
@@ -90,6 +91,7 @@ namespace windows {
 
 auto a2w(const std::string &s) -> std::wstring;
 auto w2a(const std::wstring &s) -> std::string;
+auto convert_slash(const std::string &path) -> std::string;
 auto convert_slash(const std::wstring &path) -> std::wstring;
 auto encode_argv(const std::list<std::string> &argv) -> std::string;
 auto get_last_error() -> std::string;
