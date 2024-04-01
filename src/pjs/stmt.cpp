@@ -553,6 +553,9 @@ void Try::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *impo
 void Try::execute(Context &ctx, Result &result) {
   m_try->execute(ctx, result);
   if (result.is_throw() && m_catch) {
+    if (result.value.is<pjs::Error>()) {
+      result.value.as<pjs::Error>()->backtrace(ctx.error().backtrace);
+    }
     ctx.reset();
     Context cctx(ctx, 1, &result.value, ctx.scope());
     if (auto scope = m_catch_scope.instantiate(cctx)) {

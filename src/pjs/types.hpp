@@ -3581,6 +3581,7 @@ public:
   auto message() const -> Str* { return m_message; }
   auto cause() const -> Error* { return m_cause; }
   auto stack() const -> Str* { return m_stack; }
+  void backtrace(const std::vector<Context::Location> &bt);
 
 private:
   Error(Str *message = nullptr, Object *cause = nullptr)

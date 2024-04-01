@@ -2067,6 +2067,21 @@ auto Error::name() const -> Str* {
   return s_error;
 }
 
+void Error::backtrace(const std::vector<Context::Location> &bt) {
+  std::string s;
+  for (const auto &l : bt) {
+    s += "In ";
+    s += l.name;
+    if (l.line && l.column) {
+      char buf[100];
+      std::sprintf(buf, " at line %d column %d in %s", l.line, l.column, l.source->filename.c_str());
+      s += buf;
+    }
+    s += '\n';
+  }
+  m_stack = Str::make(std::move(s));
+}
+
 auto Error::to_string() const -> std::string {
   return m_message->str();
 }
