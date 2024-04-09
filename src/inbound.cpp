@@ -339,8 +339,7 @@ void InboundTCP::describe(char *buf, size_t len) {
   if (Inbound::m_options.transparent) {
     std::snprintf(
       buf, len,
-      "[inbound  %p] [%s]:%d -> [%s]:%d -> [%s]:%d",
-      this,
+      "[inbound] [%s]:%d -> [%s]:%d -> [%s]:%d",
       m_remote_addr.c_str(),
       m_remote_port,
       m_local_addr.c_str(),
@@ -351,8 +350,7 @@ void InboundTCP::describe(char *buf, size_t len) {
   } else {
     std::snprintf(
       buf, len,
-      "[inbound  %p] [%s]:%d -> [%s]:%d",
-      this,
+      "[inbound] [%s]:%d -> [%s]:%d",
       m_remote_addr.c_str(),
       m_remote_port,
       m_local_addr.c_str(),

@@ -133,8 +133,7 @@ void Outbound::error(StreamEnd::Error err) {
 void Outbound::describe(char *buf, size_t len) {
   std::snprintf(
     buf, len,
-    "[outbound %p] [%s]:%d -> [%s]:%d (%s)",
-    this,
+    "[outbound] [%s]:%d -> [%s]:%d (%s)",
     m_local_addr.empty() ? "0.0.0.0" : m_local_addr.c_str(),
     m_local_port,
     m_remote_addr.c_str(),
@@ -326,10 +325,10 @@ void OutboundTCP::resolve() {
 
       if (ec != asio::error::operation_aborted) {
         if (ec) {
-          if (Log::is_enabled(Log::ERROR)) {
+          if (Log::is_enabled(Log::OUTBOUND)) {
             char desc[1000];
             describe(desc, sizeof(desc));
-            Log::error("%s cannot resolve hostname: %s", desc, ec.message().c_str());
+            Log::debug(Log::OUTBOUND, "%s cannot resolve hostname: %s", desc, ec.message().c_str());
           }
           connect_error(StreamEnd::CANNOT_RESOLVE);
 
@@ -383,10 +382,10 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
 
       if (ec != asio::error::operation_aborted) {
         if (ec) {
-          if (Log::is_enabled(Log::ERROR)) {
+          if (Log::is_enabled(Log::OUTBOUND)) {
             char desc[200];
             describe(desc, sizeof(desc));
-            Log::error("%s cannot connect: %s", desc, ec.message().c_str());
+            Log::debug(Log::OUTBOUND, "%s cannot connect: %s", desc, ec.message().c_str());
           }
           connect_error(StreamEnd::CONNECTION_REFUSED);
 
@@ -551,10 +550,10 @@ void OutboundUDP::resolve() {
 
       if (ec != asio::error::operation_aborted) {
         if (ec) {
-          if (Log::is_enabled(Log::ERROR)) {
+          if (Log::is_enabled(Log::OUTBOUND)) {
             char desc[1000];
             describe(desc, sizeof(desc));
-            Log::error("%s cannot resolve hostname: %s", desc, ec.message().c_str());
+            Log::debug(Log::OUTBOUND, "%s cannot resolve hostname: %s", desc, ec.message().c_str());
           }
           connect_error(StreamEnd::CANNOT_RESOLVE);
 
@@ -608,10 +607,10 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
 
       if (ec != asio::error::operation_aborted) {
         if (ec) {
-          if (Log::is_enabled(Log::ERROR)) {
+          if (Log::is_enabled(Log::OUTBOUND)) {
             char desc[200];
             describe(desc, sizeof(desc));
-            Log::error("%s cannot connect: %s", desc, ec.message().c_str());
+            Log::debug(Log::OUTBOUND, "%s cannot connect: %s", desc, ec.message().c_str());
           }
           connect_error(StreamEnd::CONNECTION_REFUSED);
 
