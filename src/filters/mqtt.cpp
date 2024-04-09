@@ -930,7 +930,7 @@ auto Decoder::on_state(int state, int c) -> int {
       if (!m_remaining_length) {
         auto type = PacketType(m_fixed_header >> 4);
         if (type != PacketType::PINGREQ && type != PacketType::PINGRESP) return ERROR;
-        m_buffer = nullptr;
+        m_buffer = Data::make();
         message();
         return FIXED_HEADER;
       } else {
