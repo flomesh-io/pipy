@@ -1346,14 +1346,15 @@ Stmt* ScriptParser::statement() {
       if (!read(Token::ID(")"), TokenExpected)) return nullptr;
       if (!read(Token::ID("{"), TokenExpected)) return nullptr;
       std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> cases;
-      std::unique_ptr<Stmt> default_case;
+      bool has_default = false;
       while (!read(Token::ID("}"))) {
         if (read(Token::ID("default"))) {
           if (!read(Token::ID(":"), TokenExpected)) return nullptr;
-          if (default_case) { error(DuplicatedDefault); return nullptr; }
+          if (has_default) { error(DuplicatedDefault); return nullptr; }
           auto s = statement_block();
           if (!s) return nullptr;
-          default_case = std::unique_ptr<Stmt>(s);
+          cases.push_back(std::make_pair(std::unique_ptr<Expr>(), std::unique_ptr<Stmt>(s)));
+          has_default = true;
         } else if (read(Token::ID("case"))) {
           auto e = std::unique_ptr<Expr>(expression());
           if (!e) return nullptr;
@@ -1366,7 +1367,7 @@ Stmt* ScriptParser::statement() {
           return nullptr;
         }
       }
-      return locate(switch_case(cond.release(), std::move(cases), default_case.release()), l);
+      return locate(switch_case(cond.release(), std::move(cases)), l);
     }
     case Token::ID("break"): {
       read(l);

@@ -342,7 +342,7 @@ bool Switch::declare(Module *module, Tree::Scope &scope, Error &error) {
   Tree::Scope s(Tree::Scope::SWITCH, &scope);
   if (!m_cond->declare(module, s, error)) return false;
   for (const auto &p : m_cases) {
-    if (!p.first->declare(module, s, error)) return false;
+    if (p.first && !p.first->declare(module, s, error)) return false;
     if (p.second && !p.second->declare(module, s, error)) return false;
   }
   return true;
@@ -351,7 +351,7 @@ bool Switch::declare(Module *module, Tree::Scope &scope, Error &error) {
 void Switch::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
   m_cond->resolve(module, ctx, l, imports);
   for (const auto &p : m_cases) {
-    p.first->resolve(module, ctx, l, imports);
+    if (p.first) p.first->resolve(module, ctx, l, imports);
     if (p.second) p.second->resolve(module, ctx, l, imports);
   }
 }
@@ -364,18 +364,24 @@ void Switch::execute(Context &ctx, Result &result) {
     return;
   }
 
+  auto def = m_cases.end();
   auto p = m_cases.begin();
   while (p != m_cases.end()) {
-    auto e = p->first.get();
-    Value val;
-    if (!e->eval(ctx, val)) {
-      result.value = ctx.error().value;
-      result.set_throw();
-      return;
+    if (auto e = p->first.get()) {
+      Value val;
+      if (!e->eval(ctx, val)) {
+        result.value = ctx.error().value;
+        result.set_throw();
+        return;
+      }
+      if (Value::is_equal(cond_val, val)) break;
+    } else {
+      def = p;
     }
-    if (Value::is_equal(cond_val, val)) break;
     p++;
   }
+
+  if (p == m_cases.end()) p = def;
 
   while (p != m_cases.end()) {
     if (auto s = p->second.get()) {
@@ -394,16 +400,16 @@ void Switch::dump(std::ostream &out, const std::string &indent) {
   auto indent_str = indent + "  ";
   m_cond->dump(out, indent_str);
   for (const auto &p : m_cases) {
-    out << indent << "case" << std::endl;
-    p.first->dump(out, indent_str);
+    if (p.first) {
+      out << indent << "case" << std::endl;
+      p.first->dump(out, indent_str);
+    } else {
+      out << indent << "default" << std::endl;
+    }
     if (p.second) {
       out << indent << "then" << std::endl;
       p.second->dump(out, indent_str);
     }
-  }
-  if (m_default) {
-    out << indent << "default" << std::endl;
-    m_default->dump(out, indent_str);
   }
 }
 
