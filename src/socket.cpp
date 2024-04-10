@@ -26,6 +26,8 @@
 #include "socket.hpp"
 #include "log.hpp"
 
+#include <errno.h>
+
 namespace pipy {
 
 using tcp = asio::ip::tcp;
@@ -843,15 +845,21 @@ auto Socket::get_raw_option(int level, int option, Data *data) -> int {
   char buf[DATA_CHUNK_SIZE];
   socklen_t len = sizeof(buf);
   auto ret = getsockopt(m_fd, level, option, buf, &len);
-  data->push(buf, len, nullptr);
-  return ret;
+  if (!ret) {
+    data->push(buf, len, nullptr);
+    return ret;
+  } else {
+    return errno;
+  }
 }
 
 auto Socket::set_raw_option(int level, int option, Data *data) -> int {
   if (!m_fd) throw std::runtime_error("socket is gone");
   pjs::vl_array<char, 1000> buf(data->size());
   data->to_bytes((uint8_t *)buf.data());
-  return setsockopt(m_fd, level, option, buf.data(), buf.size());
+  auto ret = setsockopt(m_fd, level, option, buf.data(), buf.size());
+  if (!ret) return ret;
+  return errno;
 }
 
 } // namespace pipy
