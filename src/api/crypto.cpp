@@ -44,6 +44,7 @@
 namespace pipy {
 namespace crypto {
 
+thread_local static Data::Producer s_dp("Crypto");
 thread_local static Data::Producer s_dp_cipher("Cipher");
 thread_local static Data::Producer s_dp_decipher("Decipher");
 thread_local static Data::Producer s_dp_hmac("Hmac");
@@ -169,6 +170,19 @@ PublicKey::~PublicKey() {
   if (m_pkey) EVP_PKEY_free(m_pkey);
 }
 
+auto PublicKey::to_pem() const -> Data* {
+  auto bio = BIO_new(BIO_s_mem());
+  PEM_write_bio_PUBKEY(bio, m_pkey);
+  Data data;
+  Data::Builder db(data, &s_dp);
+  uint8_t buf[DATA_CHUNK_SIZE];
+  size_t len;
+  while (BIO_read_ex(bio, buf, sizeof(buf), &len) > 0) db.push(buf, len);
+  BIO_free(bio);
+  db.flush();
+  return Data::make(std::move(data));
+}
+
 auto PublicKey::read_pem(const void *data, size_t size) -> EVP_PKEY* {
   auto bio = BIO_new_mem_buf(data, size);
   auto pkey = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
@@ -212,6 +226,19 @@ PrivateKey::~PrivateKey() {
   if (m_pkey) EVP_PKEY_free(m_pkey);
 }
 
+auto PrivateKey::to_pem() const -> Data* {
+  auto bio = BIO_new(BIO_s_mem());
+  PEM_write_bio_PrivateKey(bio, m_pkey, nullptr, nullptr, 0, nullptr, nullptr);
+  Data data;
+  Data::Builder db(data, &s_dp);
+  uint8_t buf[DATA_CHUNK_SIZE];
+  size_t len;
+  while (BIO_read_ex(bio, buf, sizeof(buf), &len) > 0) db.push(buf, len);
+  BIO_free(bio);
+  db.flush();
+  return Data::make(std::move(data));
+}
+
 auto PrivateKey::read_pem(const void *data, size_t size) -> EVP_PKEY* {
   auto bio = BIO_new_mem_buf(data, size);
   auto pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
@@ -250,6 +277,19 @@ Certificate::Certificate(pjs::Str *data) {
 
 Certificate::~Certificate() {
   if (m_x509) X509_free(m_x509);
+}
+
+auto Certificate::to_pem() const -> Data* {
+  auto bio = BIO_new(BIO_s_mem());
+  PEM_write_bio_X509(bio, m_x509);
+  Data data;
+  Data::Builder db(data, &s_dp);
+  uint8_t buf[DATA_CHUNK_SIZE];
+  size_t len;
+  while (BIO_read_ex(bio, buf, sizeof(buf), &len) > 0) db.push(buf, len);
+  BIO_free(bio);
+  db.flush();
+  return Data::make(std::move(data));
 }
 
 auto Certificate::issuer() -> pjs::Object* {
@@ -1099,6 +1139,10 @@ template<> void ClassDef<PublicKey>::init() {
       return nullptr;
     }
   });
+
+  method("toPEM", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<PublicKey>()->to_pem());
+  });
 }
 
 template<> void ClassDef<Constructor<PublicKey>>::init() {
@@ -1128,6 +1172,10 @@ template<> void ClassDef<PrivateKey>::init() {
       return nullptr;
     }
   });
+
+  method("toPEM", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<PrivateKey>()->to_pem());
+  });
 }
 
 template<> void ClassDef<Constructor<PrivateKey>>::init() {
@@ -1156,6 +1204,10 @@ template<> void ClassDef<Certificate>::init() {
       ctx.error(err);
       return nullptr;
     }
+  });
+
+  method("toPEM", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<Certificate>()->to_pem());
   });
 
   accessor("issuer", [](Object *obj, Value &ret) { ret.set(obj->as<Certificate>()->issuer()); });

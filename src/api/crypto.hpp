@@ -41,6 +41,7 @@ namespace crypto {
 class PublicKey : public pjs::ObjectTemplate<PublicKey> {
 public:
   auto pkey() const -> EVP_PKEY* { return m_pkey; }
+  auto to_pem() const -> Data*;
 
 private:
   PublicKey(Data *data);
@@ -62,6 +63,7 @@ private:
 class PrivateKey : public pjs::ObjectTemplate<PrivateKey> {
 public:
   auto pkey() const -> EVP_PKEY* { return m_pkey; }
+  auto to_pem() const -> Data*;
 
 private:
   PrivateKey(Data *data);
@@ -83,6 +85,7 @@ private:
 class Certificate : public pjs::ObjectTemplate<Certificate> {
 public:
   auto x509() const -> X509* { return m_x509; }
+  auto to_pem() const -> Data*;
 
   auto issuer() -> pjs::Object*;
   auto subject() -> pjs::Object*;
