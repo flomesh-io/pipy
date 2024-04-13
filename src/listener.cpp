@@ -51,7 +51,7 @@ auto Port::get(Protocol protocol, int port_num, const std::string &ip) -> Port* 
 
 bool Port::set_max_connections(int n) {
   m_max_connections.store(n);
-  return m_num_connections.load() < n;
+  return n < 0 || m_num_connections.load() < n;
 }
 
 bool Port::increase_num_connections() {
