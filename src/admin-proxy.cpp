@@ -166,7 +166,7 @@ void AdminProxy::open(const std::string &ip, int port, const Options &options) {
   ppl_forward->append(new http::Mux(nullptr, nullptr))->add_sub_pipeline(ppl_connect);
 
   Listener::Options opts;
-  auto listener = Listener::get(Listener::Protocol::TCP, ip, port);
+  auto listener = Listener::get(Port::Protocol::TCP, ip, port);
   listener->set_reserved(true);
   listener->set_options(opts);
   listener->pipeline_layout(ppl);
@@ -175,7 +175,7 @@ void AdminProxy::open(const std::string &ip, int port, const Options &options) {
 }
 
 void AdminProxy::close() {
-  if (auto listener = Listener::get(Listener::Protocol::TCP, m_ip, m_port)) {
+  if (auto listener = Listener::get(Port::Protocol::TCP, m_ip, m_port)) {
     listener->pipeline_layout(nullptr);
   }
   m_module->shutdown();

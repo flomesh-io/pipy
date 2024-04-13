@@ -28,19 +28,41 @@
 #include "worker.hpp"
 #include "log.hpp"
 
-namespace pjs {
+namespace pipy {
 
-using namespace pipy;
+//
+// Port
+//
 
-template<>
-void EnumDef<Listener::Protocol>::init() {
-  define(Listener::Protocol::TCP, "tcp");
-  define(Listener::Protocol::UDP, "udp");
+std::list<std::unique_ptr<Port>> Port::s_port_list;
+std::mutex Port::s_port_list_mutex;
+
+auto Port::get(Protocol protocol, int port_num, const std::string &ip) -> Port* {
+  std::lock_guard<std::mutex> lock(s_port_list_mutex);
+  for (auto &i : s_port_list) {
+    if (i->protocol() == protocol && i->num() == port_num && i->ip() == ip) {
+      return i.get();
+    }
+  }
+  auto p = new Port(protocol, port_num, ip);
+  s_port_list.push_back(std::unique_ptr<Port>(p));
+  return p;
 }
 
-} // namespace pjs
+bool Port::set_max_connections(int n) {
+  m_max_connections.store(n);
+  return m_num_connections.load() < n;
+}
 
-namespace pipy {
+bool Port::increase_num_connections() {
+  auto max = m_max_connections.load();
+  return m_num_connections.fetch_add(1) + 1 < max || max < 0;
+}
+
+bool Port::decrease_num_connections() {
+  auto max = m_max_connections.load();
+  return m_num_connections.fetch_sub(1) - 1 < max || max < 0;
+}
 
 //
 // Listener::Options
@@ -52,6 +74,9 @@ Listener::Options::Options(pjs::Object *options) {
     .check_nullable();
   Value(options, "maxConnections")
     .get(max_connections)
+    .check_nullable();
+  Value(options, "maxPortConnections")
+    .get(max_port_connections)
     .check_nullable();
   Value(options, "readTimeout")
     .get_seconds(read_timeout)
@@ -89,7 +114,7 @@ Listener::Options::Options(pjs::Object *options) {
 // Listener
 //
 
-thread_local std::set<Listener*> Listener::s_listeners[int(Listener::Protocol::MAX)];
+thread_local std::set<Listener*> Listener::s_listeners;
 bool Listener::s_reuse_port = false;
 
 void Listener::set_reuse_port(bool reuse) {
@@ -97,53 +122,43 @@ void Listener::set_reuse_port(bool reuse) {
 }
 
 void Listener::commit_all() {
-  for (int i = 0; i < int(Listener::Protocol::MAX); i++) {
-    for (auto l : s_listeners[i]) {
-      l->commit();
-    }
+  for (auto l : s_listeners) {
+    l->commit();
   }
 }
 
 void Listener::rollback_all() {
-  for (int i = 0; i < int(Listener::Protocol::MAX); i++) {
-    for (auto l : s_listeners[i]) {
-      l->rollback();
-    }
+  for (auto l : s_listeners) {
+    l->rollback();
   }
 }
 
 void Listener::delete_all() {
-  for (int i = 0; i < int(Listener::Protocol::MAX); i++) {
-    std::set<Listener*> all(std::move(s_listeners[i]));
-    for (auto l : all) delete l;
-  }
+  std::set<Listener*> all(std::move(s_listeners));
+  for (auto l : all) delete l;
 }
 
-Listener::Listener(Protocol protocol, const std::string &ip, int port)
-  : m_protocol(protocol)
-  , m_ip(ip)
-  , m_port(port)
-{
-  m_address = asio::ip::make_address(m_ip);
-  m_ip = m_address.to_string();
+Listener::Listener(Port::Protocol protocol, const std::string &ip, int port) {
+  m_address = asio::ip::make_address(ip);
+  m_port = Port::get(protocol, port, m_address.to_string());
   char label[100];
   const char *proto;
-  switch (m_protocol) {
-  case Protocol::TCP: proto = "TCP"; break;
-  case Protocol::UDP: proto = "UDP"; break;
+  switch (protocol) {
+  case Port::Protocol::TCP: proto = "TCP"; break;
+  case Port::Protocol::UDP: proto = "UDP"; break;
   default: proto = "?"; break;
   }
   std::snprintf(
     label, sizeof(label),
     "[%s]:%d/%s",
-    m_ip.c_str(), port, proto
+    m_port->ip().c_str(), port, proto
   );
   m_label = pjs::Str::make(label);
-  s_listeners[int(protocol)].insert(this);
+  s_listeners.insert(this);
 }
 
 Listener::~Listener() {
-  s_listeners[int(m_protocol)].erase(this);
+  s_listeners.erase(this);
 }
 
 bool Listener::pipeline_layout(PipelineLayout *layout) {
@@ -162,10 +177,11 @@ bool Listener::pipeline_layout(PipelineLayout *layout) {
 
 void Listener::set_options(const Options &options) {
   m_options = options;
-  m_options.protocol = m_protocol;
+  m_options.protocol = m_port->protocol();
+  auto port_has_room = m_port->set_max_connections(options.max_port_connections);
   if (m_acceptor) {
-    int n = m_options.max_connections;
-    if (n >= 0 && m_inbounds.size() >= n) {
+    auto n = m_options.max_connections;
+    if ((n >= 0 && m_inbounds.size() >= n) || !port_has_room) {
       pause();
     } else {
       resume();
@@ -224,16 +240,16 @@ bool Listener::start_listening() {
   describe(desc, sizeof(desc));
 
   try {
-    switch (m_protocol) {
-      case Protocol::TCP: {
-        asio::ip::tcp::endpoint endpoint(m_address, m_port);
+    switch (m_port->protocol()) {
+      case Port::Protocol::TCP: {
+        asio::ip::tcp::endpoint endpoint(m_address, m_port->num());
         auto *acceptor = new AcceptorTCP(this);
         m_acceptor = acceptor;
         acceptor->start(endpoint);
         break;
       }
-      case Protocol::UDP: {
-        asio::ip::udp::endpoint endpoint(m_address, m_port);
+      case Port::Protocol::UDP: {
+        asio::ip::udp::endpoint endpoint(m_address, m_port->num());
         auto *acceptor = new AcceptorUDP(this);
         m_acceptor = acceptor;
         acceptor->start(endpoint);
@@ -304,34 +320,36 @@ void Listener::stop() {
 void Listener::open(Inbound *inbound) {
   m_inbounds.push(inbound);
   auto n = m_inbounds.size();
-  m_peak_connections = std::max(m_peak_connections, int(n));
-  int max = m_options.max_connections;
-  if (max > 0 && n >= max) {
+  bool port_has_room = m_port->increase_num_connections();
+  auto max = m_options.max_connections;
+  if ((max > 0 && n >= max) || !port_has_room) {
     pause();
   } else {
     m_acceptor->accept();
   }
+  m_peak_connections = std::max(m_peak_connections, int(n));
 }
 
 void Listener::close(Inbound *inbound) {
   m_inbounds.remove(inbound);
   auto n = m_inbounds.size();
-  int max = m_options.max_connections;
-  if (max < 0 || n < max) {
+  bool port_has_room = m_port->decrease_num_connections();
+  auto max = m_options.max_connections;
+  if ((max < 0 || n < max) && port_has_room) {
     resume();
   }
 }
 
 void Listener::describe(char *buf, size_t len) {
   const char *proto = nullptr;
-  switch (m_protocol) {
-    case Protocol::TCP: proto = "TCP"; break;
-    case Protocol::UDP: proto = "UDP"; break;
+  switch (m_port->protocol()) {
+    case Port::Protocol::TCP: proto = "TCP"; break;
+    case Port::Protocol::UDP: proto = "UDP"; break;
     default: proto = "?"; break;
   }
   std::snprintf(
     buf, len, "%s port %d at %s",
-    proto, m_port, m_ip.c_str()
+    proto, m_port->num(), m_port->ip().c_str()
   );
 }
 
@@ -356,9 +374,9 @@ void Listener::set_sock_opts(int sock) {
   }
 }
 
-auto Listener::find(Protocol protocol, const std::string &ip, int port) -> Listener* {
-  for (auto *l : s_listeners[int(protocol)]) {
-    if (l->ip() == ip && l->port() == port) {
+auto Listener::find(Port::Protocol protocol, const std::string &ip, int port) -> Listener* {
+  for (auto *l : s_listeners) {
+    if (l->protocol() == protocol && l->ip() == ip && l->port() == port) {
       return l;
     }
   }
@@ -541,11 +559,11 @@ void ListenerArray::set_listeners(pjs::Array *array) {
         std::string ip;
         int port_num;
         if (v.is_number()) {
-          auto l = Listener::get(Listener::Protocol::TCP, "0.0.0.0", v.to_int32());
+          auto l = Listener::get(Port::Protocol::TCP, "0.0.0.0", v.to_int32());
           listeners[l] = m_default_options.get();
         } else if (v.is_string()) {
           get_ip_port(v.s()->str(), ip, port_num);
-          auto l = Listener::get(Listener::Protocol::TCP, ip, port_num);
+          auto l = Listener::get(Port::Protocol::TCP, ip, port_num);
           listeners[l] = m_default_options.get();
         } else if (v.is_object() && v.o()) {
           pjs::Value port;
@@ -619,6 +637,11 @@ void ListenerArray::get_ip_port(const std::string &ip_port, std::string &ip, int
 namespace pjs {
 
 using namespace pipy;
+
+template<> void EnumDef<Port::Protocol>::init() {
+  define(Port::Protocol::TCP, "tcp");
+  define(Port::Protocol::UDP, "udp");
+}
 
 template<> void ClassDef<ListenerArray>::init() {
   ctor([](Context &ctx) -> Object* {

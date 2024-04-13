@@ -389,10 +389,10 @@ void Pipy::listen(pjs::Context &ctx) {
     if (!ctx.check(i, builder) && !ctx.check(i, plw)) return;
   }
 
-  Listener::Protocol proto = Listener::Protocol::TCP;
+  auto proto = Port::Protocol::TCP;
   if (protocol) {
-    if (protocol == s_tcp) proto = Listener::Protocol::TCP; else
-    if (protocol == s_udp) proto = Listener::Protocol::UDP; else {
+    if (protocol == s_tcp) proto = Port::Protocol::TCP; else
+    if (protocol == s_udp) proto = Port::Protocol::UDP; else {
       ctx.error("unknown protocol");
       return;
     }

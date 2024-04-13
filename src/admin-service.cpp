@@ -203,7 +203,7 @@ void AdminService::open(const std::string &ip, int port, const Options &options)
   ppl_ws->append(new websocket::Encoder());
 
   Listener::Options opts;
-  auto listener = Listener::get(Listener::Protocol::TCP, ip, port);
+  auto listener = Listener::get(Port::Protocol::TCP, ip, port);
   listener->set_reserved(true);
   listener->set_options(opts);
   listener->pipeline_layout(ppl);
@@ -214,7 +214,7 @@ void AdminService::open(const std::string &ip, int port, const Options &options)
 }
 
 void AdminService::close() {
-  if (auto listener = Listener::get(Listener::Protocol::TCP, m_ip, m_port)) {
+  if (auto listener = Listener::get(Port::Protocol::TCP, m_ip, m_port)) {
     listener->pipeline_layout(nullptr);
   }
   m_module->shutdown();

@@ -383,8 +383,8 @@ void Status::update_local() {
   Listener::for_each([&](Listener *listener) {
     auto protocol = Protocol::UNKNOWN;
     switch (listener->protocol()) {
-      case Listener::Protocol::TCP: protocol = Status::Protocol::TCP; break;
-      case Listener::Protocol::UDP: protocol = Status::Protocol::UDP; break;
+      case Port::Protocol::TCP: protocol = Status::Protocol::TCP; break;
+      case Port::Protocol::UDP: protocol = Status::Protocol::UDP; break;
       default: break;
     }
     int count = 0;

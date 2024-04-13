@@ -31,6 +31,7 @@
 #include "inbound.hpp"
 #include "options.hpp"
 
+#include <atomic>
 #include <functional>
 #include <string>
 #include <set>
@@ -42,10 +43,10 @@ class Worker;
 class PipelineLayout;
 
 //
-// Listener
+// Port
 //
 
-class Listener {
+class Port {
 public:
   enum class Protocol : int {
     TCP,
@@ -53,32 +54,65 @@ public:
     MAX,
   };
 
+  static auto get(Protocol protocol, int port_num, const std::string &ip) -> Port*;
+
+  auto protocol() const -> Protocol { return m_protocol; }
+  auto num() const -> int { return m_port_num; }
+  auto ip() const -> const std::string& { return m_ip; }
+  auto num_connections() const -> int { return m_num_connections.load(); }
+  auto max_connections() const -> int { return m_max_connections.load(); }
+  bool set_max_connections(int n);
+  bool increase_num_connections();
+  bool decrease_num_connections();
+
+private:
+  Port(Protocol protocol, int port_num, const std::string &ip)
+    : m_port_num(port_num)
+    , m_protocol(protocol)
+    , m_ip(ip)
+    , m_max_connections(0)
+    , m_num_connections(0) {}
+
+  int m_port_num;
+  Protocol m_protocol;
+  std::string m_ip;
+  std::atomic<int> m_max_connections;
+  std::atomic<int> m_num_connections;
+
+  static std::list<std::unique_ptr<Port>> s_port_list;
+  static std::mutex s_port_list_mutex;
+};
+
+//
+// Listener
+//
+
+class Listener {
+public:
   struct Options : public Inbound::Options, public pipy::Options {
-    Protocol protocol = Protocol::TCP;
+    Port::Protocol protocol = Port::Protocol::TCP;
     size_t max_packet_size = 16 * 1024;
     int max_connections = -1;
-
+    int max_port_connections = -1;
     Options() {}
     Options(pjs::Object *options);
   };
 
   static void set_reuse_port(bool reuse);
 
-  static auto get(Protocol protocol, const std::string &ip, int port) -> Listener* {
+  static auto get(Port::Protocol protocol, const std::string &ip, int port) -> Listener* {
     if (auto *l = find(protocol, ip, port)) return l;
     return new Listener(protocol, ip, port);
   }
 
-  static bool is_open(Protocol protocol, const std::string &ip, int port) {
+  static bool is_open(Port::Protocol protocol, const std::string &ip, int port) {
     if (auto *l = find(protocol, ip, port)) return l->is_open();
     return false;
   }
 
   static bool for_each(const std::function<bool(Listener*)> &cb) {
-    for (int i = 0; i < int(Protocol::MAX); i++) {
-      for (auto *l : s_listeners[i]) {
-        if (!cb(l)) return false;
-      }
+    for (auto *l : s_listeners) {
+      if (!cb(l)) return false;
     }
     return true;
   }
@@ -88,9 +122,9 @@ public:
   static void delete_all();
 
   auto options() const -> const Options& { return m_options; }
-  auto protocol() const -> Protocol { return m_protocol; }
-  auto ip() const -> const std::string& { return m_ip; }
-  auto port() const -> int { return m_port; }
+  auto protocol() const -> Port::Protocol { return m_port->protocol(); }
+  auto ip() const -> const std::string& { return m_port->ip(); }
+  auto port() const -> int { return m_port->num(); }
   auto label() const -> pjs::Str* { return m_label; }
   bool is_open() const { return m_pipeline_layout; }
   bool is_new_listen() const { return m_new_listen; }
@@ -108,7 +142,7 @@ public:
   bool for_each_inbound(const std::function<bool(Inbound*)> &cb);
 
 private:
-  Listener(Protocol protocol, const std::string &ip, int port);
+  Listener(Port::Protocol protocol, const std::string &ip, int port);
   ~Listener();
 
   //
@@ -185,9 +219,7 @@ private:
 
   Options m_options;
   Options m_options_next;
-  Protocol m_protocol;
-  std::string m_ip;
-  int m_port;
+  Port* m_port;
   int m_peak_connections = 0;
   bool m_reserved = false;
   bool m_paused = false;
@@ -199,10 +231,10 @@ private:
   pjs::Ref<pjs::Str> m_label;
   List<Inbound> m_inbounds;
 
-  thread_local static std::set<Listener*> s_listeners[];
+  thread_local static std::set<Listener*> s_listeners;
   static bool s_reuse_port;
 
-  static auto find(Protocol protocol, const std::string &ip, int port) -> Listener*;
+  static auto find(Port::Protocol protocol, const std::string &ip, int port) -> Listener*;
 
   friend class Inbound;
   friend class pjs::RefCount<Listener>;
