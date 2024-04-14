@@ -28,11 +28,21 @@
 
 #include "pjs/pjs.hpp"
 #include "data.hpp"
+#include "options.hpp"
 
 #include <openssl/evp.h>
 
 namespace pipy {
 namespace crypto {
+
+//
+// KeyType
+//
+
+enum class KeyType {
+  RSA,
+  DSA,
+};
 
 //
 // PublicKey
@@ -62,12 +72,20 @@ private:
 
 class PrivateKey : public pjs::ObjectTemplate<PrivateKey> {
 public:
+  struct GenerateOptions : public Options {
+    KeyType type = KeyType::RSA;
+    int bits = 2048;
+    GenerateOptions() {}
+    GenerateOptions(pjs::Object *options);
+  };
+
   auto pkey() const -> EVP_PKEY* { return m_pkey; }
   auto to_pem() const -> Data*;
 
 private:
   PrivateKey(Data *data);
   PrivateKey(pjs::Str *data);
+  PrivateKey(const GenerateOptions &options);
   ~PrivateKey();
 
   EVP_PKEY* m_pkey = nullptr;

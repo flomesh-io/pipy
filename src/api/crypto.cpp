@@ -205,6 +205,15 @@ auto PublicKey::load_by_engine(const std::string &id) -> EVP_PKEY* {
 // PrivateKey
 //
 
+PrivateKey::GenerateOptions::GenerateOptions(pjs::Object *options) {
+  Value(options, "type")
+    .get_enum(type)
+    .check();
+  Value(options, "bits")
+    .get(bits)
+    .check_nullable();
+}
+
 PrivateKey::PrivateKey(Data *data) {
   if (s_openssl_engine) {
     m_pkey = load_by_engine(data->to_string());
@@ -220,6 +229,48 @@ PrivateKey::PrivateKey(pjs::Str *data) {
   } else {
     m_pkey = read_pem(data->c_str(), data->size());
   }
+}
+
+PrivateKey::PrivateKey(const GenerateOptions &options) {
+  int id;
+  switch (options.type) {
+    case KeyType::RSA: id = EVP_PKEY_RSA; break;
+    case KeyType::DSA: id = EVP_PKEY_DSA; break;
+    default: throw std::runtime_error("unknown key type");
+  }
+
+  auto ctx = EVP_PKEY_CTX_new_id(id, nullptr);
+  if (!ctx) throw_error();
+
+  EVP_PKEY *params = nullptr;
+  try {
+    switch (id) {
+      case EVP_PKEY_RSA: {
+        if (EVP_PKEY_keygen_init(ctx) <= 0) throw_error();
+        if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, options.bits) <= 0) throw_error();
+        if (EVP_PKEY_keygen(ctx, &m_pkey) <= 0) throw_error();
+        break;
+      }
+      case EVP_PKEY_DSA: {
+        if (EVP_PKEY_paramgen_init(ctx) <= 0) throw_error();
+        if (EVP_PKEY_CTX_set_dsa_paramgen_bits(ctx, options.bits) <= 0) throw_error();
+        if (EVP_PKEY_paramgen(ctx, &params) <= 0) throw_error();
+        EVP_PKEY_CTX_free(ctx);
+        ctx = EVP_PKEY_CTX_new(params, nullptr);
+        if (!ctx) throw_error();
+        if (EVP_PKEY_keygen_init(ctx) <= 0) throw_error();
+        if (EVP_PKEY_keygen(ctx, &m_pkey) <= 0) throw_error();
+        break;
+      }
+    }
+
+  } catch (std::runtime_error &) {
+    if (params) EVP_PKEY_free(params);
+    if (ctx) EVP_PKEY_CTX_free(ctx);
+    throw;
+  }
+
+  EVP_PKEY_CTX_free(ctx);
 }
 
 PrivateKey::~PrivateKey() {
@@ -1118,6 +1169,15 @@ namespace pjs {
 using namespace pipy::crypto;
 
 //
+// KeyType
+//
+
+template<> void EnumDef<KeyType>::init() {
+  define(KeyType::RSA, "rsa");
+  define(KeyType::DSA, "dsa");
+}
+
+//
 // PublicKey
 //
 
@@ -1158,13 +1218,16 @@ template<> void ClassDef<PrivateKey>::init() {
   ctor([](Context &ctx) -> Object* {
     Str *data_str;
     pipy::Data *data = nullptr;
+    Object *options = nullptr;
     try {
-      if (ctx.try_arguments(1, &data_str)) {
+      if (ctx.get(0, data_str)) {
         return PrivateKey::make(data_str);
-      } else if (ctx.arguments(1, &data) && data) {
+      } else if (ctx.get(0, data) && data) {
         return PrivateKey::make(data);
+      } else if (ctx.get(0, options) && options) {
+        return PrivateKey::make(options);
       } else {
-        ctx.error_argument_type(0, "a string or a Data object");
+        ctx.error_argument_type(0, "a string or an object");
         return nullptr;
       }
     } catch (std::runtime_error &err) {
