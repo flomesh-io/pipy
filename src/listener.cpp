@@ -200,9 +200,6 @@ bool Listener::set_next_state(PipelineLayout *pipeline_layout, const Options &op
 void Listener::commit() {
   if (m_new_listen) {
     m_pipeline_layout = m_pipeline_layout_next;
-    m_pipeline_layout_next = nullptr;
-    m_options = m_options_next;
-    m_options_next = Options();
     if (m_pipeline_layout) {
       if (m_acceptor) {
         start_accepting();
@@ -210,6 +207,9 @@ void Listener::commit() {
     } else {
       stop();
     }
+    set_options(m_options_next);
+    m_options_next = Options();
+    m_pipeline_layout_next = nullptr;
   }
 }
 
@@ -229,6 +229,7 @@ bool Listener::for_each_inbound(const std::function<bool(Inbound*)> &cb) {
 }
 
 bool Listener::start() {
+  m_keep_alive = std::unique_ptr<Signal>(new Signal);
   return (
     start_listening() &&
     start_accepting()
@@ -314,6 +315,10 @@ void Listener::stop() {
     char desc[200];
     describe(desc, sizeof(desc));
     Log::info("[listener] Stopped listening on %s", desc);
+  }
+  if (m_keep_alive) {
+    m_keep_alive->fire();
+    m_keep_alive = nullptr;
   }
 }
 

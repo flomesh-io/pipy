@@ -29,6 +29,7 @@
 #include "net.hpp"
 #include "socket.hpp"
 #include "inbound.hpp"
+#include "signal.h"
 #include "options.hpp"
 
 #include <atomic>
@@ -70,7 +71,7 @@ private:
     : m_port_num(port_num)
     , m_protocol(protocol)
     , m_ip(ip)
-    , m_max_connections(0)
+    , m_max_connections(-1)
     , m_num_connections(0) {}
 
   int m_port_num;
@@ -225,6 +226,7 @@ private:
   bool m_paused = false;
   bool m_new_listen = false; // TODO: Remove this
   asio::ip::address m_address;
+  std::unique_ptr<Signal> m_keep_alive;
   pjs::Ref<Acceptor> m_acceptor;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
   pjs::Ref<PipelineLayout> m_pipeline_layout_next;
