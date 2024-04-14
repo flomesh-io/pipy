@@ -45,25 +45,28 @@ enum class KeyType {
 };
 
 //
-// PublicKey
+// CipherOptions
 //
 
-class PublicKey : public pjs::ObjectTemplate<PublicKey> {
-public:
-  auto pkey() const -> EVP_PKEY* { return m_pkey; }
-  auto to_pem() const -> Data*;
+struct CipherOptions : public Options {
+  uint8_t key[EVP_MAX_KEY_LENGTH];
+  uint8_t iv[EVP_MAX_IV_LENGTH];
+  size_t key_size = 0;
+  size_t iv_size = 0;
 
-private:
-  PublicKey(Data *data);
-  PublicKey(pjs::Str *data);
-  ~PublicKey();
+  CipherOptions() {}
+  CipherOptions(pjs::Object *options);
+};
 
-  EVP_PKEY* m_pkey = nullptr;
+//
+// SignOptions
+//
 
-  static auto read_pem(const void *data, size_t size) -> EVP_PKEY*;
-  static auto load_by_engine(const std::string &id) -> EVP_PKEY*;
+struct SignOptions : public Options {
+  pjs::Ref<Data> id;
 
-  friend class pjs::ObjectTemplate<PublicKey>;
+  SignOptions() {}
+  SignOptions(pjs::Object *options);
 };
 
 //
@@ -94,6 +97,29 @@ private:
   static auto load_by_engine(const std::string &id) -> EVP_PKEY*;
 
   friend class pjs::ObjectTemplate<PrivateKey>;
+};
+
+//
+// PublicKey
+//
+
+class PublicKey : public pjs::ObjectTemplate<PublicKey> {
+public:
+  auto pkey() const -> EVP_PKEY* { return m_pkey; }
+  auto to_pem() const -> Data*;
+
+private:
+  PublicKey(Data *data);
+  PublicKey(pjs::Str *data);
+  PublicKey(PrivateKey *pkey);
+  ~PublicKey();
+
+  EVP_PKEY* m_pkey = nullptr;
+
+  static auto read_pem(const void *data, size_t size) -> EVP_PKEY*;
+  static auto load_by_engine(const std::string &id) -> EVP_PKEY*;
+
+  friend class pjs::ObjectTemplate<PublicKey>;
 };
 
 //
@@ -162,7 +188,7 @@ public:
   auto final() -> Data*;
 
 private:
-  Cipher(const std::string &algorithm, pjs::Object *options);
+  Cipher(const std::string &algorithm, const CipherOptions &options);
   ~Cipher();
 
   EVP_CIPHER_CTX* m_ctx = nullptr;
@@ -181,7 +207,7 @@ public:
   auto final() -> Data*;
 
 private:
-  Decipher(const std::string &algorithm, pjs::Object *options);
+  Decipher(const std::string &algorithm, const CipherOptions &options);
   ~Decipher();
 
   EVP_CIPHER_CTX* m_ctx = nullptr;
@@ -242,8 +268,8 @@ class Sign : public pjs::ObjectTemplate<Sign> {
 public:
   void update(Data *data);
   void update(pjs::Str *str, Data::Encoding enc);
-  auto sign(PrivateKey *key, Object *options = nullptr) -> Data*;
-  auto sign(PrivateKey *key, Data::Encoding enc, Object *options = nullptr) -> pjs::Str*;
+  auto sign(PrivateKey *key, const SignOptions &options) -> Data*;
+  auto sign(PrivateKey *key, Data::Encoding enc, const SignOptions &options) -> pjs::Str*;
 
 private:
   Sign(const std::string &algorithm);
@@ -263,8 +289,8 @@ class Verify : public pjs::ObjectTemplate<Verify> {
 public:
   void update(Data *data);
   void update(pjs::Str *str, Data::Encoding enc);
-  bool verify(PublicKey *key, Data *signature, Object *options = nullptr);
-  bool verify(PublicKey *key, pjs::Str *signature, Data::Encoding enc, Object *options = nullptr);
+  bool verify(PublicKey *key, Data *signature, const SignOptions &options);
+  bool verify(PublicKey *key, pjs::Str *signature, Data::Encoding enc, const SignOptions &options);
 
 private:
   Verify(const std::string &algorithm);

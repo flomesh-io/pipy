@@ -101,49 +101,36 @@ void Crypto::free() {
 // CipherOptions
 //
 
-struct CipherOptions : public Options {
-  uint8_t key[EVP_MAX_KEY_LENGTH];
-  uint8_t iv[EVP_MAX_IV_LENGTH];
-  size_t key_size = 0;
-  size_t iv_size = 0;
-
-  CipherOptions() {}
-
-  CipherOptions(pjs::Object *options) {
-    pjs::Ref<Data> key_data, iv_data;
-    pjs::Ref<pjs::Str> key_str, iv_str;
-    std::memset(key, 0, sizeof(key));
-    std::memset(iv, 0, sizeof(iv));
-    Value(options, "key")
-      .get(key_data)
-      .get(key_str)
-      .check();
-    Value(options, "iv")
-      .get(iv_data)
-      .get(iv_str)
-      .check_nullable();
-    key_size = (key_data ? key_data->size() : key_str->size());
-    if (key_size > EVP_MAX_KEY_LENGTH) throw std::runtime_error("options.key is too long");
-    if (key_data) key_data->to_bytes(key); else std::memcpy(key, key_str->c_str(), key_size);
-    iv_size = (iv_data ? iv_data->size() : iv_str->size());
-    if (iv_size > EVP_MAX_KEY_LENGTH) throw std::runtime_error("options.key is too long");
-    if (iv_data) iv_data->to_bytes(iv); else std::memcpy(iv, iv_str->c_str(), iv_size);
-  }
-};
+CipherOptions::CipherOptions(pjs::Object *options) {
+  pjs::Ref<Data> key_data, iv_data;
+  pjs::Ref<pjs::Str> key_str, iv_str;
+  std::memset(key, 0, sizeof(key));
+  std::memset(iv, 0, sizeof(iv));
+  Value(options, "key")
+    .get(key_data)
+    .get(key_str)
+    .check();
+  Value(options, "iv")
+    .get(iv_data)
+    .get(iv_str)
+    .check_nullable();
+  key_size = (key_data ? key_data->size() : key_str->size());
+  if (key_size > EVP_MAX_KEY_LENGTH) throw std::runtime_error("options.key is too long");
+  if (key_data) key_data->to_bytes(key); else std::memcpy(key, key_str->c_str(), key_size);
+  iv_size = (iv_data ? iv_data->size() : iv_str->size());
+  if (iv_size > EVP_MAX_KEY_LENGTH) throw std::runtime_error("options.key is too long");
+  if (iv_data) iv_data->to_bytes(iv); else std::memcpy(iv, iv_str->c_str(), iv_size);
+}
 
 //
 // SignOptions
 //
 
-struct SignOptions : public Options {
-  pjs::Ref<Data> id;
-  SignOptions() {}
-  SignOptions(pjs::Object *options) {
-    Value(options, "id")
-      .get(id)
-      .check();
-  }
-};
+SignOptions::SignOptions(pjs::Object *options) {
+  Value(options, "id")
+    .get(id)
+    .check_nullable();
+}
 
 //
 // PublicKey
@@ -164,6 +151,11 @@ PublicKey::PublicKey(pjs::Str *data) {
   } else {
     m_pkey = read_pem(data->c_str(), data->size());
   }
+}
+
+PublicKey::PublicKey(PrivateKey *pkey) {
+  m_pkey = EVP_PKEY_dup(pkey->pkey());
+  if (!m_pkey) throw_error();
 }
 
 PublicKey::~PublicKey() {
@@ -473,19 +465,18 @@ auto Cipher::cipher(const std::string &algorithm) -> const EVP_CIPHER* {
   return cipher;
 }
 
-Cipher::Cipher(const std::string &algorithm, pjs::Object *options) {
+Cipher::Cipher(const std::string &algorithm, const CipherOptions &options) {
   auto cipher = Cipher::cipher(algorithm);
   auto key_size = EVP_CIPHER_key_length(cipher);
   auto iv_size = EVP_CIPHER_iv_length(cipher);
 
-  CipherOptions co(options);
-  if (co.key_size != key_size) throw std::runtime_error("options.key expected to have a length of " + std::to_string(key_size));
-  if (co.iv_size > 0 && co.iv_size != iv_size) throw std::runtime_error("options.iv expected to have a length of " + std::to_string(iv_size));
+  if (options.key_size != key_size) throw std::runtime_error("options.key expected to have a length of " + std::to_string(key_size));
+  if (options.iv_size > 0 && options.iv_size != iv_size) throw std::runtime_error("options.iv expected to have a length of " + std::to_string(iv_size));
 
   m_ctx = EVP_CIPHER_CTX_new();
   if (!m_ctx) throw_error();
 
-  if (!EVP_EncryptInit_ex(m_ctx, cipher, nullptr, co.key, co.iv)) throw_error();
+  if (!EVP_EncryptInit_ex(m_ctx, cipher, nullptr, options.key, options.iv)) throw_error();
 }
 
 Cipher::~Cipher() {
@@ -540,19 +531,18 @@ auto Cipher::final() -> Data* {
 // Decipher
 //
 
-Decipher::Decipher(const std::string &algorithm, pjs::Object *options) {
+Decipher::Decipher(const std::string &algorithm, const CipherOptions &options) {
   auto cipher = Cipher::cipher(algorithm);
   auto key_size = EVP_CIPHER_key_length(cipher);
   auto iv_size = EVP_CIPHER_iv_length(cipher);
 
-  CipherOptions co(options);
-  if (co.key_size != key_size) throw std::runtime_error("options.key expected to have a length of " + std::to_string(key_size));
-  if (co.iv_size > 0 && co.iv_size != iv_size) throw std::runtime_error("options.iv expected to have a length of " + std::to_string(iv_size));
+  if (options.key_size != key_size) throw std::runtime_error("options.key expected to have a length of " + std::to_string(key_size));
+  if (options.iv_size > 0 && options.iv_size != iv_size) throw std::runtime_error("options.iv expected to have a length of " + std::to_string(iv_size));
 
   m_ctx = EVP_CIPHER_CTX_new();
   if (!m_ctx) throw_error();
 
-  if (!EVP_DecryptInit_ex(m_ctx, cipher, nullptr, co.key, co.iv)) throw_error();
+  if (!EVP_DecryptInit_ex(m_ctx, cipher, nullptr, options.key, options.iv)) throw_error();
 }
 
 Decipher::~Decipher() {
@@ -796,16 +786,15 @@ void Sign::update(pjs::Str *str, Data::Encoding enc) {
   }
 }
 
-auto Sign::sign(PrivateKey *key, Object *options) -> Data* {
+auto Sign::sign(PrivateKey *key, const SignOptions &options) -> Data* {
   unsigned char hash[EVP_MAX_MD_SIZE];
   unsigned int size;
   if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
 
-  SignOptions so(options);
   auto ctx = EVP_PKEY_CTX_new(key->pkey(), nullptr);
   if (!ctx) throw_error();
-  if (so.id) {
-    auto id = so.id->to_bytes();
+  if (options.id) {
+    auto id = options.id->to_bytes();
     EVP_PKEY_CTX_set1_id(ctx, id.data(), id.size());
   }
   if (EVP_PKEY_sign_init(ctx) <= 0) throw_error();
@@ -822,7 +811,7 @@ auto Sign::sign(PrivateKey *key, Object *options) -> Data* {
   return s_dp_sign.make(&sig[0], sig_len);
 }
 
-auto Sign::sign(PrivateKey *key, Data::Encoding enc, Object *options) -> pjs::Str* {
+auto Sign::sign(PrivateKey *key, Data::Encoding enc, const SignOptions &options) -> pjs::Str* {
   pjs::Ref<Data> data = sign(key, options);
   return pjs::Str::make(data->to_string(enc));
 }
@@ -863,16 +852,15 @@ void Verify::update(pjs::Str *str, Data::Encoding enc) {
   }
 }
 
-bool Verify::verify(PublicKey *key, Data *signature, Object *options) {
+bool Verify::verify(PublicKey *key, Data *signature, const SignOptions &options) {
   unsigned char hash[EVP_MAX_MD_SIZE];
   unsigned int size;
   if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
 
-  SignOptions so(options);
   auto ctx = EVP_PKEY_CTX_new(key->pkey(), nullptr);
   if (!ctx) throw_error();
-  if (so.id) {
-    auto id = so.id->to_bytes();
+  if (options.id) {
+    auto id = options.id->to_bytes();
     EVP_PKEY_CTX_set1_id(ctx, id.data(), id.size());
   }
   if (EVP_PKEY_verify_init(ctx) <= 0) throw_error();
@@ -888,7 +876,7 @@ bool Verify::verify(PublicKey *key, Data *signature, Object *options) {
   return result == 1;
 }
 
-bool Verify::verify(PublicKey *key, pjs::Str *signature, Data::Encoding enc, Object *options) {
+bool Verify::verify(PublicKey *key, pjs::Str *signature, Data::Encoding enc, const SignOptions &options) {
   Data sig(signature->str(), enc, &s_dp_verify);
   return verify(key, &sig, options);
 }
@@ -1185,13 +1173,16 @@ template<> void ClassDef<PublicKey>::init() {
   ctor([](Context &ctx) -> Object* {
     Str *data_str;
     pipy::Data *data = nullptr;
+    PrivateKey *pkey = nullptr;
     try {
-      if (ctx.try_arguments(1, &data_str)) {
+      if (ctx.get(0, data_str)) {
         return PublicKey::make(data_str);
-      } else if (ctx.arguments(1, &data) && data) {
+      } else if (ctx.get(0, data) && data) {
         return PublicKey::make(data);
+      } else if (ctx.get(0, pkey) && pkey) {
+        return PublicKey::make(pkey);
       } else {
-        ctx.error_argument_type(0, "a string or a Data object");
+        ctx.error_argument_type(0, "a string or an object");
         return nullptr;
       }
     } catch (std::runtime_error &err) {
