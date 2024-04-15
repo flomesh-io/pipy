@@ -842,7 +842,7 @@ void SocketNetlink::on_send(Data *data, const std::error_code &ec, std::size_t n
 
 auto Socket::get_raw_option(int level, int option, Data *data) -> int {
   if (!m_fd) throw std::runtime_error("socket is gone");
-  char buf[DATA_CHUNK_SIZE];
+  char buf[256];
   socklen_t len = sizeof(buf);
   auto ret = getsockopt(m_fd, level, option, buf, &len);
   if (!ret) {
