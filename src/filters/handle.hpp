@@ -72,6 +72,7 @@ private:
   pjs::Ref<PromiseCallback> m_promise_callback;
   pjs::Ref<Event> m_deferred_event;
   EventBuffer m_event_buffer;
+  int m_counter = 0;
   bool m_waiting = false;
 };
 

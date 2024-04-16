@@ -56,6 +56,7 @@ void Handle::reset() {
     m_promise_callback->close();
     m_promise_callback = nullptr;
   }
+  m_counter = 0;
   m_waiting = false;
 }
 
@@ -68,8 +69,10 @@ void Handle::process(Event *evt) {
 }
 
 bool Handle::callback(pjs::Object *arg) {
-  pjs::Value a(arg), result;
-  if (!Filter::callback(m_callback, 1, &a, result)) return false;
+  pjs::Value args[2], result;
+  args[0] = arg;
+  args[1].set(m_counter++);
+  if (!Filter::callback(m_callback, 2, args, result)) return false;
   if (result.is_promise()) {
     auto cb = PromiseCallback::make(this);
     result.as<pjs::Promise>()->then(nullptr, cb->resolved(), cb->rejected());
