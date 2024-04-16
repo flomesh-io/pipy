@@ -60,7 +60,7 @@ auto OnEvent::clone() -> Filter* {
 }
 
 void OnEvent::handle(Event *evt) {
-  if (evt->type() == m_type) {
+  if (int(m_type) < 0 || evt->type() == m_type) {
     if (Handle::callback(evt)) {
       Handle::defer(evt);
     }

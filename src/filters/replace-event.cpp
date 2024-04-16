@@ -60,7 +60,7 @@ auto ReplaceEvent::clone() -> Filter* {
 }
 
 void ReplaceEvent::handle(Event *evt) {
-  if (evt->type() == m_type) {
+  if (int(m_type) < 0 || evt->type() == m_type) {
     if (!Replace::callback(evt)) return;
   } else {
     Replace::pass(evt);
