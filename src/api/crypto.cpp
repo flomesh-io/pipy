@@ -59,6 +59,14 @@ static void throw_error() {
   throw std::runtime_error(str);
 }
 
+static void read_bio(BIO *bio, Data &data) {
+  Data::Builder db(data, &s_dp);
+  uint8_t buf[DATA_CHUNK_SIZE];
+  size_t len;
+  while (BIO_read_ex(bio, buf, sizeof(buf), &len) > 0) db.push(buf, len);
+  db.flush();
+}
+
 //
 // Crypto
 //
@@ -136,6 +144,10 @@ SignOptions::SignOptions(pjs::Object *options) {
 // PublicKey
 //
 
+PublicKey::PublicKey(EVP_PKEY *pkey) : m_pkey(pkey) {
+  EVP_PKEY_up_ref(pkey);
+}
+
 PublicKey::PublicKey(Data *data) {
   if (s_openssl_engine) {
     m_pkey = load_by_engine(data->to_string());
@@ -166,12 +178,8 @@ auto PublicKey::to_pem() const -> Data* {
   auto bio = BIO_new(BIO_s_mem());
   PEM_write_bio_PUBKEY(bio, m_pkey);
   Data data;
-  Data::Builder db(data, &s_dp);
-  uint8_t buf[DATA_CHUNK_SIZE];
-  size_t len;
-  while (BIO_read_ex(bio, buf, sizeof(buf), &len) > 0) db.push(buf, len);
+  read_bio(bio, data);
   BIO_free(bio);
-  db.flush();
   return Data::make(std::move(data));
 }
 
@@ -273,12 +281,8 @@ auto PrivateKey::to_pem() const -> Data* {
   auto bio = BIO_new(BIO_s_mem());
   PEM_write_bio_PrivateKey(bio, m_pkey, nullptr, nullptr, 0, nullptr, nullptr);
   Data data;
-  Data::Builder db(data, &s_dp);
-  uint8_t buf[DATA_CHUNK_SIZE];
-  size_t len;
-  while (BIO_read_ex(bio, buf, sizeof(buf), &len) > 0) db.push(buf, len);
+  read_bio(bio, data);
   BIO_free(bio);
-  db.flush();
   return Data::make(std::move(data));
 }
 
@@ -304,6 +308,27 @@ auto PrivateKey::load_by_engine(const std::string &id) -> EVP_PKEY* {
 // Certificate
 //
 
+Certificate::Options::Options(pjs::Object *options) {
+  Value(options, "subject")
+    .get(subject)
+    .check();
+  Value(options, "subjectAltNames")
+    .get(subject_alt_names)
+    .check_nullable();
+  Value(options, "days")
+    .get(days)
+    .check_nullable();
+  Value(options, "privateKey")
+    .get(private_key)
+    .check();
+  Value(options, "publicKey")
+    .get(public_key)
+    .check_nullable();
+  Value(options, "issuer")
+    .get(issuer)
+    .check_nullable();
+}
+
 Certificate::Certificate(X509 *x509) {
   m_x509 = x509;
   X509_up_ref(x509);
@@ -318,6 +343,60 @@ Certificate::Certificate(pjs::Str *data) {
   m_x509 = read_pem(data->c_str(), data->size());
 }
 
+Certificate::Certificate(const Options &options) {
+  auto x509 = X509_new();
+  try {
+
+    // Subject
+    auto subject = set_x509_name(options.subject);
+    X509_set_subject_name(x509, subject);
+    X509_set_issuer_name(x509, set_x509_name(options.subject));
+    X509_NAME_free(subject);
+
+    // Serial number
+    auto bn = BN_new();
+    auto sn = ASN1_INTEGER_new();
+    BN_rand(bn, 159, BN_RAND_TOP_ANY, BN_RAND_BOTTOM_ANY);
+    BN_to_ASN1_INTEGER(bn, sn);
+    BN_free(bn);
+    X509_set_serialNumber(x509, sn);
+    ASN1_INTEGER_free(sn);
+
+    // Time
+    if (!X509_gmtime_adj(X509_getm_notBefore(x509), 0)) throw_error();
+    if (!X509_time_adj_ex(X509_getm_notAfter(x509), options.days, 0, nullptr)) throw_error();
+
+    // Public key
+    if (options.public_key) {
+      m_public_key = options.public_key;
+      X509_set_pubkey(x509, m_public_key->pkey());
+    } else if (options.issuer) {
+      m_public_key = PublicKey::make(X509_get0_pubkey(options.issuer->x509()));
+      X509_set_pubkey(x509, X509_get0_pubkey(options.issuer->x509()));
+    } else {
+      throw std::runtime_error("missing public key");
+    }
+
+    // Digest algorithm
+    char digest_name[80];
+    if (EVP_PKEY_get_default_digest_name(options.private_key->pkey(), digest_name, sizeof(digest_name)) == 2) {
+      if (!std::strcmp(digest_name, "UNDEF")) {
+        digest_name[0] = '\0';
+      }
+    }
+    auto md = digest_name[0] ? Hash::digest(digest_name) : nullptr;
+
+    // Sign
+    if (!X509_sign(x509, options.private_key->pkey(), md)) throw_error();
+
+  } catch (std::runtime_error &) {
+    X509_free(x509);
+    throw;
+  }
+
+  m_x509 = x509;
+}
+
 Certificate::~Certificate() {
   if (m_x509) X509_free(m_x509);
 }
@@ -326,12 +405,8 @@ auto Certificate::to_pem() const -> Data* {
   auto bio = BIO_new(BIO_s_mem());
   PEM_write_bio_X509(bio, m_x509);
   Data data;
-  Data::Builder db(data, &s_dp);
-  uint8_t buf[DATA_CHUNK_SIZE];
-  size_t len;
-  while (BIO_read_ex(bio, buf, sizeof(buf), &len) > 0) db.push(buf, len);
+  read_bio(bio, data);
   BIO_free(bio);
-  db.flush();
   return Data::make(std::move(data));
 }
 
@@ -388,6 +463,26 @@ auto Certificate::get_x509_name(X509_NAME *name) -> pjs::Object* {
     );
   }
   return obj;
+}
+
+auto Certificate::set_x509_name(pjs::Object *obj) -> X509_NAME* {
+  auto name = X509_NAME_new();
+  if (obj) {
+    obj->iterate_all(
+      [&](pjs::Str *k, pjs::Value &v) {
+        auto nid = OBJ_txt2nid(k->c_str());
+        if (nid == NID_undef) return;
+        auto s = v.to_string();
+        X509_NAME_add_entry_by_NID(
+          name, nid,
+          MBSTRING_UTF8, (const unsigned char *)s->c_str(), s->size(),
+          -1, 0
+        );
+        s->release();
+      }
+    );
+  }
+  return name;
 }
 
 //
@@ -1245,13 +1340,16 @@ template<> void ClassDef<Certificate>::init() {
   ctor([](Context &ctx) -> Object* {
     Str *data_str;
     pipy::Data *data = nullptr;
+    Object *options = nullptr;
     try {
-      if (ctx.try_arguments(1, &data_str)) {
+      if (ctx.get(0, data_str)) {
         return Certificate::make(data_str);
-      } else if (ctx.try_arguments(1, &data) && data) {
+      } else if (ctx.get(0, data) && data) {
         return Certificate::make(data);
+      } else if (ctx.get(0, options) && options) {
+        return Certificate::make(options);
       } else {
-        ctx.error_argument_type(0, "a string or a Data object");
+        ctx.error_argument_type(0, "a string or an object");
         return nullptr;
       }
     } catch (std::runtime_error &err) {

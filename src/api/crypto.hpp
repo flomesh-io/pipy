@@ -109,6 +109,7 @@ public:
   auto to_pem() const -> Data*;
 
 private:
+  PublicKey(EVP_PKEY *pkey);
   PublicKey(Data *data);
   PublicKey(pjs::Str *data);
   PublicKey(PrivateKey *pkey);
@@ -128,6 +129,17 @@ private:
 
 class Certificate : public pjs::ObjectTemplate<Certificate> {
 public:
+  struct Options : public pipy::Options {
+    pjs::Ref<pjs::Object> subject;
+    pjs::Ref<pjs::Array> subject_alt_names;
+    pjs::Ref<Certificate> issuer;
+    int days = 30;
+    pjs::Ref<PublicKey> public_key;
+    pjs::Ref<PrivateKey> private_key;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
   auto x509() const -> X509* { return m_x509; }
   auto to_pem() const -> Data*;
 
@@ -139,15 +151,18 @@ private:
   Certificate(X509 *x509);
   Certificate(Data *data);
   Certificate(pjs::Str *data);
+  Certificate(const Options &options);
   ~Certificate();
 
   X509* m_x509 = nullptr;
   pjs::Ref<pjs::Object> m_issuer;
   pjs::Ref<pjs::Object> m_subject;
   pjs::Ref<pjs::Array> m_subject_alt_names;
+  pjs::Ref<PublicKey> m_public_key;
 
   static auto read_pem(const void *data, size_t size) -> X509*;
   static auto get_x509_name(X509_NAME *name) -> pjs::Object*;
+  static auto set_x509_name(pjs::Object *obj) -> X509_NAME*;
 
   friend class pjs::ObjectTemplate<Certificate>;
 };
