@@ -215,6 +215,7 @@ private:
   void stop();
   void open(Inbound *inbound);
   void close(Inbound *inbound);
+  void print_state(const char *msg);
   void describe(char *buf, size_t len);
   void set_sock_opts(int sock);
 

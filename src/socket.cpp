@@ -54,10 +54,10 @@ void SocketBase::log_debug(const char *msg) {
 }
 
 void SocketBase::log_warn(const char *msg, const std::error_code &ec) {
-  if (Log::is_enabled(Log::WARN)) {
+  if (Log::is_enabled(Log::SOCKET)) {
     char desc[1000];
     on_socket_describe(desc, sizeof(desc));
-    Log::warn("%s %s: %s", desc, msg, ec.message().c_str());
+    Log::debug(Log::SOCKET, "%s %s: %s", desc, msg, ec.message().c_str());
   }
 }
 

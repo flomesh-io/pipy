@@ -26,6 +26,7 @@
 #include "listener.hpp"
 #include "pipeline.hpp"
 #include "worker.hpp"
+#include "worker-thread.hpp"
 #include "log.hpp"
 
 namespace pipy {
@@ -333,6 +334,7 @@ void Listener::open(Inbound *inbound) {
     m_acceptor->accept();
   }
   m_peak_connections = std::max(m_peak_connections, int(n));
+  if (Log::is_enabled(Log::LISTENER)) print_state("accept");
 }
 
 void Listener::close(Inbound *inbound) {
@@ -343,6 +345,19 @@ void Listener::close(Inbound *inbound) {
   if ((max < 0 || n < max) && port_has_room) {
     resume();
   }
+  if (Log::is_enabled(Log::LISTENER)) print_state("finish");
+}
+
+void Listener::print_state(const char *msg) {
+  auto wt = WorkerThread::current();
+  Log::debug(
+    Log::LISTENER, "[listener] [%s] thread %d port [%s]:%d state: [%s] local %d/%d global %d/%d",
+    msg, wt ? wt->index() : -1,
+    m_port->ip().c_str(), m_port->num(),
+    m_paused ? "paused" : "open",
+    m_inbounds.size(), m_options.max_connections,
+    m_port->num_connections(), m_port->max_connections()
+  );
 }
 
 void Listener::describe(char *buf, size_t len) {
