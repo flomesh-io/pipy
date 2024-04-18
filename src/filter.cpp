@@ -194,7 +194,7 @@ auto Filter::sub_pipeline(
   }
 
   auto *p = Pipeline::make(layout, ctx);
-  p->chain(pipeline()->chain());
+  p->chain(pipeline()->chain(), pipeline()->chain_args());
   if (chain_to) p->chain(chain_to);
 
   return p;
