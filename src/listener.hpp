@@ -42,12 +42,13 @@ namespace pipy {
 
 class Worker;
 class PipelineLayout;
+class Listener;
 
 //
 // Port
 //
 
-class Port {
+class Port : public pjs::RefCountMT<Port> {
 public:
   enum class Protocol : int {
     TCP,
@@ -63,8 +64,6 @@ public:
   auto num_connections() const -> int { return m_num_connections.load(); }
   auto max_connections() const -> int { return m_max_connections.load(); }
   bool set_max_connections(int n);
-  bool increase_num_connections();
-  bool decrease_num_connections();
 
 private:
   Port(Protocol protocol, int port_num, const std::string &ip)
@@ -74,14 +73,24 @@ private:
     , m_max_connections(-1)
     , m_num_connections(0) {}
 
+  bool increase_num_connections();
+  bool decrease_num_connections();
+  void append_listener(Listener *l);
+  void remove_listener(Listener *l);
+  void wake_up_listeners();
+
   int m_port_num;
   Protocol m_protocol;
   std::string m_ip;
   std::atomic<int> m_max_connections;
   std::atomic<int> m_num_connections;
+  std::set<Listener*> m_listeners;
+  std::mutex m_listeners_mutex;
 
-  static std::list<std::unique_ptr<Port>> s_port_list;
+  static std::list<pjs::Ref<Port>> s_port_list;
   static std::mutex s_port_list_mutex;
+
+  friend class Listener;
 };
 
 //
@@ -215,13 +224,15 @@ private:
   void stop();
   void open(Inbound *inbound);
   void close(Inbound *inbound);
+  void wake_up();
   void print_state(const char *msg);
   void describe(char *buf, size_t len);
   void set_sock_opts(int sock);
 
+  Net& m_net;
   Options m_options;
   Options m_options_next;
-  Port* m_port;
+  pjs::Ref<Port> m_port;
   int m_peak_connections = 0;
   bool m_reserved = false;
   bool m_paused = false;
@@ -239,6 +250,7 @@ private:
 
   static auto find(Port::Protocol protocol, const std::string &ip, int port) -> Listener*;
 
+  friend class Port;
   friend class Inbound;
   friend class pjs::RefCount<Listener>;
 };

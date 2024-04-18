@@ -35,7 +35,7 @@ namespace pipy {
 // Port
 //
 
-std::list<std::unique_ptr<Port>> Port::s_port_list;
+std::list<pjs::Ref<Port>> Port::s_port_list;
 std::mutex Port::s_port_list_mutex;
 
 auto Port::get(Protocol protocol, int port_num, const std::string &ip) -> Port* {
@@ -46,7 +46,7 @@ auto Port::get(Protocol protocol, int port_num, const std::string &ip) -> Port* 
     }
   }
   auto p = new Port(protocol, port_num, ip);
-  s_port_list.push_back(std::unique_ptr<Port>(p));
+  s_port_list.push_back(p);
   return p;
 }
 
@@ -62,7 +62,28 @@ bool Port::increase_num_connections() {
 
 bool Port::decrease_num_connections() {
   auto max = m_max_connections.load();
-  return m_num_connections.fetch_sub(1) - 1 < max || max < 0;
+  if (max >= 0) {
+    auto n = m_num_connections.fetch_sub(1);
+    if (n == max) wake_up_listeners();
+    return n <= max;
+  } else {
+    return true;
+  }
+}
+
+void Port::wake_up_listeners() {
+  std::lock_guard<std::mutex> lock(m_listeners_mutex);
+  for (const auto &l : m_listeners) l->wake_up();
+}
+
+void Port::append_listener(Listener *l) {
+  std::lock_guard<std::mutex> lock(m_listeners_mutex);
+  m_listeners.insert(l);
+}
+
+void Port::remove_listener(Listener *l) {
+  std::lock_guard<std::mutex> lock(m_listeners_mutex);
+  m_listeners.erase(l);
 }
 
 //
@@ -139,9 +160,12 @@ void Listener::delete_all() {
   for (auto l : all) delete l;
 }
 
-Listener::Listener(Port::Protocol protocol, const std::string &ip, int port) {
+Listener::Listener(Port::Protocol protocol, const std::string &ip, int port)
+  : m_net(Net::current())
+{
   m_address = asio::ip::make_address(ip);
   m_port = Port::get(protocol, port, m_address.to_string());
+  m_port->append_listener(this);
   char label[100];
   const char *proto;
   switch (protocol) {
@@ -159,6 +183,7 @@ Listener::Listener(Port::Protocol protocol, const std::string &ip, int port) {
 }
 
 Listener::~Listener() {
+  m_port->remove_listener(this);
   s_listeners.erase(this);
 }
 
@@ -346,6 +371,14 @@ void Listener::close(Inbound *inbound) {
     resume();
   }
   if (Log::is_enabled(Log::LISTENER)) print_state("finish");
+}
+
+void Listener::wake_up() {
+  m_net.post([this]() {
+    auto n = m_inbounds.size();
+    int max = m_options.max_connections;
+    if (max < 0 || n < max) resume();
+  });
 }
 
 void Listener::print_state(const char *msg) {
