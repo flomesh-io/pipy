@@ -1,0 +1,5 @@
+proxy:
+  socks:
+    listen: 0.0.0.0:1080
+  http:
+    listen: 0.0.0.0:8080
