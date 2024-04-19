@@ -318,6 +318,9 @@ Certificate::Options::Options(pjs::Object *options) {
   Value(options, "days")
     .get(days)
     .check_nullable();
+  Value(options, "timeOffset")
+    .get(time_offset)
+    .check_nullable();
   Value(options, "privateKey")
     .get(private_key)
     .check();
@@ -398,8 +401,10 @@ Certificate::Certificate(const Options &options) {
     ASN1_INTEGER_free(sn);
 
     // Time
-    if (!X509_gmtime_adj(X509_getm_notBefore(x509), 0)) throw_error();
-    if (!X509_time_adj_ex(X509_getm_notAfter(x509), options.days, 0, nullptr)) throw_error();
+    auto offset_days = int(options.time_offset / (24*60*60));
+    auto offset_secs = int(options.time_offset - (24*60*60) * offset_days);
+    if (!X509_gmtime_adj(X509_getm_notBefore(x509), options.time_offset)) throw_error();
+    if (!X509_time_adj_ex(X509_getm_notAfter(x509), options.days + offset_days, offset_secs, nullptr)) throw_error();
 
     // Public key
     if (options.public_key) {

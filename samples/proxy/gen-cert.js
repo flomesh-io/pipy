@@ -26,6 +26,8 @@ var cache = new algo.Cache(
     var cert = new crypto.Certificate({
       subject: { CN: domain },
       extensions: { subjectAltName: `DNS:${domain}` },
+      days: 7,
+      timeOffset: -3600,
       issuer: caCert,
       publicKey: pkey,
       privateKey: caKey,

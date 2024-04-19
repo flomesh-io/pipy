@@ -134,6 +134,7 @@ public:
     pjs::Ref<pjs::Object> extensions;
     pjs::Ref<Certificate> issuer;
     int days = 30;
+    double time_offset = 0;
     pjs::Ref<PublicKey> public_key;
     pjs::Ref<PrivateKey> private_key;
     Options() {}
