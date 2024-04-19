@@ -131,7 +131,7 @@ class Certificate : public pjs::ObjectTemplate<Certificate> {
 public:
   struct Options : public pipy::Options {
     pjs::Ref<pjs::Object> subject;
-    pjs::Ref<pjs::Array> subject_alt_names;
+    pjs::Ref<pjs::Object> extensions;
     pjs::Ref<Certificate> issuer;
     int days = 30;
     pjs::Ref<PublicKey> public_key;

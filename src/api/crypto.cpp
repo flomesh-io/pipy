@@ -312,8 +312,8 @@ Certificate::Options::Options(pjs::Object *options) {
   Value(options, "subject")
     .get(subject)
     .check();
-  Value(options, "subjectAltNames")
-    .get(subject_alt_names)
+  Value(options, "extensions")
+    .get(extensions)
     .check_nullable();
   Value(options, "days")
     .get(days)
@@ -350,8 +350,43 @@ Certificate::Certificate(const Options &options) {
     // Subject
     auto subject = set_x509_name(options.subject);
     X509_set_subject_name(x509, subject);
-    X509_set_issuer_name(x509, set_x509_name(options.subject));
     X509_NAME_free(subject);
+
+    // Extensions
+    if (auto exts = options.extensions.get()) {
+      exts->iterate_all(
+        [&](pjs::Str *k, pjs::Value &v) {
+          void *i = nullptr;
+          auto nid = OBJ_sn2nid(k->c_str());
+          if (auto method = (nid != NID_undef ? X509V3_EXT_get_nid(nid) : nullptr)) {
+            if (method->v2i) {
+              auto s = v.to_string();
+              auto nval = X509V3_parse_list(s->c_str());
+              s->release();
+              if (nval && sk_CONF_VALUE_num(nval) > 0) {
+                i = method->v2i(method, nullptr, nval);
+              }
+            } else if (method->s2i) {
+              auto s = v.to_string();
+              i = method->s2i(method, nullptr, s->c_str());
+              s->release();
+            }
+          }
+          if (!i) throw std::runtime_error("invalid extension: " + k->str());
+          auto ext = X509V3_EXT_i2d(nid, 0, i);
+          X509_add_ext(x509, ext, -1);
+          X509_EXTENSION_free(ext);
+        }
+      );
+    }
+
+    // Issuer
+    if (options.issuer) {
+      auto issuer = X509_get_subject_name(options.issuer->x509());
+      X509_set_issuer_name(x509, issuer);
+    } else {
+      X509_set_issuer_name(x509, set_x509_name(options.subject));
+    }
 
     // Serial number
     auto bn = BN_new();
