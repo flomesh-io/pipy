@@ -1,0 +1,6 @@
+listen: 127.0.0.1:5353
+server: 127.0.0.53:53
+block:
+  - google.com
+  - facebook.com
+  - x.com
