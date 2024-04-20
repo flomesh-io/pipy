@@ -237,7 +237,7 @@ private:
 
 class Hash : public pjs::ObjectTemplate<Hash> {
 public:
-  static auto digest(const std::string &algorithm) -> const EVP_MD*;
+  static auto algorithm(const std::string &name) -> const EVP_MD*;
 
   void update(Data *data);
   void update(pjs::Str *str, Data::Encoding enc = Data::Encoding::utf8);

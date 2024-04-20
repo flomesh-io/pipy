@@ -424,7 +424,7 @@ Certificate::Certificate(const Options &options) {
         digest_name[0] = '\0';
       }
     }
-    auto md = digest_name[0] ? Hash::digest(digest_name) : nullptr;
+    auto md = digest_name[0] ? Hash::algorithm(digest_name) : nullptr;
 
     // Sign
     if (!X509_sign(x509, options.private_key->pkey(), md)) throw_error();
@@ -732,18 +732,18 @@ auto Decipher::final() -> Data* {
 // Hash
 //
 
-auto Hash::digest(const std::string &algorithm) -> const EVP_MD* {
-  auto md = EVP_get_digestbyname(algorithm.c_str());
+auto Hash::algorithm(const std::string &name) -> const EVP_MD* {
+  auto md = EVP_get_digestbyname(name.c_str());
   if (!md) {
     std::string msg("Unknown algorithm: ");
-    throw std::runtime_error(msg + algorithm);
+    throw std::runtime_error(msg + name);
   }
   return md;
 }
 
 Hash::Hash(const std::string &algorithm) {
   m_ctx = EVP_MD_CTX_new();
-  EVP_DigestInit_ex(m_ctx, digest(algorithm), nullptr);
+  EVP_DigestInit_ex(m_ctx, Hash::algorithm(algorithm), nullptr);
 }
 
 Hash::~Hash() {
@@ -820,12 +820,12 @@ auto Hash::digest(void *hash) -> size_t {
 Hmac::Hmac(const std::string &algorithm, Data *key) {
   m_ctx = HMAC_CTX_new();
   auto buf = key->to_bytes();
-  HMAC_Init_ex(m_ctx, &buf[0], buf.size(), Hash::digest(algorithm), nullptr);
+  HMAC_Init_ex(m_ctx, &buf[0], buf.size(), Hash::algorithm(algorithm), nullptr);
 }
 
 Hmac::Hmac(const std::string &algorithm, pjs::Str *key) {
   m_ctx = HMAC_CTX_new();
-  HMAC_Init_ex(m_ctx, key->c_str(), key->size(), Hash::digest(algorithm), nullptr);
+  HMAC_Init_ex(m_ctx, key->c_str(), key->size(), Hash::algorithm(algorithm), nullptr);
 }
 
 Hmac::~Hmac() {
@@ -890,7 +890,7 @@ auto Hmac::digest(Data::Encoding enc) -> pjs::Str* {
 //
 
 Sign::Sign(const std::string &algorithm) {
-  m_md = Hash::digest(algorithm);
+  m_md = Hash::algorithm(algorithm);
   m_ctx = EVP_MD_CTX_new();
   if (!m_ctx) throw_error();
   if (!EVP_DigestInit_ex(m_ctx, m_md, nullptr)) throw_error();
@@ -956,7 +956,7 @@ auto Sign::sign(PrivateKey *key, Data::Encoding enc, const SignOptions &options)
 //
 
 Verify::Verify(const std::string &algorithm) {
-  m_md = Hash::digest(algorithm);
+  m_md = Hash::algorithm(algorithm);
   m_ctx = EVP_MD_CTX_new();
   if (!m_ctx) throw_error();
   if (!EVP_DigestInit_ex(m_ctx, m_md, nullptr)) throw_error();
