@@ -25,6 +25,7 @@
 
 #include "sqlite.hpp"
 #include "data.hpp"
+#include "os-platform.hpp"
 
 namespace pipy {
 namespace sqlite {
@@ -113,12 +114,17 @@ static void throw_error(sqlite3 *db) {
 //
 
 Database::Database(pjs::Str *filename, int flags) {
+#ifdef _WIN32
+  auto path = os::windows::to_back_slash(filename->str());
+#else
+  const auto &path = filename->str();
+#endif
   if (!flags) {
-    if (sqlite3_open(filename->c_str(), &m_db) != SQLITE_OK) {
+    if (sqlite3_open(path.c_str(), &m_db) != SQLITE_OK) {
       throw_error(m_db);
     }
   } else {
-    if (sqlite3_open_v2(filename->c_str(), &m_db, flags, nullptr) != SQLITE_OK) {
+    if (sqlite3_open_v2(path.c_str(), &m_db, flags, nullptr) != SQLITE_OK) {
       throw_error(m_db);
     }
   }

@@ -217,6 +217,7 @@ auto home() -> std::string {
   OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token_handle);
   GetUserProfileDirectoryW(token_handle, buf, &buf_size);
   CloseHandle(token_handle);
+  if (buf_size > 0 && !buf[buf_size-1]) buf_size--;
   return os::windows::convert_slash(os::windows::w2a(std::wstring(buf, buf_size)));
 }
 

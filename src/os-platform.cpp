@@ -373,6 +373,14 @@ auto w2a(const std::wstring &s) -> std::string {
   return std::string(std::move(buf));
 }
 
+auto to_back_slash(const std::string &path) -> std::string {
+  std::string copy(path);
+  for (auto &c : copy) {
+    if (c == '/') c = '\\';
+  }
+  return std::string(std::move(copy));
+}
+
 auto convert_slash(const std::string &path) -> std::string {
   std::string copy(path);
   for (auto &c : copy) {
