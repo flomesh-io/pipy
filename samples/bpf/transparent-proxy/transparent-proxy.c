@@ -10,7 +10,7 @@
 
 struct Config {
   __u16 proxy_port;
-  __u64 pipy_cgroup_id;
+  __u64 pipy_pid;
 };
 
 struct Socket {
@@ -48,7 +48,7 @@ int cg_connect4(struct bpf_sock_addr *ctx) {
   __u32 i = 0;
   struct Config *conf = bpf_map_lookup_elem(&map_config, &i);
   if (!conf) return 1;
-  if (bpf_get_current_cgroup_id() == conf->pipy_cgroup_id) return 1;
+  if ((bpf_get_current_pid_tgid() >> 32) == conf->pipy_pid) return 1;
 
   __u32 dst_addr = ntohl(ctx->user_ip4);
   __u16 dst_port = ntohl(ctx->user_port) >> 16;

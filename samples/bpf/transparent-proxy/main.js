@@ -7,7 +7,6 @@ var progCgSockOpt = obj.programs.find(p => p.name === 'cg_sock_opt').load('BPF_P
 
 var PROXY_PORT = 18000
 var CGRP = '/sys/fs/cgroup'
-var CGRP_PIPY = `${CGRP}/pipy`
 var SOL_IP = 0
 var SO_ORIGINAL_DST = 80
 
@@ -17,13 +16,10 @@ var sockaddr_in = new CStruct({
   sin_addr: 'uint8[4]',
 })
 
-os.mkdir(CGRP_PIPY)
-os.write(`${CGRP_PIPY}/cgroup.procs`, pipy.pid.toString())
-
 obj.maps.find(m => m.name === 'map_config').update(
   { i: 0 }, {
     proxy_port: PROXY_PORT,
-    pipy_cgroup_id: bpf.cgroup(CGRP_PIPY)
+    pipy_pid: pipy.pid,
   }
 )
 
@@ -36,8 +32,6 @@ pipy.exit(
     bpf.detach('BPF_CGROUP_INET4_CONNECT', progCgConnect4.fd, CGRP)
     bpf.detach('BPF_CGROUP_SOCK_OPS', progCgSockOps.fd, CGRP)
     bpf.detach('BPF_CGROUP_GETSOCKOPT', progCgSockOpt.fd, CGRP)
-    os.write(`${CGRP}/cgroup.procs`, pipy.pid.toString())
-    os.rmdir(CGRP_PIPY)
   }
 )
 
