@@ -25,6 +25,7 @@
 
 #include "input.hpp"
 #include "context.hpp"
+#include "net.hpp"
 
 namespace pipy {
 
@@ -118,6 +119,10 @@ InputContext::~InputContext() {
       target->on_flush();
     }
 
+    // Any pending micro-tasks?
+    if (pjs::Promise::Period::current()->pending()) {
+      Net::current().post([]() { InputContext ic; });
+    }
   }
 
   s_stack = m_next;

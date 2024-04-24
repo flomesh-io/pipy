@@ -2940,6 +2940,7 @@ public:
     static auto make() -> Period*;
 
     void set_current();
+    bool pending() const { return m_settled_queue_head != nullptr; }
     void run(int max_iterations = 1);
     void resume(int max_iterations = 1);
     void pause();
