@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-##### Default environment variables #########
-PIPY_CONF=pipy.js
-
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
   PIPY_DIR=$(dirname $(readlink -e $(basename $0)))
   OS_NAME=generic_linux
@@ -47,14 +44,14 @@ SHORT_OPTS="crsgt:nhpd"
 function usage() {
     echo "Usage: $0 [-h|-c|-r|-s|-g|-n|-t <version-revision>]" 1>&2
     echo "       -h                     Show this help message"
-    echo "       -t <version-revision>  Specify release version, like 0.2.0-15, should be one of release tag"
-    echo "       -c                     Build container image"
-    echo "       -r                     Build RHEL/CentOS rpm package"
-    echo "       -s                     Build static binary pipy executable object"
-    echo "       -g                     Build pipy with GUI, default with no GUI"
-    echo "       -n                     Build pipy binary, default yes"
-    echo "       -p                     Package build outputs"
-    echo "       -d                     Build with debug options"
+    echo "       -t <version-revision>  Specify the release version (should be one of the release tags, e.g. 0.2.0-15)"
+    echo "       -c                     Build a container image"
+    echo "       -r                     Build a CentOS/RHEL RPM package"
+    echo "       -n                     Build a stand-alone executable (default: yes)"
+    echo "       -d                     Build with debugging information (default: no)"
+    echo "       -s                     Build with static linking (default: no)"
+    echo "       -g                     Build with the builtin GUI (default: no)"
+    echo "       -p                     Package the build outputs (default: no)"
     echo ""
     exit 1
 }
@@ -170,7 +167,8 @@ function __build_deps_check() {
   __NODE_VERSION=`node --version 2> /dev/null`
   version_compare "v12" "$__NODE_VERSION"
   if [ $? -ne 0 ] && [ $PIPY_GUI == "ON" ] ; then
-    echo "NodeJS is too old, the minimal requirement is NodeJS 12."
+    echo "Your current version of Node.js is too old."
+    echo "Node.js version 12 or above is required to build Pipy."
     exit -1
   fi
 }
@@ -191,8 +189,8 @@ function build() {
   cd ${PIPY_DIR}/build
   $CMAKE -DPIPY_GUI=${PIPY_GUI} -DPIPY_SAMPLES=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $PIPY_DIR
   make -j${__NPROC}
-  if [ $? -eq 0 ];then 
-    echo "pipy now is in ${PIPY_DIR}/bin"
+  if [ $? -eq 0 ];then
+    echo "Pipy has been built successfully and can be found in ${PIPY_DIR}/bin"
   fi
   cd - 2>&1 > /dev/null
 }
