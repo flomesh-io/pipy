@@ -12,7 +12,7 @@ endif
 
 all: full
 
-full: $(PIPY_EXE)
+full:
 	npm install
 	npm run build
 	mkdir -p build
@@ -28,7 +28,7 @@ full: $(PIPY_EXE)
 	  -DPIPY_LTO=OFF \
 	&& $(MAKE)
 
-no-gui: $(PIPY_EXE)
+no-gui:
 	mkdir -p build
 	cd build && $(CMAKE) .. \
 	  -DCMAKE_BUILD_TYPE=Release \
