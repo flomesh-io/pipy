@@ -25,6 +25,7 @@ full: $(PIPY_EXE)
 	  -DPIPY_BPF=ON \
 	  -DPIPY_SOIL_FREED_SPACE=OFF \
 	  -DPIPY_ASSERT_SAME_THREAD=OFF \
+	  -DPIPY_LTO=OFF \
 	&& $(MAKE)
 
 no-gui: $(PIPY_EXE)
@@ -38,6 +39,7 @@ no-gui: $(PIPY_EXE)
 	  -DPIPY_BPF=ON \
 	  -DPIPY_SOIL_FREED_SPACE=OFF \
 	  -DPIPY_ASSERT_SAME_THREAD=OFF \
+	  -DPIPY_LTO=OFF \
 	&& $(MAKE)
 
 install: $(PIPY_INSTALL)
