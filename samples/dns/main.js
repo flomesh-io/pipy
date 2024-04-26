@@ -6,7 +6,7 @@ pipy.listen(config.listen, 'udp', $=>$
     function (dgram) {
       var msg = DNS.decode(dgram)
       msg.answer = msg.answer.filter(
-        rec => config.block.indexOf(rec.name) < 0
+        rec => !config.block.includes(rec.name)
       )
       return DNS.encode(msg)
     }

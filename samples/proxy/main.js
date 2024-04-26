@@ -12,7 +12,7 @@ var proxy = pipeline($=>$
   .pipe(() => ($proto === 'TLS' ? proxyTLS : proxyTCP))
 )
 
-var proxyTCP = pipeline($=>$
+var observe = pipeline($=>$
   .fork().to($=>$
     .decodeHTTPRequest()
     .handleMessageStart(
@@ -22,6 +22,10 @@ var proxyTCP = pipeline($=>$
       }
     )
   )
+)
+
+var proxyTCP = pipeline($=>$
+  .pipe(observe)
   .connect(() => $target)
 )
 
@@ -29,7 +33,10 @@ var proxyTLS = pipeline($=>$
   .acceptTLS({
     certificate: sni => sni ? genCert(sni) : undefined
   }).to($=>$
-    .connectTLS().to(proxyTCP)
+    .pipe(observe)
+    .connectTLS().to($=>$
+      .connect(() => $target)
+    )
   )
 )
 
