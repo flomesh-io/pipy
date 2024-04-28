@@ -65,8 +65,9 @@ struct Options : public pipy::Options {
   pjs::Ref<pjs::Str> ciphers;
   pjs::Ref<pjs::Object> certificate;
   std::vector<pjs::Ref<crypto::Certificate>> trusted;
-  pjs::Ref<pjs::Function> verify;
   pjs::Ref<pjs::Function> handshake;
+  pjs::Ref<pjs::Function> on_verify_f;
+  pjs::Ref<pjs::Function> on_state_f;
   bool alpn = false;
 #if PIPY_USE_NTLS
   bool ntls = false;
@@ -116,13 +117,24 @@ private:
 //
 
 class TLSSession :
-  public pjs::Pooled<TLSSession>,
+  public pjs::ObjectTemplate<TLSSession>,
   public EventProxy
 {
 public:
+  //
+  // TLSSession::State
+  //
+
+  enum class State {
+    idle,
+    handshake,
+    connected,
+    closed,
+  };
 
   //
-  // HandshakeInfo
+  // TLSSession::HandshakeInfo
+  // TODO: remove this
   //
 
   struct HandshakeInfo : public pjs::ObjectTemplate<HandshakeInfo> {
@@ -132,6 +144,13 @@ public:
   static void init();
   static auto get(SSL *ssl) -> TLSSession*;
 
+  void start_handshake(const char *name = nullptr);
+
+  auto state() const -> State { return m_state; }
+  auto error() const -> pjs::Str* { return m_error; }
+  auto protocol() -> pjs::Str*;
+
+private:
   TLSSession(
     TLSContext *ctx,
     Filter *filter,
@@ -140,29 +159,30 @@ public:
     bool is_ntls,
 #endif
     pjs::Object *certificate,
-    pjs::Function *verify,
     pjs::Function *alpn,
-    pjs::Function *handshake
+    pjs::Function *handshake,
+    pjs::Function *on_verify,
+    pjs::Function *on_state
   );
 
   ~TLSSession();
 
-  void set_sni(const char *name);
-  void start_handshake();
-
-private:
   Filter* m_filter;
   SSL* m_ssl;
   BIO* m_rbio;
   BIO* m_wbio;
   Data m_buffer_write;
   Data m_buffer_receive;
+  State m_state = State::idle;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<pjs::Object> m_certificate;
   pjs::Ref<pjs::Object> m_ca;
-  pjs::Ref<pjs::Function> m_verify;
   pjs::Ref<pjs::Function> m_alpn;
   pjs::Ref<pjs::Function> m_handshake;
+  pjs::Ref<pjs::Function> m_on_verify;
+  pjs::Ref<pjs::Function> m_on_state;
+  pjs::Ref<pjs::Str> m_error;
+  pjs::Ref<pjs::Str> m_protocol;
   bool m_is_server;
 #if PIPY_USE_NTLS
   bool m_is_ntls;
@@ -178,6 +198,7 @@ private:
   void on_server_name();
   auto on_select_alpn(pjs::Array *names) -> int;
 
+  void set_state(State state);
   void use_certificate(pjs::Str *sni);
   bool handshake_step();
   void handshake_done();
@@ -186,10 +207,11 @@ private:
   void pump_read();
   void pump_write();
   void close();
+  void error();
 
   static int s_user_data_index;
 
-  friend class pjs::RefCount<TLSSession>;
+  friend class pjs::ObjectTemplate<TLSSession>;
   friend class TLSContext;
 };
 
@@ -221,7 +243,7 @@ private:
 
   std::shared_ptr<TLSContext> m_tls_context;
   std::shared_ptr<Options> m_options;
-  TLSSession* m_session = nullptr;
+  pjs::Ref<TLSSession> m_session;
 };
 
 //
@@ -253,7 +275,7 @@ private:
 
   std::shared_ptr<TLSContext> m_tls_context;
   std::shared_ptr<Options> m_options;
-  TLSSession* m_session = nullptr;
+  pjs::Ref<TLSSession> m_session;
 };
 
 //

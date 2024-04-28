@@ -85,12 +85,20 @@ Options::Options(pjs::Object *options, const char *base_name) {
     });
   }
 
-  Value(options, "verify", base_name)
-    .get(verify)
-    .check_nullable();
-
   Value(options, "handshake", base_name)
     .get(handshake)
+    .check_nullable();
+
+  Value(options, "verify", base_name)
+    .get(on_verify_f)
+    .check_nullable();
+
+  Value(options, "onVerify", base_name)
+    .get(on_verify_f)
+    .check_nullable();
+
+  Value(options, "onState", base_name)
+    .get(on_state_f)
     .check_nullable();
 
 #if PIPY_USE_NTLS
@@ -276,15 +284,17 @@ TLSSession::TLSSession(
   bool is_ntls,
 #endif
   pjs::Object *certificate,
-  pjs::Function *verify,
   pjs::Function *alpn,
-  pjs::Function *handshake
+  pjs::Function *handshake,
+  pjs::Function *on_verify,
+  pjs::Function *on_state
 )
   : m_filter(filter)
   , m_certificate(certificate)
-  , m_verify(verify)
   , m_alpn(alpn)
   , m_handshake(handshake)
+  , m_on_verify(on_verify)
+  , m_on_state(on_state)
   , m_is_server(is_server)
 #if PIPY_USE_NTLS
   , m_is_ntls(is_ntls)
@@ -304,6 +314,7 @@ TLSSession::TLSSession(
   if (is_server) {
     SSL_set_accept_state(m_ssl);
     use_certificate(nullptr);
+    set_state(State::handshake);
 
   } else {
     SSL_set_connect_state(m_ssl);
@@ -315,12 +326,22 @@ TLSSession::~TLSSession() {
   SSL_free(m_ssl);
 }
 
-void TLSSession::set_sni(const char *name) {
-  SSL_set_tlsext_host_name(m_ssl, name);
+void TLSSession::start_handshake(const char *name) {
+  if (name) SSL_set_tlsext_host_name(m_ssl, name);
+  handshake_step();
+  set_state(State::handshake);
 }
 
-void TLSSession::start_handshake() {
-  handshake_step();
+auto TLSSession::protocol() -> pjs::Str* {
+  if (!m_protocol) {
+    const unsigned char *str = nullptr;
+    unsigned int len = 0;
+    SSL_get0_alpn_selected(m_ssl, &str, &len);
+    if (str) {
+      m_protocol = pjs::Str::make((const char *)str, len);
+    }
+  }
+  return m_protocol;
 }
 
 void TLSSession::on_input(Event *evt) {
@@ -366,14 +387,14 @@ void TLSSession::on_reply(Event *evt) {
 }
 
 auto TLSSession::on_verify(int preverify_ok, X509_STORE_CTX *cert_store_ctx) -> int {
-  if (!m_verify) return preverify_ok;
+  if (!m_on_verify) return preverify_ok;
   auto *x509 = X509_STORE_CTX_get0_cert(cert_store_ctx);
   pjs::Ref<crypto::Certificate> cert(crypto::Certificate::make(x509));
   pjs::Value args[2], ret;
   args[0].set((bool)preverify_ok);
   args[1].set(cert.get());
   Context &ctx = *m_pipeline->context();
-  (*m_verify)(ctx, 2, args, ret);
+  (*m_on_verify)(ctx, 2, args, ret);
   if (!ctx.ok()) return 0;
   return ret.to_boolean();
 }
@@ -394,6 +415,16 @@ auto TLSSession::on_select_alpn(pjs::Array *names) -> int {
     return ret.to_number();
   } else {
     return -1;
+  }
+}
+
+void TLSSession::set_state(State state) {
+  m_state = state;
+  if (m_on_state) {
+    Context &ctx = *m_pipeline->context();
+    pjs::Value arg(this), ret;
+    (*m_on_verify)(ctx, 1, &arg, ret);
+    ctx.reset(); // TODO: print out errors if any
   }
 }
 
@@ -510,11 +541,7 @@ bool TLSSession::handshake_step() {
       }
     } else if (status != SSL_ERROR_WANT_WRITE) {
       Log::warn("[tls] handshake failed (error = %d)", status);
-      while (auto err = ERR_get_error()) {
-        char str[256];
-        ERR_error_string(err, str);
-        Log::warn("[tls] %s", str);
-      }
+      error();
       close();
       return false;
     }
@@ -534,11 +561,12 @@ void TLSSession::handshake_done() {
     info->alpn = pjs::Str::make((const char *)str, len);
     pjs::Value arg(info), ret;
     (*m_handshake)(ctx, 1, &arg, ret);
-    if (m_is_server) {
-      forward(Data::make());
-    } else {
-      output(Data::make());
-    }
+  }
+  set_state(State::connected);
+  if (m_is_server) {
+    forward(Data::make());
+  } else {
+    output(Data::make());
   }
 }
 
@@ -652,6 +680,21 @@ void TLSSession::close() {
       forward(StreamEnd::make());
     }
   }
+  set_state(State::closed);
+}
+
+void TLSSession::error() {
+  Data buf;
+  Data::Builder db(buf, &s_dp);
+  while (auto err = ERR_get_error()) {
+    char str[256];
+    ERR_error_string(err, str);
+    Log::warn("[tls] %s", str);
+    if (db.size() > 0) db.push('\n');
+    db.push(str, std::strlen(str));
+  }
+  db.flush();
+  m_error = pjs::Str::make(buf.to_string());
 }
 
 //
@@ -749,7 +792,6 @@ auto Client::clone() -> Filter* {
 
 void Client::reset() {
   Filter::reset();
-  delete m_session;
   m_session = nullptr;
 }
 
@@ -762,7 +804,7 @@ void Client::process(Event *evt) {
   }
 
   if (!m_session) {
-    m_session = new TLSSession(
+    m_session = TLSSession::make(
       m_tls_context.get(),
       this,
       false,
@@ -770,21 +812,21 @@ void Client::process(Event *evt) {
       m_options->ntls,
 #endif
       m_options->certificate,
-      m_options->verify,
       nullptr,
-      m_options->handshake
+      m_options->handshake,
+      m_options->on_verify_f,
+      m_options->on_state_f
     );
     m_session->chain(Filter::output());
     pjs::Value sni(m_options->sni);
     if (!eval(m_options->sni_f, sni)) return;
-    if (!sni.is_undefined()) {
-      if (sni.is_string()) {
-        m_session->set_sni(sni.s()->c_str());
-      } else {
-        Filter::error("options.sni did not return a string");
-      }
+    if (sni.is_nullish()) {
+      m_session->start_handshake();
+    } else {
+      auto s = sni.to_string();
+      m_session->start_handshake(s->c_str());
+      s->release();
     }
-    m_session->start_handshake();
   }
 
   m_session->input()->input(evt);
@@ -884,13 +926,12 @@ auto Server::clone() -> Filter* {
 
 void Server::reset() {
   Filter::reset();
-  delete m_session;
   m_session = nullptr;
 }
 
 void Server::process(Event *evt) {
   if (!m_session) {
-    m_session = new TLSSession(
+    m_session = TLSSession::make(
       m_tls_context.get(),
       this,
       true,
@@ -898,9 +939,10 @@ void Server::process(Event *evt) {
       m_options->ntls,
 #endif
       m_options->certificate,
-      m_options->verify,
       m_options->alpn_f,
-      m_options->handshake
+      m_options->handshake,
+      m_options->on_verify_f,
+      m_options->on_state_f
     );
     m_session->chain(Filter::output());
   }
@@ -1180,8 +1222,20 @@ template<> void EnumDef<ProtocolVersion>::init() {
   define(ProtocolVersion::TLS1_3, "TLS1.3");
 }
 
+template<> void EnumDef<TLSSession::State>::init() {
+  define(TLSSession::State::idle, "idle");
+  define(TLSSession::State::handshake, "handshake");
+  define(TLSSession::State::connected, "connected");
+  define(TLSSession::State::closed, "closed");
+}
+
 template<> void ClassDef<TLSSession::HandshakeInfo>::init() {
   field<Ref<Str>>("alpn", [](TLSSession::HandshakeInfo *obj) { return &obj->alpn; });
+}
+
+template<> void ClassDef<TLSSession>::init() {
+  accessor("state", [](Object *obj, Value &ret) { ret.set(EnumDef<TLSSession::State>::name(obj->as<TLSSession>()->state())); });
+  accessor("protocol", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->protocol()); });
 }
 
 } // namespace pjs
