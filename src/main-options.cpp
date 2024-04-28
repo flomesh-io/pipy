@@ -124,10 +124,8 @@ void MainOptions::parse(const std::list<std::string> &args) {
   for (const auto &term : args) {
     if (pass_arguments) arguments.push_back(term);
     if (end_of_options) {
-      if (filename.empty()) {
-        filename = term;
-      }
-      break;
+      if (!pass_arguments) arguments.push_back(term);
+      continue;
     }
     if (term[0] != '-') {
       if (filename.empty()) {
