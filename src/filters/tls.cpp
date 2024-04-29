@@ -314,7 +314,6 @@ TLSSession::TLSSession(
   if (is_server) {
     SSL_set_accept_state(m_ssl);
     use_certificate(nullptr);
-    set_state(State::handshake);
 
   } else {
     SSL_set_connect_state(m_ssl);
@@ -329,7 +328,6 @@ TLSSession::~TLSSession() {
 void TLSSession::start_handshake(const char *name) {
   if (name) SSL_set_tlsext_host_name(m_ssl, name);
   handshake_step();
-  set_state(State::handshake);
 }
 
 auto TLSSession::protocol() -> pjs::Str* {
@@ -342,6 +340,24 @@ auto TLSSession::protocol() -> pjs::Str* {
     }
   }
   return m_protocol;
+}
+
+auto TLSSession::hostname() -> pjs::Str* {
+  if (!m_hostname) {
+    if (auto name = SSL_get_servername(m_ssl, TLSEXT_NAMETYPE_host_name)) {
+      m_hostname = pjs::Str::make(name);
+    }
+  }
+  return m_hostname;
+}
+
+auto TLSSession::peer() -> crypto::Certificate* {
+  if (!m_peer) {
+    if (auto x = SSL_get0_peer_certificate(m_ssl)) {
+      m_peer = crypto::Certificate::make(x);
+    }
+  }
+  return m_peer;
 }
 
 void TLSSession::on_input(Event *evt) {
@@ -534,6 +550,7 @@ void TLSSession::use_certificate(pjs::Str *sni) {
 }
 
 bool TLSSession::handshake_step() {
+  if (m_state == State::idle) set_state(State::handshake);
   while (!SSL_is_init_finished(m_ssl)) {
     pump_receive();
     int ret = SSL_do_handshake(m_ssl);
@@ -1237,6 +1254,8 @@ template<> void ClassDef<TLSSession>::init() {
   accessor("state", [](Object *obj, Value &ret) { ret.set(EnumDef<TLSSession::State>::name(obj->as<TLSSession>()->state())); });
   accessor("error", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->error()); });
   accessor("protocol", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->protocol()); });
+  accessor("hostname", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->hostname()); });
+  accessor("peer", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->peer()); });
 }
 
 } // namespace pjs

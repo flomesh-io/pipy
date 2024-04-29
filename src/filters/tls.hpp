@@ -149,6 +149,8 @@ public:
   auto state() const -> State { return m_state; }
   auto error() const -> pjs::Str* { return m_error; }
   auto protocol() -> pjs::Str*;
+  auto hostname() -> pjs::Str*;
+  auto peer() -> crypto::Certificate*;
 
 private:
   TLSSession(
@@ -183,6 +185,8 @@ private:
   pjs::Ref<pjs::Function> m_on_state;
   pjs::Ref<pjs::Str> m_error;
   pjs::Ref<pjs::Str> m_protocol;
+  pjs::Ref<pjs::Str> m_hostname;
+  pjs::Ref<crypto::Certificate> m_peer;
   bool m_is_server;
 #if PIPY_USE_NTLS
   bool m_is_ntls;
