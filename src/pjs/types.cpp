@@ -2251,7 +2251,12 @@ template<> void ClassDef<Promise>::init() {
   method("then", [](Context &ctx, Object *obj, Value &ret) {
     Value on_resolved;
     Value on_rejected;
-    if (!ctx.arguments(1, &on_resolved, &on_rejected)) return;
+    if (ctx.argc() <= 1) {
+      if (!ctx.arguments(1, &on_resolved)) return;
+      on_rejected = Value::empty;
+    } else {
+      if (!ctx.arguments(2, &on_resolved, &on_rejected)) return;
+    }
     ret.set(obj->as<Promise>()->then(ctx.root(), on_resolved, on_rejected));
   });
 
@@ -2411,6 +2416,8 @@ Promise::Then::Then(
   , m_on_rejected(on_rejected)
   , m_on_finally(on_finally)
   , m_promise(Promise::make())
+  , m_resolved_value(Value::empty)
+  , m_rejected_value(Value::empty)
 {
 }
 
@@ -2442,18 +2449,20 @@ void Promise::Then::execute(Context *ctx, State state, const Value &result) {
     if (m_on_resolved) {
       (*m_on_resolved)(*ctx, 1, &arg, ret);
     } else {
-      ret = m_resolved_value;
+      ret = m_resolved_value.is_empty() ? result : m_resolved_value;
     }
   } else {
     if (m_on_rejected) {
+      state = RESOLVED;
       (*m_on_rejected)(*ctx, 1, &arg, ret);
     } else {
-      ret = m_rejected_value;
+      ret = m_rejected_value.is_empty() ? result : m_rejected_value;
     }
   }
 
   if (!ctx->ok()) {
-    m_promise->settle(REJECTED, Error::make(ctx->error()));
+    m_promise->settle(REJECTED, ctx->error().value);
+    ctx->reset();
     return;
   }
 
@@ -2468,7 +2477,7 @@ void Promise::Then::execute(Context *ctx, State state, const Value &result) {
     return;
   }
 
-  m_promise->settle(RESOLVED, ret);
+  m_promise->settle(state, ret);
 }
 
 //
