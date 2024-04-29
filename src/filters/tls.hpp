@@ -199,6 +199,7 @@ private:
   auto on_select_alpn(pjs::Array *names) -> int;
 
   void set_state(State state);
+  void set_error();
   void use_certificate(pjs::Str *sni);
   bool handshake_step();
   void handshake_done();
@@ -207,7 +208,6 @@ private:
   void pump_read();
   void pump_write();
   void close();
-  void error();
 
   static int s_user_data_index;
 

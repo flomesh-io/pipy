@@ -423,9 +423,23 @@ void TLSSession::set_state(State state) {
   if (m_on_state) {
     Context &ctx = *m_pipeline->context();
     pjs::Value arg(this), ret;
-    (*m_on_verify)(ctx, 1, &arg, ret);
+    (*m_on_state)(ctx, 1, &arg, ret);
     ctx.reset(); // TODO: print out errors if any
   }
+}
+
+void TLSSession::set_error() {
+  Data buf;
+  Data::Builder db(buf, &s_dp);
+  while (auto err = ERR_get_error()) {
+    char str[256];
+    ERR_error_string(err, str);
+    Log::warn("[tls] %s", str);
+    if (db.size() > 0) db.push('\n');
+    db.push(str, std::strlen(str));
+  }
+  db.flush();
+  m_error = pjs::Str::make(buf.to_string());
 }
 
 void TLSSession::use_certificate(pjs::Str *sni) {
@@ -541,7 +555,7 @@ bool TLSSession::handshake_step() {
       }
     } else if (status != SSL_ERROR_WANT_WRITE) {
       Log::warn("[tls] handshake failed (error = %d)", status);
-      error();
+      set_error();
       close();
       return false;
     }
@@ -681,20 +695,6 @@ void TLSSession::close() {
     }
   }
   set_state(State::closed);
-}
-
-void TLSSession::error() {
-  Data buf;
-  Data::Builder db(buf, &s_dp);
-  while (auto err = ERR_get_error()) {
-    char str[256];
-    ERR_error_string(err, str);
-    Log::warn("[tls] %s", str);
-    if (db.size() > 0) db.push('\n');
-    db.push(str, std::strlen(str));
-  }
-  db.flush();
-  m_error = pjs::Str::make(buf.to_string());
 }
 
 //
@@ -1235,6 +1235,7 @@ template<> void ClassDef<TLSSession::HandshakeInfo>::init() {
 
 template<> void ClassDef<TLSSession>::init() {
   accessor("state", [](Object *obj, Value &ret) { ret.set(EnumDef<TLSSession::State>::name(obj->as<TLSSession>()->state())); });
+  accessor("error", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->error()); });
   accessor("protocol", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->protocol()); });
 }
 
