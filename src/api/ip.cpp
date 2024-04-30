@@ -23,7 +23,7 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "netmask.hpp"
+#include "ip.hpp"
 #include "utils.hpp"
 
 #include <cmath>
@@ -40,10 +40,45 @@ void IPAddressData::set_v4(uint32_t data) {
   m_str = nullptr;
 }
 
+void IPAddressData::set_v4(const uint8_t data[]) {
+  m_data.v4 = (
+    ((uint32_t)data[0] << 24) |
+    ((uint32_t)data[1] << 16) |
+    ((uint32_t)data[2] <<  8) |
+    ((uint32_t)data[3] <<  0)
+  );
+  m_is_v6 = false;
+  m_str = nullptr;
+}
+
 void IPAddressData::set_v6(const uint16_t data[]) {
   std::memcpy(m_data.v6, data, sizeof(m_data.v6));
   m_is_v6 = true;
   m_str = nullptr;
+}
+
+void IPAddressData::set_v4(pjs::Array *bytes) {
+  uint8_t data[4];
+  for (int i = 0; i < 4; i++) {
+    pjs::Value v;
+    if (bytes) bytes->get(i, v);
+    data[i] = v.to_int32();
+  }
+  set_v4(data);
+}
+
+void IPAddressData::set_v6(pjs::Array *bytes) {
+  uint16_t data[8];
+  for (int i = 0; i < 16; i++) {
+    pjs::Value v;
+    if (bytes) bytes->get(i, v);
+    if (i & 1) {
+      data[i>>1] |= (uint8_t)v.to_int32();
+    } else {
+      data[i>>1] = (uint16_t)v.to_int32() << 8;
+    }
+  }
+  set_v6(data);
 }
 
 bool IPAddressData::decompose_v4(uint8_t data[]) {
@@ -93,7 +128,7 @@ auto IPAddressData::to_bytes() -> pjs::Array* {
   }
 }
 
-auto IPAddressData::to_string(char *str, size_t len) -> size_t {
+auto IPAddressData::to_string(char *str, size_t len) const -> size_t {
   if (m_is_v6) {
     int zero_i = 0;
     int zero_n = 0;
@@ -173,11 +208,41 @@ static inline auto mask_of(int bits) -> uint32_t {
 }
 
 //
-// Netmask
+// IP
 //
 
-Netmask::Netmask(pjs::Str *cidr) : m_cidr(cidr) {
-  char str[50];
+IP::IP(const std::string &str) {
+  uint8_t ipv4[4];
+  uint16_t ipv6[8];
+  if (utils::get_ip_v4(str, ipv4)) {
+    m_data.set_v4(ipv4);
+  } else if (utils::get_ip_v6(str, ipv6)) {
+    m_data.set_v6(ipv6);
+  } else {
+    throw std::runtime_error("invalid IP address notation");
+  }
+}
+
+IP::IP(pjs::Array *bytes) {
+  if (bytes && bytes->length() > 4) {
+    m_data.set_v6(bytes);
+  } else {
+    m_data.set_v4(bytes);
+  }
+}
+
+auto IP::to_string() const -> std::string {
+  char str[100];
+  auto len = m_data.to_string(str, sizeof(str));
+  return std::string(str, len);
+}
+
+//
+// IPMask
+//
+
+IPMask::IPMask(pjs::Str *cidr) : m_cidr(cidr) {
+  char str[100];
   if (cidr->size() >= sizeof(str)) {
     throw std::runtime_error("string too long for CIDR notation");
   }
@@ -195,59 +260,50 @@ Netmask::Netmask(pjs::Str *cidr) : m_cidr(cidr) {
 
   if (utils::get_ip_v4(str, ipv4)) {
     if (m_bitmask < 0 || m_bitmask > 32) throw std::runtime_error("IPv4 CIDR mask out of range");
-    m_ip_full.set_v4(
-      ((uint32_t)ipv4[0] << 24) |
-      ((uint32_t)ipv4[1] << 16) |
-      ((uint32_t)ipv4[2] <<  8) |
-      ((uint32_t)ipv4[3] <<  0)
-    );
-    m_ip_mask.set_v4(mask_of(m_bitmask) << (32 - m_bitmask));
-    m_ip_base.set_v4(m_ip_full.v4() & m_ip_mask.v4());
+    m_ip_full.set_v4(ipv4);
   } else if (utils::get_ip_v6(str, ipv6)) {
     if (m_bitmask < 0 || m_bitmask > 128) throw std::runtime_error("IPv6 CIDR mask out of range");
-    uint16_t base[8];
-    uint16_t mask[8];
-    for (int i = 0; i < 8; i++) {
-      int n = std::min(m_bitmask - i * 16, 16);
-      int m = (n <= 0 ? 0 : (mask_of(n) << (16 - n)));
-      mask[i] = m;
-      base[i] = ipv6[i] & m;
-    }
     m_ip_full.set_v6(ipv6);
-    m_ip_base.set_v6(base);
-    m_ip_mask.set_v6(mask);
   } else {
     throw std::runtime_error("invalid CIDR notation");
   }
+
+  init_mask();
 }
 
-Netmask::Netmask(int mask, uint32_t ipv4)
+IPMask::IPMask(int mask, uint32_t ipv4)
   : m_bitmask(mask)
 {
   m_ip_full.set_v4(ipv4);
   init_mask();
 }
 
-Netmask::Netmask(int mask, uint8_t ipv4[])
+IPMask::IPMask(int mask, uint8_t ipv4[])
   : m_bitmask(mask)
 {
-  m_ip_full.set_v4(
-    ((uint32_t)ipv4[0] << 24) |
-    ((uint32_t)ipv4[1] << 16) |
-    ((uint32_t)ipv4[2] <<  8) |
-    ((uint32_t)ipv4[3] <<  0)
-  );
+  m_ip_full.set_v4(ipv4);
   init_mask();
 }
 
-Netmask::Netmask(int mask, uint16_t ipv6[])
+IPMask::IPMask(int mask, uint16_t ipv6[])
   : m_bitmask(mask)
 {
   m_ip_full.set_v6(ipv6);
   init_mask();
 }
 
-auto Netmask::hostmask() -> pjs::Str* {
+IPMask::IPMask(int mask, pjs::Array *bytes)
+  : m_bitmask(mask)
+{
+  if (bytes && bytes->length() > 4) {
+    m_ip_full.set_v6(bytes);
+  } else {
+    m_ip_full.set_v4(bytes);
+  }
+  init_mask();
+}
+
+auto IPMask::hostmask() -> pjs::Str* {
   if (!m_hostmask) {
     if (m_ip_full.is_v6()) {
       uint16_t data[8];
@@ -260,7 +316,7 @@ auto Netmask::hostmask() -> pjs::Str* {
   return m_hostmask;
 }
 
-auto Netmask::broadcast() -> pjs::Str* {
+auto IPMask::broadcast() -> pjs::Str* {
   if (!m_broadcast) {
     if (m_ip_full.is_v6()) {
       uint16_t data[8];
@@ -273,7 +329,7 @@ auto Netmask::broadcast() -> pjs::Str* {
   return m_broadcast;
 }
 
-auto Netmask::size() const -> double {
+auto IPMask::size() const -> double {
   if (m_ip_full.is_v6()) {
     return std::pow(2, 128 - m_bitmask);
   } else {
@@ -281,7 +337,7 @@ auto Netmask::size() const -> double {
   }
 }
 
-auto Netmask::first() -> pjs::Str* {
+auto IPMask::first() -> pjs::Str* {
   if (!m_first) {
     if (m_ip_full.is_v6()) {
       uint16_t data[8];
@@ -295,7 +351,7 @@ auto Netmask::first() -> pjs::Str* {
   return m_first;
 }
 
-auto Netmask::last() -> pjs::Str* {
+auto IPMask::last() -> pjs::Str* {
   if (!m_last) {
     if (m_ip_full.is_v6()) {
       uint16_t data[8];
@@ -311,7 +367,7 @@ auto Netmask::last() -> pjs::Str* {
   return m_last;
 }
 
-bool Netmask::contains(pjs::Str *addr) {
+bool IPMask::contains(pjs::Str *addr) {
   if (m_ip_full.is_v6()) {
     uint16_t data[8];
     if (!utils::get_ip_v6(addr->str(), data)) {
@@ -332,7 +388,7 @@ bool Netmask::contains(pjs::Str *addr) {
   }
 }
 
-auto Netmask::next() -> pjs::Str* {
+auto IPMask::next() -> pjs::Str* {
   char str[100];
   if (m_ip_full.is_v6()) {
     uint64_t mask = (
@@ -357,7 +413,7 @@ auto Netmask::next() -> pjs::Str* {
   }
 }
 
-void Netmask::init_mask() {
+void IPMask::init_mask() {
   if (m_ip_full.is_v6()) {
     uint16_t mask[8];
     uint16_t base[8];
@@ -382,38 +438,63 @@ namespace pjs {
 using namespace pipy;
 
 //
-// Netmask
+// IP
 //
 
-template<> void ClassDef<Netmask>::init() {
+template<> void ClassDef<IP>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Str *str;
+    Array *bytes;
+    try {
+      if (ctx.get(0, str)) {
+        return IP::make(str->str());
+      } else if (ctx.get(0, bytes)) {
+        return IP::make(bytes);
+      } else {
+        ctx.error_argument_type(0, "a string or an array");
+        return nullptr;
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+
+  accessor("version", [](Object *obj, Value &ret) { ret.set(obj->as<IP>()->version()); });
+
+  method("decompose", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<IP>()->data().decompose());
+  });
+
+  method("toString", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<IP>()->data().to_string());
+  });
+
+  method("toBytes", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<IP>()->data().to_bytes());
+  });
+}
+
+template<> void ClassDef<Constructor<IP>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
+// IPMask
+//
+
+template<> void ClassDef<IPMask>::init() {
   ctor([](Context &ctx) -> Object* {
     int mask;
     Array *bytes;
     Str *cidr;
     try {
       if (ctx.get(0, cidr)) {
-        return Netmask::make(cidr);
+        return IPMask::make(cidr);
       } else if (ctx.get(0, mask)) {
         if (ctx.get(1, bytes)) {
-          if (bytes && bytes->length() > 4) {
-            uint16_t ip[8];
-            for (int i = 0; i < 16; i++) {
-              Value v; bytes->get(i, v);
-              if (i & 1) {
-                ip[i>>1] |= (uint8_t)v.to_int32();
-              } else {
-                ip[i>>1] = (uint16_t)v.to_int32() << 8;
-              }
-            }
-            return Netmask::make(mask, ip);
-          } else {
-            uint8_t ip[4];
-            for (int i = 0; i < 4; i++) {
-              Value v; if (bytes) bytes->get(i, v);
-              ip[i] = v.to_int32();
-            }
-            return Netmask::make(mask, ip);
-          }
+          return IPMask::make(mask, bytes);
         } else {
           ctx.error_argument_type(1, "an array");
           return nullptr;
@@ -428,37 +509,37 @@ template<> void ClassDef<Netmask>::init() {
     }
   });
 
-  accessor("version",   [](Object *obj, Value &ret) { ret.set(obj->as<Netmask>()->version()); });
-  accessor("ip",        [](Object *obj, Value &ret) { ret.set(obj->as<Netmask>()->ip()); });
-  accessor("bitmask",   [](Object *obj, Value &ret) { ret.set(obj->as<Netmask>()->bitmask()); });
-  accessor("base",      [](Object *obj, Value &ret) { ret.set(obj->as<Netmask>()->base()); });
-  accessor("mask",      [](Object *obj, Value &ret) { ret.set(obj->as<Netmask>()->mask()); });
-  accessor("hostmask",  [](Object *obj, Value &ret) { ret.set(obj->as<Netmask>()->hostmask()); });
-  accessor("broadcast", [](Object *obj, Value &ret) { ret.set(obj->as<Netmask>()->broadcast()); });
-  accessor("size",      [](Object *obj, Value &ret) { ret.set(obj->as<Netmask>()->size()); });
-  accessor("first",     [](Object *obj, Value &ret) { ret.set(obj->as<Netmask>()->first()); });
-  accessor("last",      [](Object *obj, Value &ret) { ret.set(obj->as<Netmask>()->last()); });
+  accessor("version",   [](Object *obj, Value &ret) { ret.set(obj->as<IPMask>()->version()); });
+  accessor("ip",        [](Object *obj, Value &ret) { ret.set(obj->as<IPMask>()->ip()); });
+  accessor("bitmask",   [](Object *obj, Value &ret) { ret.set(obj->as<IPMask>()->bitmask()); });
+  accessor("base",      [](Object *obj, Value &ret) { ret.set(obj->as<IPMask>()->base()); });
+  accessor("mask",      [](Object *obj, Value &ret) { ret.set(obj->as<IPMask>()->mask()); });
+  accessor("hostmask",  [](Object *obj, Value &ret) { ret.set(obj->as<IPMask>()->hostmask()); });
+  accessor("broadcast", [](Object *obj, Value &ret) { ret.set(obj->as<IPMask>()->broadcast()); });
+  accessor("size",      [](Object *obj, Value &ret) { ret.set(obj->as<IPMask>()->size()); });
+  accessor("first",     [](Object *obj, Value &ret) { ret.set(obj->as<IPMask>()->first()); });
+  accessor("last",      [](Object *obj, Value &ret) { ret.set(obj->as<IPMask>()->last()); });
 
   method("decompose", [](Context &ctx, Object *obj, Value &ret) {
-    ret.set(obj->as<Netmask>()->decompose());
+    ret.set(obj->as<IPMask>()->decompose());
   });
 
   method("toBytes", [](Context &ctx, Object *obj, Value &ret) {
-    ret.set(obj->as<Netmask>()->to_bytes());
+    ret.set(obj->as<IPMask>()->to_bytes());
   });
 
   method("contains", [](Context &ctx, Object *obj, Value &ret) {
     Str *addr;
     if (!ctx.arguments(1, &addr)) return;
-    ret.set(obj->as<Netmask>()->contains(addr));
+    ret.set(obj->as<IPMask>()->contains(addr));
   });
 
   method("next", [](Context &ctx, Object *obj, Value &ret) {
-    ret.set(obj->as<Netmask>()->next());
+    ret.set(obj->as<IPMask>()->next());
   });
 }
 
-template<> void ClassDef<Constructor<Netmask>>::init() {
+template<> void ClassDef<Constructor<IPMask>>::init() {
   super<Function>();
   ctor();
 }

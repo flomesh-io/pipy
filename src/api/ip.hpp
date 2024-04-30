@@ -38,17 +38,21 @@ class IPAddressData {
 public:
   IPAddressData() {}
   IPAddressData(uint32_t data) { set_v4(data); }
+  IPAddressData(const uint8_t data[]) { set_v4(data); }
   IPAddressData(const uint16_t data[]) { set_v6(data); }
   bool is_v6() const { return m_is_v6; }
   auto v4() const -> uint32_t { return m_data.v4; }
   auto v6() const -> const uint16_t* { return m_data.v6; }
   void set_v4(uint32_t data);
+  void set_v4(const uint8_t data[]);
   void set_v6(const uint16_t data[]);
+  void set_v4(pjs::Array *bytes);
+  void set_v6(pjs::Array *bytes);
   bool decompose_v4(uint8_t data[]);
   bool decompose_v6(uint16_t data[]);
   auto decompose() -> pjs::Array*;
   auto to_bytes() -> pjs::Array*;
-  auto to_string(char *str, size_t len) -> size_t;
+  auto to_string(char *str, size_t len) const -> size_t;
   auto to_string() -> pjs::Str*;
 
 private:
@@ -61,10 +65,33 @@ private:
 };
 
 //
-// Netmask
+// IP
 //
 
-class Netmask : public pjs::ObjectTemplate<Netmask> {
+class IP : public pjs::ObjectTemplate<IP> {
+public:
+  auto version() const -> int { return m_data.is_v6() ? 6 : 4; }
+  auto data() -> IPAddressData& { return m_data; }
+
+  virtual auto to_string() const -> std::string override;
+
+private:
+  IP(const std::string &str);
+  IP(uint32_t ipv4) : m_data(ipv4) {}
+  IP(uint8_t ipv4[]) : m_data(ipv4) {}
+  IP(uint16_t ipv6[]) : m_data(ipv6) {}
+  IP(pjs::Array *bytes);
+
+  IPAddressData m_data;
+
+  friend class pjs::ObjectTemplate<IP>;
+};
+
+//
+// IPMask
+//
+
+class IPMask : public pjs::ObjectTemplate<IPMask> {
 public:
   auto version() const -> int { return m_ip_full.is_v6() ? 6 : 4; }
   auto ip() -> pjs::Str* { return m_ip_full.to_string(); }
@@ -88,10 +115,11 @@ public:
   }
 
 private:
-  Netmask(pjs::Str *cidr);
-  Netmask(int mask, uint32_t ipv4);
-  Netmask(int mask, uint8_t ipv4[]);
-  Netmask(int mask, uint16_t ipv6[]);
+  IPMask(pjs::Str *cidr);
+  IPMask(int mask, uint32_t ipv4);
+  IPMask(int mask, uint8_t ipv4[]);
+  IPMask(int mask, uint16_t ipv6[]);
+  IPMask(int mask, pjs::Array *bytes);
 
   pjs::Ref<pjs::Str> m_cidr;
   pjs::Ref<pjs::Str> m_hostmask;
@@ -107,7 +135,7 @@ private:
 
   void init_mask();
 
-  friend class pjs::ObjectTemplate<Netmask>;
+  friend class pjs::ObjectTemplate<IPMask>;
 };
 
 } // namespace pipy

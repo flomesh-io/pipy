@@ -24,7 +24,7 @@
  */
 
 #include "bgp.hpp"
-#include "api/netmask.hpp"
+#include "api/ip.hpp"
 #include "utils.hpp"
 
 #include <cstring>
@@ -49,8 +49,8 @@ inline static void write_address_prefix(Data::Builder &db, const pjs::Value &add
   int mask = 0;
   if (addr.is_string()) {
     utils::get_cidr(addr.s()->str(), ip, mask);
-  } else if (addr.is<Netmask>()) {
-    auto nm = addr.as<Netmask>();
+  } else if (addr.is<IPMask>()) {
+    auto nm = addr.as<IPMask>();
     if (nm->decompose_v4(ip)) {
       mask = nm->bitmask();
     }
@@ -626,7 +626,7 @@ bool BGP::Parser::read(Data::Reader &r, uint32_t &data) {
   return true;
 }
 
-auto BGP::Parser::read_address_prefix(Data::Reader &r) -> Netmask* {
+auto BGP::Parser::read_address_prefix(Data::Reader &r) -> IPMask* {
   uint8_t mask, ip[4];
   if (!read(r, mask)) return nullptr;
   if (mask > 32) return nullptr;
@@ -638,7 +638,7 @@ auto BGP::Parser::read_address_prefix(Data::Reader &r) -> Netmask* {
       ip[i] = 0;
     }
   }
-  return Netmask::make(mask, ip);
+  return IPMask::make(mask, ip);
 }
 
 auto BGP::Parser::read_optional_param(Data::Reader &r) -> OptionalParameter* {

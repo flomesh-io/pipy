@@ -47,9 +47,9 @@
 #include "api/dns.hpp"
 #include "api/hessian.hpp"
 #include "api/http.hpp"
+#include "api/ip.hpp"
 #include "api/json.hpp"
 #include "api/logging.hpp"
-#include "api/netmask.hpp"
 #include "api/os.hpp"
 #include "api/pipy.hpp"
 #include "api/pipeline-api.hpp"
@@ -115,6 +115,15 @@ template<> void ClassDef<pipy::Global>::init() {
   // Protobuf
   variable("protobuf", class_of<Protobuf>());
 
+  // IP
+  variable("IP", class_of<Constructor<IP>>());
+
+  // IPMask
+  variable("IPMask", class_of<Constructor<IPMask>>());
+
+  // Netmask
+  variable("Netmask", class_of<Constructor<IPMask>>());
+
   // BGP
   variable("BGP", class_of<BGP>());
 
@@ -138,9 +147,6 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // URLSearchParams
   variable("URLSearchParams", class_of<Constructor<URLSearchParams>>());
-
-  // Netmask
-  variable("Netmask", class_of<Constructor<Netmask>>());
 
   // Data
   variable("Data", class_of<Constructor<pipy::Data>>());

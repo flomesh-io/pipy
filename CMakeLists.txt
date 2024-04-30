@@ -225,9 +225,9 @@ add_executable(pipy
   src/api/dns.cpp
   src/api/hessian.cpp
   src/api/http.cpp
+  src/api/ip.cpp
   src/api/json.cpp
   src/api/logging.cpp
-  src/api/netmask.cpp
   src/api/os.cpp
   src/api/pipeline-api.cpp
   src/api/pipy.cpp

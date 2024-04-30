@@ -32,7 +32,7 @@
 
 namespace pipy {
 
-class Netmask;
+class IPMask;
 
 //
 // BGP
@@ -213,7 +213,7 @@ public:
     bool read(Data::Reader &r, uint16_t &data);
     bool read(Data::Reader &r, uint32_t &data);
 
-    auto read_address_prefix(Data::Reader &r) -> Netmask*;
+    auto read_address_prefix(Data::Reader &r) -> IPMask*;
     auto read_optional_param(Data::Reader &r) -> OptionalParameter*;
     auto read_path_attribute(Data::Reader &r) -> PathAttribute*;
   };
