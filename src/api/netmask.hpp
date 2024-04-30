@@ -31,56 +31,78 @@
 namespace pipy {
 
 //
+// IPAddressData
+//
+
+class IPAddressData {
+public:
+  IPAddressData() {}
+  IPAddressData(uint32_t data) { set_v4(data); }
+  IPAddressData(const uint16_t data[]) { set_v6(data); }
+  bool is_v6() const { return m_is_v6; }
+  auto v4() const -> uint32_t { return m_data.v4; }
+  auto v6() const -> const uint16_t* { return m_data.v6; }
+  void set_v4(uint32_t data);
+  void set_v6(const uint16_t data[]);
+  bool decompose_v4(uint8_t data[]);
+  bool decompose_v6(uint16_t data[]);
+  auto decompose() -> pjs::Array*;
+  auto to_bytes() -> pjs::Array*;
+  auto to_string(char *str, size_t len) -> size_t;
+  auto to_string() -> pjs::Str*;
+
+private:
+  union {
+    uint32_t v4;
+    uint16_t v6[8];
+  } m_data;
+  pjs::Ref<pjs::Str> m_str;
+  bool m_is_v6;
+};
+
+//
 // Netmask
 //
 
 class Netmask : public pjs::ObjectTemplate<Netmask> {
 public:
-  auto version() const -> int { return m_is_v6 ? 6 : 4; }
-  auto ip() -> pjs::Str*;
+  auto version() const -> int { return m_ip_full.is_v6() ? 6 : 4; }
+  auto ip() -> pjs::Str* { return m_ip_full.to_string(); }
   auto bitmask() const -> int { return m_bitmask; }
-  auto base() -> pjs::Str*;
-  auto mask() -> pjs::Str*;
+  auto base() -> pjs::Str* { return m_ip_base.to_string(); }
+  auto mask() -> pjs::Str* { return m_ip_mask.to_string(); }
   auto hostmask() -> pjs::Str*;
   auto broadcast() -> pjs::Str*;
-  auto size() const -> int { return 1 << (32 - m_bitmask); }
+  auto size() const -> double;
   auto first() -> pjs::Str*;
   auto last() -> pjs::Str*;
-  bool decompose_v4(uint8_t ip[]);
-  bool decompose_v6(uint16_t ip[]);
-  auto decompose() -> pjs::Array*;
-  auto to_bytes() -> pjs::Array*;
   bool contains(pjs::Str *addr);
   auto next() -> pjs::Str*;
+  bool decompose_v4(uint8_t data[]) { return m_ip_full.decompose_v4(data); }
+  bool decompose_v6(uint16_t data[]) { return m_ip_full.decompose_v6(data); }
+  auto decompose() -> pjs::Array* { return m_ip_full.decompose(); }
+  auto to_bytes() -> pjs::Array* { return m_ip_full.to_bytes(); }
 
   virtual auto to_string() const -> std::string override {
     return m_cidr->str();
   }
 
 private:
-  union IP {
-    uint32_t v4;
-    uint16_t v6[8];
-  };
-
   Netmask(pjs::Str *cidr);
+  Netmask(int mask, uint32_t ipv4);
   Netmask(int mask, uint8_t ipv4[]);
   Netmask(int mask, uint16_t ipv6[]);
 
   pjs::Ref<pjs::Str> m_cidr;
-  pjs::Ref<pjs::Str> m_ip;
-  pjs::Ref<pjs::Str> m_base;
-  pjs::Ref<pjs::Str> m_mask;
   pjs::Ref<pjs::Str> m_hostmask;
   pjs::Ref<pjs::Str> m_broadcast;
   pjs::Ref<pjs::Str> m_first;
   pjs::Ref<pjs::Str> m_last;
 
-  bool m_is_v6;
   int m_bitmask;
-  IP m_ip_full;
-  IP m_ip_base;
-  IP m_ip_mask;
+  IPAddressData m_ip_full;
+  IPAddressData m_ip_base;
+  IPAddressData m_ip_mask;
   uint64_t m_next = 1;
 
   void init_mask();
