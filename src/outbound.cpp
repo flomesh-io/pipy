@@ -61,7 +61,15 @@ Outbound::Outbound(EventTarget::Input *input, const Options &options)
 
 Outbound::~Outbound() {
   Log::debug(Log::ALLOC, "[outbound %p] --", this);
+  if (m_socket) m_socket->discard();
   s_all_outbounds.remove(this);
+}
+
+auto Outbound::get_socket() -> Socket* {
+  if (!m_socket) {
+    m_socket = wrap_socket();
+  }
+  return m_socket;
 }
 
 auto Outbound::protocol_name() const -> pjs::Str* {
@@ -334,6 +342,8 @@ void OutboundTCP::resolve() {
     return;
   }
 
+  state(Outbound::State::resolving);
+
   const auto &host = (m_host == s_localhost ? s_localhost_ip : m_host);
 
   m_resolver.async_resolve(
@@ -392,10 +402,17 @@ void OutboundTCP::resolve() {
   }
 
   retain();
-  state(Outbound::State::resolving);
 }
 
 void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
+  if (Log::is_enabled(Log::OUTBOUND)) {
+    char desc[200];
+    describe(desc, sizeof(desc));
+    Log::debug(Log::OUTBOUND, "%s connecting...", desc);
+  }
+
+  state(Outbound::State::connecting);
+
   socket().async_connect(
     target,
     [=](const std::error_code &ec) {
@@ -441,14 +458,7 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
     }
   );
 
-  if (Log::is_enabled(Log::OUTBOUND)) {
-    char desc[200];
-    describe(desc, sizeof(desc));
-    Log::debug(Log::OUTBOUND, "%s connecting...", desc);
-  }
-
   retain();
-  state(Outbound::State::connecting);
 }
 
 void OutboundTCP::connect_error(StreamEnd::Error err) {
@@ -462,6 +472,10 @@ void OutboundTCP::connect_error(StreamEnd::Error err) {
     state(Outbound::State::idle);
     start(options().retry_delay);
   }
+}
+
+auto OutboundTCP::wrap_socket() -> Socket* {
+  return Socket::make(SocketTCP::socket().native_handle());
 }
 
 auto OutboundTCP::get_traffic_in() -> size_t {
@@ -575,6 +589,8 @@ void OutboundUDP::resolve() {
     return;
   }
 
+  state(State::resolving);
+
   const auto &host = (m_host == s_localhost ? s_localhost_ip : m_host);
 
   m_resolver.async_resolve(
@@ -633,10 +649,17 @@ void OutboundUDP::resolve() {
   }
 
   retain();
-  state(State::resolving);
 }
 
 void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
+  if (Log::is_enabled(Log::OUTBOUND)) {
+    char desc[200];
+    describe(desc, sizeof(desc));
+    Log::debug(Log::OUTBOUND, "%s connecting...", desc);
+  }
+
+  state(State::connecting);
+
   socket().async_connect(
     target,
     [=](const std::error_code &ec) {
@@ -682,14 +705,7 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
     }
   );
 
-  if (Log::is_enabled(Log::OUTBOUND)) {
-    char desc[200];
-    describe(desc, sizeof(desc));
-    Log::debug(Log::OUTBOUND, "%s connecting...", desc);
-  }
-
   retain();
-  state(State::connecting);
 }
 
 void OutboundUDP::connect_error(StreamEnd::Error err) {
@@ -703,6 +719,10 @@ void OutboundUDP::connect_error(StreamEnd::Error err) {
     state(State::idle);
     start(options().retry_delay);
   }
+}
+
+auto OutboundUDP::wrap_socket() -> Socket* {
+  return Socket::make(SocketUDP::socket().native_handle());
 }
 
 auto OutboundUDP::get_traffic_in() -> size_t {
@@ -776,6 +796,10 @@ void OutboundNetlink::close() {
   state(Outbound::State::closed);
 }
 
+auto OutboundNetlink::wrap_socket() -> Socket* {
+  return Socket::make(SocketNetlink::socket().native_handle());
+}
+
 auto OutboundNetlink::get_traffic_in() -> size_t {
   auto n = SocketNetlink::m_traffic_read;
   SocketNetlink::m_traffic_read = 0;
@@ -826,6 +850,7 @@ template<> void EnumDef<Outbound::State>::init() {
 
 template<> void ClassDef<Outbound>::init() {
   accessor("state",         [](Object *obj, Value &ret) { ret.set(EnumDef<Outbound::State>::name(obj->as<Outbound>()->state())); });
+  accessor("socket",        [](Object *obj, Value &ret) { ret.set(obj->as<Outbound>()->get_socket()); });
   accessor("localAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<Outbound>()->local_address()); });
   accessor("localPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<Outbound>()->local_port()); });
   accessor("remoteAddress", [](Object *obj, Value &ret) { ret.set(obj->as<Outbound>()->remote_address()); });

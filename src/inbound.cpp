@@ -88,9 +88,7 @@ Inbound::Inbound(Listener *listener, const Options &options)
 
 Inbound::~Inbound() {
   Log::debug(Log::ALLOC, "[inbound  %p] --", this);
-  if (m_listener) {
-    m_listener->close(this);
-  }
+  if (m_listener) m_listener->close(this);
 }
 
 auto Inbound::local_address() -> pjs::Str* {

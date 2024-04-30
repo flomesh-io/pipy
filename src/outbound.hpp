@@ -88,6 +88,7 @@ public:
     }
   }
 
+  auto get_socket() -> Socket*;
   auto protocol() const -> Protocol { return m_options.protocol; }
   auto protocol_name() const -> pjs::Str*;
   auto address() -> pjs::Str*;
@@ -107,6 +108,7 @@ public:
   virtual void send(Event *evt) = 0;
   virtual void close() = 0;
 
+  virtual auto wrap_socket() -> Socket* = 0;
   virtual auto get_buffered() const -> size_t = 0;
   virtual auto get_traffic_in() ->size_t = 0;
   virtual auto get_traffic_out() ->size_t = 0;
@@ -126,6 +128,7 @@ protected:
   pjs::Ref<pjs::Str> m_local_addr_str;
   pjs::Ref<pjs::Str> m_remote_addr_str;
   pjs::Ref<EventTarget::Input> m_input;
+  pjs::Ref<Socket> m_socket;
   State m_state = State::idle;
   StreamEnd::Error m_error = StreamEnd::Error::NO_ERROR;
   int m_port = 0;
@@ -192,6 +195,7 @@ private:
   void connect(const asio::ip::tcp::endpoint &target);
   void connect_error(StreamEnd::Error err);
 
+  virtual auto wrap_socket() -> Socket* override;
   virtual auto get_buffered() const -> size_t override { return SocketTCP::buffered(); }
   virtual auto get_traffic_in() ->size_t override;
   virtual auto get_traffic_out() ->size_t override;
@@ -231,6 +235,7 @@ private:
   void connect(const asio::ip::udp::endpoint &target);
   void connect_error(StreamEnd::Error err);
 
+  virtual auto wrap_socket() -> Socket* override;
   virtual auto get_buffered() const -> size_t override { return SocketUDP::buffered(); }
   virtual auto get_traffic_in() -> size_t override;
   virtual auto get_traffic_out() -> size_t override;
@@ -262,6 +267,7 @@ private:
   OutboundNetlink(int family, EventTarget::Input *output, const Outbound::Options &options);
   ~OutboundNetlink();
 
+  virtual auto wrap_socket() -> Socket* override;
   virtual auto get_buffered() const -> size_t override { return SocketNetlink::buffered(); }
   virtual auto get_traffic_in() -> size_t override;
   virtual auto get_traffic_out() -> size_t override;
