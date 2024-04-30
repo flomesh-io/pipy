@@ -121,6 +121,9 @@ template<> void ClassDef<pipy::Global>::init() {
   // IPMask
   variable("IPMask", class_of<Constructor<IPMask>>());
 
+  // IPEndpoint
+  variable("IPEndpoint", class_of<Constructor<IPEndpoint>>());
+
   // Netmask
   variable("Netmask", class_of<Constructor<IPMask>>());
 

@@ -138,6 +138,30 @@ private:
   friend class pjs::ObjectTemplate<IPMask>;
 };
 
+//
+// IPEndpoint
+//
+
+class IPEndpoint : public pjs::ObjectTemplate<IPEndpoint> {
+public:
+  enum class Protocol {
+    tcp,
+    udp,
+  };
+
+  pjs::EnumValue<Protocol> protocol = Protocol::tcp;
+  pjs::Ref<IP> ip;
+  int port = 0;
+
+private:
+  IPEndpoint(IP *ip, Protocol proto);
+  IPEndpoint(IP *ip, int port, Protocol proto);
+  IPEndpoint(const std::string &addr, Protocol proto);
+  IPEndpoint(const std::string &addr, int port, Protocol proto);
+
+  friend class pjs::ObjectTemplate<IPEndpoint>;
+};
+
 } // namespace pipy
 
 #endif // NETMASK_HPP

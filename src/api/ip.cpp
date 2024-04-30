@@ -431,6 +431,38 @@ void IPMask::init_mask() {
   }
 }
 
+//
+// IPEndpoint
+//
+
+IPEndpoint::IPEndpoint(IP *addr, Protocol proto)
+  : protocol(proto)
+  , ip(addr)
+{
+}
+
+IPEndpoint::IPEndpoint(IP *addr, int p, Protocol proto)
+  : protocol(proto)
+  , ip(addr)
+  , port(p)
+{
+}
+
+IPEndpoint::IPEndpoint(const std::string &addr, Protocol proto)
+  : protocol(proto)
+{
+  std::string host;
+  if (!utils::get_host_port(addr, host, port)) host = addr;
+  ip = IP::make(host);
+}
+
+IPEndpoint::IPEndpoint(const std::string &addr, int p, Protocol proto)
+  : protocol(proto)
+  , port(p)
+{
+  ip = IP::make(addr);
+}
+
 } // namespace pipy
 
 namespace pjs {
@@ -540,6 +572,61 @@ template<> void ClassDef<IPMask>::init() {
 }
 
 template<> void ClassDef<Constructor<IPMask>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
+// IPEndpoint
+//
+
+template<> void EnumDef<IPEndpoint::Protocol>::init() {
+  define(IPEndpoint::Protocol::tcp, "tcp");
+  define(IPEndpoint::Protocol::udp, "udp");
+}
+
+template<> void ClassDef<IPEndpoint>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Str *addr = nullptr;
+    IP *ip = nullptr;
+    int port;
+    EnumValue<IPEndpoint::Protocol> protocol;
+    try {
+      if (!ctx.get(0, addr) && !ctx.get(0, ip)) {
+        ctx.error_argument_type(0, "a string or an IP instance");
+        return nullptr;
+      }
+      if (ctx.get(1, port)) {
+        if (port < 0 || port > 65535) {
+          ctx.error("port number out of range");
+          return nullptr;
+        }
+        if (!ctx.check(2, protocol, IPEndpoint::Protocol::tcp)) return nullptr;
+        if (addr) {
+          return IPEndpoint::make(addr->str(), port, protocol);
+        } else {
+          return IPEndpoint::make(ip, port, protocol);
+        }
+      } else {
+        if (!ctx.check(1, protocol, IPEndpoint::Protocol::tcp)) return nullptr;
+        if (addr) {
+          return IPEndpoint::make(addr->str(), protocol);
+        } else {
+          return IPEndpoint::make(ip, protocol);
+        }
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+
+  field<EnumValue<IPEndpoint::Protocol>>("protocol", [](IPEndpoint *obj) { return &obj->protocol; });
+  field<Ref<IP>>("ip", [](IPEndpoint *obj) { return &obj->ip; });
+  field<int>("port", [](IPEndpoint *obj) { return &obj->port; });
+}
+
+template<> void ClassDef<Constructor<IPEndpoint>>::init() {
   super<Function>();
   ctor();
 }
