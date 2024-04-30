@@ -137,8 +137,15 @@ void Connect::process(Event *evt) {
     pjs::Value target;
     if (!eval(m_target, target)) return;
 
-    if (!target.is_string()) {
-      Filter::error("target expected to be or return a string");
+    IPEndpoint *ep = nullptr;
+    if (target.is<IPEndpoint>()) {
+      ep = target.as<IPEndpoint>();
+      if (!ep->ip) {
+        Filter::error("invalid IP address");
+        return;
+      }
+    } else if (!target.is_string()) {
+      Filter::error("invalid target");
       return;
     }
 
@@ -147,7 +154,7 @@ void Connect::process(Event *evt) {
       pjs::Value ret;
       if (!Filter::eval(f, ret)) return;
       if (!ret.is_object()) {
-        Filter::error("callback did not return an object for options");
+        Filter::error("invalid options");
         return;
       }
       try {
@@ -166,7 +173,7 @@ void Connect::process(Event *evt) {
       if (!Filter::eval(options.bind_f, ret)) return;
       if (!ret.is_undefined()) {
         if (!ret.is_string()) {
-          Filter::error("bind expected to be or return a string");
+          Filter::error("invalid bind address");
           return;
         }
         bind = ret.s();
@@ -181,7 +188,15 @@ void Connect::process(Event *evt) {
       };
     }
 
-    switch (options.protocol) {
+    auto protocol = options.protocol;
+    if (ep) {
+      switch (ep->protocol.get()) {
+        case IPEndpoint::Protocol::tcp: protocol = Outbound::Protocol::TCP; break;
+        case IPEndpoint::Protocol::udp: protocol = Outbound::Protocol::UDP; break;
+      }
+    }
+
+    switch (protocol) {
       case Outbound::Protocol::TCP:
         m_outbound = OutboundTCP::make(Filter::output(), options);
         break;
@@ -200,7 +215,11 @@ void Connect::process(Event *evt) {
         m_outbound->bind("");
       }
 
-      m_outbound->connect(target.s()->str());
+      if (ep) {
+        m_outbound->connect(ep->ip, ep->port);
+      } else {
+        m_outbound->connect(target.s()->str());
+      }
 
     } catch (std::runtime_error &e) {
       m_outbound = nullptr;

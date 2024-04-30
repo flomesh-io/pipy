@@ -48,10 +48,11 @@ public:
   void set_v6(const uint16_t data[]);
   void set_v4(pjs::Array *bytes);
   void set_v6(pjs::Array *bytes);
-  bool decompose_v4(uint8_t data[]);
-  bool decompose_v6(uint16_t data[]);
-  auto decompose() -> pjs::Array*;
-  auto to_bytes() -> pjs::Array*;
+  bool decompose_v4(uint8_t data[]) const;
+  bool decompose_v6(uint16_t data[]) const;
+  auto decompose() const -> pjs::Array*;
+  auto to_bytes() const -> pjs::Array*;
+  auto to_bytes(uint8_t buf[]) const -> size_t;
   auto to_string(char *str, size_t len) const -> size_t;
   auto to_string() -> pjs::Str*;
 

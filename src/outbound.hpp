@@ -32,6 +32,7 @@
 #include "input.hpp"
 #include "timer.hpp"
 #include "list.hpp"
+#include "api/ip.hpp"
 #include "api/stats.hpp"
 
 #include <functional>
@@ -102,6 +103,7 @@ public:
 
   virtual void bind(const std::string &address) = 0;
   virtual void connect(const std::string &address) = 0;
+  virtual void connect(IP *ip, int port) = 0;
   virtual void send(Event *evt) = 0;
   virtual void close() = 0;
 
@@ -119,6 +121,7 @@ protected:
   std::string m_host;
   std::string m_remote_addr;
   std::string m_local_addr;
+  pjs::Ref<IP> m_ip;
   pjs::Ref<pjs::Str> m_address;
   pjs::Ref<pjs::Str> m_local_addr_str;
   pjs::Ref<pjs::Str> m_remote_addr_str;
@@ -137,6 +140,7 @@ protected:
   void input(Event *evt);
   void error(StreamEnd::Error err);
   void describe(char *buf, size_t len);
+  void collect_metrics();
   void collect();
 
   static void to_ip_addr(const std::string &address, std::string &host, int &port, int default_port = -1);
@@ -148,6 +152,7 @@ protected:
 
   pjs::Ref<stats::Counter> m_metric_traffic_out;
   pjs::Ref<stats::Counter> m_metric_traffic_in;
+  pjs::Ref<stats::Histogram> m_metric_conn_time;
 
 private:
   thread_local static List<Outbound> s_all_outbounds;
@@ -170,6 +175,7 @@ public:
 
   virtual void bind(const std::string &address) override;
   virtual void connect(const std::string &address) override;
+  virtual void connect(IP *ip, int port) override;
   virtual void send(Event *evt) override;
   virtual void close() override;
 
@@ -177,7 +183,6 @@ private:
   OutboundTCP(EventTarget::Input *output, const Outbound::Options &options);
   ~OutboundTCP();
 
-  pjs::Ref<stats::Histogram> m_metric_conn_time;
   asio::ip::tcp::resolver m_resolver;
   Timer m_connect_timer;
   Timer m_retry_timer;
@@ -209,6 +214,7 @@ class OutboundUDP :
 public:
   virtual void bind(const std::string &address) override;
   virtual void connect(const std::string &address) override;
+  virtual void connect(IP *ip, int port) override;
   virtual void send(Event *evt) override;
   virtual void close() override;
 
@@ -216,7 +222,6 @@ private:
   OutboundUDP(EventTarget::Input *output, const Outbound::Options &options);
   ~OutboundUDP();
 
-  pjs::Ref<stats::Histogram> m_metric_conn_time;
   asio::ip::udp::resolver m_resolver;
   Timer m_connect_timer;
   Timer m_retry_timer;
@@ -249,6 +254,7 @@ class OutboundNetlink :
 public:
   virtual void bind(const std::string &address) override;
   virtual void connect(const std::string &address) override;
+  virtual void connect(IP *ip, int port) override {}
   virtual void send(Event *evt) override;
   virtual void close() override;
 

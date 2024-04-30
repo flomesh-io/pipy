@@ -81,7 +81,7 @@ void IPAddressData::set_v6(pjs::Array *bytes) {
   set_v6(data);
 }
 
-bool IPAddressData::decompose_v4(uint8_t data[]) {
+bool IPAddressData::decompose_v4(uint8_t data[]) const {
   if (m_is_v6) return false;
   for (int i = 0; i < 4; i++) {
     data[i] = (m_data.v4 >> (24 - i * 8)) & 255;
@@ -89,7 +89,7 @@ bool IPAddressData::decompose_v4(uint8_t data[]) {
   return true;
 }
 
-bool IPAddressData::decompose_v6(uint16_t data[]) {
+bool IPAddressData::decompose_v6(uint16_t data[]) const {
   if (!m_is_v6) return false;
   for (int i = 0; i < 8; i++) {
     data[i] = m_data.v6[i];
@@ -97,7 +97,7 @@ bool IPAddressData::decompose_v6(uint16_t data[]) {
   return true;
 }
 
-auto IPAddressData::decompose() -> pjs::Array* {
+auto IPAddressData::decompose() const -> pjs::Array* {
   if (m_is_v6) {
     auto *arr = pjs::Array::make(8);
     for (int i = 0; i < 8; i++) arr->set(i, m_data.v6[i]);
@@ -111,20 +111,24 @@ auto IPAddressData::decompose() -> pjs::Array* {
   }
 }
 
-auto IPAddressData::to_bytes() -> pjs::Array* {
+auto IPAddressData::to_bytes() const -> pjs::Array* {
+  uint8_t buf[16];
+  auto len = to_bytes(buf);
+  auto arr = pjs::Array::make(len);
+  for (int i = 0; i < len; i++) arr->set(i, buf[i]);
+  return arr;
+}
+
+auto IPAddressData::to_bytes(uint8_t buf[]) const -> size_t {
   if (m_is_v6) {
-    auto *arr = pjs::Array::make(16);
     for (int i = 0; i < 8; i++) {
-      arr->set(i*2+0, m_data.v6[i] >> 8);
-      arr->set(i*2+1, m_data.v6[i] & 0xff);
+      buf[i*2+0] = m_data.v6[i] >> 8;
+      buf[i*2+1] = m_data.v6[i] & 0xff;
     }
-    return arr;
+    return 16;
   } else {
-    auto *arr = pjs::Array::make(4);
-    uint8_t data[4];
-    decompose_v4(data);
-    for (int i = 0; i < 4; i++) arr->set(i, data[i]);
-    return arr;
+    decompose_v4(buf);
+    return 4;
   }
 }
 

@@ -142,6 +142,15 @@ void Outbound::describe(char *buf, size_t len) {
   );
 }
 
+void Outbound::collect_metrics() {
+  pjs::Str *keys[2];
+  keys[0] = protocol_name();
+  keys[1] = Outbound::address();
+  m_metric_traffic_out = Outbound::s_metric_traffic_out->with_labels(keys, 2);
+  m_metric_traffic_in = Outbound::s_metric_traffic_in->with_labels(keys, 2);
+  m_metric_conn_time = Outbound::s_metric_conn_time->with_labels(keys, 2);
+}
+
 void Outbound::collect() {
   auto in = get_traffic_in();
   auto out = get_traffic_out();
@@ -261,13 +270,15 @@ void OutboundTCP::bind(const std::string &address) {
 
 void OutboundTCP::connect(const std::string &address) {
   to_ip_addr(address, m_host, m_port);
-  pjs::Str *keys[2];
-  keys[0] = protocol_name();
-  keys[1] = Outbound::address();
-  m_metric_traffic_out = Outbound::s_metric_traffic_out->with_labels(keys, 2);
-  m_metric_traffic_in = Outbound::s_metric_traffic_in->with_labels(keys, 2);
-  m_metric_conn_time = Outbound::s_metric_conn_time->with_labels(keys, 2);
+  collect_metrics();
+  start(0);
+}
 
+void OutboundTCP::connect(IP *ip, int port) {
+  m_ip = ip;
+  m_host = ip->data().to_string()->str();
+  m_port = port;
+  collect_metrics();
   start(0);
 }
 
@@ -309,6 +320,20 @@ void OutboundTCP::start(double delay) {
 void OutboundTCP::resolve() {
   static const std::string s_localhost("localhost");
   static const std::string s_localhost_ip("127.0.0.1");
+
+  if (m_ip) {
+    if (m_ip->version() == 6) {
+      asio::ip::address_v6::bytes_type buf;
+      m_ip->data().to_bytes(buf.data());
+      connect(tcp::endpoint(asio::ip::address_v6(buf), m_port));
+    } else {
+      asio::ip::address_v4::bytes_type buf;
+      m_ip->data().to_bytes(buf.data());
+      connect(tcp::endpoint(asio::ip::address_v4(buf), m_port));
+    }
+    return;
+  }
+
   const auto &host = (m_host == s_localhost ? s_localhost_ip : m_host);
 
   m_resolver.async_resolve(
@@ -482,13 +507,15 @@ void OutboundUDP::bind(const std::string &address) {
 
 void OutboundUDP::connect(const std::string &address) {
   to_ip_addr(address, m_host, m_port);
-  pjs::Str *keys[2];
-  keys[0] = protocol_name();
-  keys[1] = Outbound::address();
-  m_metric_traffic_out = Outbound::s_metric_traffic_out->with_labels(keys, 2);
-  m_metric_traffic_in = Outbound::s_metric_traffic_in->with_labels(keys, 2);
-  m_metric_conn_time = Outbound::s_metric_conn_time->with_labels(keys, 2);
+  collect_metrics();
+  start(0);
+}
 
+void OutboundUDP::connect(IP *ip, int port) {
+  m_ip = ip;
+  m_host = ip->data().to_string()->str();
+  m_port = port;
+  collect_metrics();
   start(0);
 }
 
@@ -534,6 +561,20 @@ void OutboundUDP::start(double delay) {
 void OutboundUDP::resolve() {
   static const std::string s_localhost("localhost");
   static const std::string s_localhost_ip("127.0.0.1");
+
+  if (m_ip) {
+    if (m_ip->version() == 6) {
+      asio::ip::address_v6::bytes_type buf;
+      m_ip->data().to_bytes(buf.data());
+      connect(udp::endpoint(asio::ip::address_v6(buf), m_port));
+    } else {
+      asio::ip::address_v4::bytes_type buf;
+      m_ip->data().to_bytes(buf.data());
+      connect(udp::endpoint(asio::ip::address_v4(buf), m_port));
+    }
+    return;
+  }
+
   const auto &host = (m_host == s_localhost ? s_localhost_ip : m_host);
 
   m_resolver.async_resolve(
