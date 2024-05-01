@@ -451,11 +451,11 @@ auto Certificate::to_pem() const -> Data* {
 }
 
 auto Certificate::issuer() -> pjs::Object* {
-  if (!m_subject) {
+  if (!m_issuer) {
     auto name = X509_get_issuer_name(m_x509);
-    m_subject = get_x509_name(name);
+    m_issuer = get_x509_name(name);
   }
-  return m_subject;
+  return m_issuer;
 }
 
 auto Certificate::subject() -> pjs::Object* {
