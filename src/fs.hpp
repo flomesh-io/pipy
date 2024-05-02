@@ -26,6 +26,7 @@
 #ifndef FS_HPP
 #define FS_HPP
 
+#include <cstdint>
 #include <list>
 #include <string>
 #include <vector>
