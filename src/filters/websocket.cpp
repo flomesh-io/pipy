@@ -227,7 +227,7 @@ void Encoder::process(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
     if (!m_start) {
       m_start = start;
-      auto head = pjs::coerce<MessageHead>(start->head());
+      pjs::Ref<MessageHead> head = pjs::coerce<MessageHead>(start->head());
       m_opcode = head->opcode;
       m_masked = head->masked;
       m_continuation = false;
