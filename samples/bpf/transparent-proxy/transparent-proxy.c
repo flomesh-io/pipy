@@ -104,6 +104,7 @@ int cg_sock_opt(struct bpf_sockopt *ctx) {
   sa->sin_addr.s_addr = htonl(sock->dst_addr);
   sa->sin_port = htons(sock->dst_port);
 
+  ctx->retval = 0;
   return 1;
 }
 
