@@ -102,7 +102,7 @@ void Fork::process(Event *evt) {
       auto arr = init_arg.as<pjs::Array>();
       auto len = arr->length();
       m_branches = pjs::PooledArray<Branch>::make(len);
-      if (m_mode != FORK) m_waiting = true;
+      if (m_mode != FORK && len > 0) m_waiting = true;
       for (int i = 0; i < len; i++) {
         auto pipeline = sub_pipeline(0, true);
         auto &branch = m_branches->at(i);
