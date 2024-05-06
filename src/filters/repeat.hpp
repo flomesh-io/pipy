@@ -46,6 +46,7 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
+  virtual void shutdown() override;
   virtual void on_reply(Event *evt) override;
   virtual void dump(Dump &d) override;
 
@@ -58,6 +59,7 @@ private:
   bool m_outputting = false;
   bool m_restarting = false;
   bool m_ended = false;
+  bool m_shutdown = false;
 
   void restart();
   void repeat();

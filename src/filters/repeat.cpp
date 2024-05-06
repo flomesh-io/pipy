@@ -72,6 +72,7 @@ void Repeat::reset() {
   m_outputting = false;
   m_restarting = false;
   m_ended = false;
+  m_shutdown = false;
 }
 
 void Repeat::process(Event *evt) {
@@ -86,9 +87,17 @@ void Repeat::process(Event *evt) {
   m_pipeline->input()->input(evt);
 }
 
+void Repeat::shutdown() {
+  m_shutdown = true;
+}
+
 void Repeat::on_reply(Event *evt) {
   if (auto eos = evt->as<StreamEnd>()) {
     m_eos = eos;
+    if (m_shutdown) {
+      end();
+      return;
+    }
     pjs::Value arg(evt), ret;
     if (!Filter::callback(m_condition, 1, &arg, ret)) return;
     if (ret.is_promise()) {
