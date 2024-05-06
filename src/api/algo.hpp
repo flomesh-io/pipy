@@ -28,10 +28,13 @@
 
 #include "pjs/pjs.hpp"
 #include "list.hpp"
+#include "net.hpp"
 #include "timer.hpp"
 #include "options.hpp"
 
+#include <atomic>
 #include <map>
+#include <mutex>
 #include <set>
 #include <unordered_map>
 
@@ -95,10 +98,49 @@ private:
 class Quota : public pjs::ObjectTemplate<Quota> {
 public:
   struct Options : public pipy::Options {
+    pjs::Ref<pjs::Str> key;
     double per = 0;
     double produce = 0;
     Options() {}
     Options(pjs::Object *options);
+  };
+
+  //
+  // Quota::Counter
+  //
+
+  class Counter : public pjs::RefCountMT<Counter> {
+  public:
+    static auto get(const std::string &key, double initial_value, double produce_value, double produce_cycle) -> Counter*;
+
+    auto initial() const -> double { return m_initial_value; }
+    auto current() const -> double { return m_current_value.load(); }
+    void produce(double value);
+    auto consume(double value) -> double;
+    void enqueue(Quota *quota);
+    void dequeue(Quota *quota);
+
+  private:
+    Counter(const std::string &key, double initial_value, double produce_value, double produce_cycle);
+    ~Counter();
+
+    std::string m_key;
+    std::atomic<double> m_initial_value;
+    std::atomic<double> m_produce_value;
+    std::atomic<double> m_produce_cycle;
+    std::atomic<double> m_current_value;
+    std::atomic<bool> m_is_producing_scheduled;
+    std::set<Quota*> m_quotas;
+    std::mutex m_quotas_mutex;
+    Timer m_timer;
+
+    void schedule_producing();
+    void on_produce();
+
+    static std::map<std::string, Counter*> m_counter_map;
+    static std::mutex m_counter_map_mutex;
+
+    friend class pjs::RefCountMT<Counter>;
   };
 
   //
@@ -122,8 +164,8 @@ public:
   };
 
   void reset();
-  auto initial() const -> double { return m_initial_value; }
-  auto current() const -> double { return m_current_value; }
+  auto initial() const -> double { return m_counter ? m_counter->initial() : m_initial_value; }
+  auto current() const -> double { return m_counter ? m_counter->current() : m_current_value; }
   void produce(double value);
   void produce_async(double value);
   auto consume(double value) -> double;
@@ -132,8 +174,11 @@ public:
 
 private:
   Quota(double initial_value, const Options &options);
+  ~Quota();
 
   Options m_options;
+  Net& m_net;
+  pjs::Ref<Counter> m_counter;
   double m_initial_value;
   double m_current_value;
   bool m_is_producing_scheduled = false;
@@ -141,6 +186,8 @@ private:
   Timer m_timer;
 
   void schedule_producing();
+  void on_produce();
+  void on_produce_async();
 
   friend class pjs::ObjectTemplate<Quota>;
 };

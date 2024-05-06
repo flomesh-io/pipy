@@ -225,6 +225,9 @@ void Cache::set(
 //
 
 Quota::Options::Options(pjs::Object *options) {
+  Value(options, "key")
+    .get(key)
+    .check_nullable();
   Value(options, "per")
     .get_seconds(per)
     .check_nullable();
@@ -235,12 +238,28 @@ Quota::Options::Options(pjs::Object *options) {
 
 Quota::Quota(double initial_value, const Options &options)
   : m_options(options)
+  , m_net(Net::current())
   , m_initial_value(initial_value)
   , m_current_value(initial_value)
 {
+  if (options.key) {
+    m_counter = Counter::get(
+      options.key->str(),
+      initial_value,
+      options.produce,
+      options.per
+    );
+  }
+}
+
+Quota::~Quota() {
+  if (m_counter) {
+    m_counter->dequeue(this);
+  }
 }
 
 void Quota::reset() {
+  if (m_counter) return;
   if (m_current_value >= m_initial_value) {
     m_current_value = m_initial_value;
   } else {
@@ -249,20 +268,10 @@ void Quota::reset() {
 }
 
 void Quota::produce(double value) {
+  if (m_counter) return m_counter->produce(value);
   if (value <= 0) return;
   m_current_value += value;
-  retain();
-  while (auto c = m_consumers.head()) {
-    m_consumers.remove(c);
-    c->m_quota = nullptr;
-    if (!c->on_consume(this)) {
-      c->m_quota = this;
-      m_consumers.unshift(c);
-      break;
-    }
-    if (m_current_value <= 0) break;
-  }
-  release();
+  on_produce();
 }
 
 void Quota::produce_async(double value) {
@@ -277,6 +286,7 @@ void Quota::produce_async(double value) {
 }
 
 auto Quota::consume(double value) -> double {
+  if (m_counter) return m_counter->consume(value);
   if (value <= 0) return 0;
   if (value > m_current_value) value = m_current_value;
   m_current_value -= value;
@@ -302,10 +312,35 @@ void Quota::schedule_producing() {
   m_is_producing_scheduled = true;
 }
 
+void Quota::on_produce() {
+  retain();
+  while (auto c = m_consumers.head()) {
+    m_consumers.remove(c);
+    c->m_quota = nullptr;
+    if (!c->on_consume(this)) {
+      c->m_quota = this;
+      m_consumers.unshift(c);
+      break;
+    }
+    if (m_current_value <= 0) break;
+  }
+  release();
+}
+
+void Quota::on_produce_async() {
+  m_net.post(
+    [this]() {
+      InputContext ic;
+      on_produce();
+    }
+  );
+}
+
 void Quota::enqueue(Consumer *consumer) {
   if (!consumer->m_quota) {
     consumer->m_quota = this;
     m_consumers.push(consumer);
+    if (m_counter) m_counter->enqueue(this);
   }
 }
 
@@ -313,7 +348,100 @@ void Quota::dequeue(Consumer *consumer) {
   if (consumer->m_quota == this) {
     m_consumers.remove(consumer);
     consumer->m_quota = nullptr;
+    if (m_consumers.empty()) m_counter->dequeue(this);
   }
+}
+
+//
+// Quota::Counter
+//
+
+std::map<std::string, Quota::Counter*> Quota::Counter::m_counter_map;
+std::mutex Quota::Counter::m_counter_map_mutex;
+
+Quota::Counter::Counter(const std::string &key, double initial_value, double produce_value, double produce_cycle)
+  : m_key(key)
+  , m_initial_value(initial_value)
+  , m_produce_value(produce_value)
+  , m_produce_cycle(produce_cycle)
+  , m_current_value(initial_value)
+  , m_is_producing_scheduled(false)
+{
+  m_counter_map[key] = this;
+}
+
+Quota::Counter::~Counter() {
+  std::lock_guard<std::mutex> lk(m_counter_map_mutex);
+  m_counter_map.erase(m_key);
+}
+
+auto Quota::Counter::get(const std::string &key, double initial_value, double produce_value, double produce_cycle) -> Counter* {
+  std::lock_guard<std::mutex> lk(m_counter_map_mutex);
+  auto i = m_counter_map.find(key);
+  if (i != m_counter_map.end()) {
+    auto p = i->second;
+    p->m_initial_value = initial_value;
+    p->m_produce_value = produce_value;
+    p->m_produce_cycle = produce_cycle;
+    return p;
+  }
+  return new Counter(key, initial_value, produce_value, produce_cycle);
+}
+
+void Quota::Counter::produce(double value) {
+  if (value <= 0) return;
+  auto old = m_current_value.load();
+  while (!m_current_value.compare_exchange_weak(old, old + value));
+  on_produce();
+}
+
+auto Quota::Counter::consume(double value) -> double {
+  if (value <= 0) return 0;
+  auto old = m_current_value.load();
+  auto dec = value;
+  for (;;) {
+    dec = std::min(value, old);
+    if (m_current_value.compare_exchange_weak(old, old - dec)) break;
+  }
+  schedule_producing();
+  return dec;
+}
+
+void Quota::Counter::enqueue(Quota *quota) {
+  std::lock_guard<std::mutex> lock(m_quotas_mutex);
+  m_quotas.insert(quota);
+}
+
+void Quota::Counter::dequeue(Quota *quota) {
+  std::lock_guard<std::mutex> lock(m_quotas_mutex);
+  m_quotas.erase(quota);
+}
+
+void Quota::Counter::schedule_producing() {
+  bool expected_state = false;
+  if (m_produce_cycle <= 0) return;
+  if (!m_is_producing_scheduled.compare_exchange_strong(expected_state, true)) return;
+  m_timer.schedule(
+    m_produce_cycle, [this]() {
+      m_is_producing_scheduled.store(false);
+      auto old = m_current_value.load();
+      for (;;) {
+        if (0 < m_produce_value && m_produce_value < m_initial_value - old) {
+          if (!m_current_value.compare_exchange_weak(old, old + m_produce_value)) continue;
+          schedule_producing();
+        } else {
+          if (!m_current_value.compare_exchange_weak(old, m_initial_value)) continue;
+        }
+        on_produce();
+        break;
+      }
+    }
+  );
+}
+
+void Quota::Counter::on_produce() {
+  std::lock_guard<std::mutex> lock(m_quotas_mutex);
+  for (auto quota : m_quotas) quota->on_produce_async();
 }
 
 //
