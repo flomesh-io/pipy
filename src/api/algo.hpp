@@ -113,6 +113,7 @@ public:
   public:
     static auto get(const std::string &key, double initial_value, double produce_value, double produce_cycle) -> Counter*;
 
+    void init(double initial_value, double produce_value, double produce_cycle);
     auto initial() const -> double { return m_initial_value; }
     auto current() const -> double { return m_current_value.load(); }
     void produce(double value);

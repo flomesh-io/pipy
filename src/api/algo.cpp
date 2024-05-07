@@ -380,12 +380,29 @@ auto Quota::Counter::get(const std::string &key, double initial_value, double pr
   auto i = m_counter_map.find(key);
   if (i != m_counter_map.end()) {
     auto p = i->second;
-    p->m_initial_value = initial_value;
-    p->m_produce_value = produce_value;
-    p->m_produce_cycle = produce_cycle;
+    p->init(initial_value, produce_value, produce_cycle);
     return p;
   }
   return new Counter(key, initial_value, produce_value, produce_cycle);
+}
+
+void Quota::Counter::init(double initial_value, double produce_value, double produce_cycle) {
+  auto old_initial_value = m_initial_value.load();
+  m_initial_value = initial_value;
+  m_produce_value = produce_value;
+  m_produce_cycle = produce_cycle;
+  auto delta = initial_value - old_initial_value;
+  auto old = m_current_value.load();
+  for (;;) {
+    if (delta > 0) {
+      if (!m_current_value.compare_exchange_weak(old, old + delta)) continue;
+      on_produce();
+    } else if (delta < 0) {
+      if (!m_current_value.compare_exchange_weak(old, std::min(old, initial_value))) continue;
+      schedule_producing();
+    }
+    break;
+  }
 }
 
 void Quota::Counter::produce(double value) {
