@@ -343,6 +343,8 @@ void OutboundTCP::start(double delay) {
 }
 
 void OutboundTCP::resolve() {
+  m_start_time = utils::now();
+
   if (m_ip) {
     if (m_ip->version() == 6) {
       asio::ip::address_v6::bytes_type buf;
@@ -404,8 +406,6 @@ void OutboundTCP::resolve() {
       }
     );
   }
-
-  m_start_time = utils::now();
 
   if (m_retries > 0) {
     if (Log::is_enabled(Log::WARN)) {
@@ -601,8 +601,7 @@ void OutboundUDP::start(double delay) {
 }
 
 void OutboundUDP::resolve() {
-  static const std::string s_localhost("localhost");
-  static const std::string s_localhost_ip("127.0.0.1");
+  m_start_time = utils::now();
 
   if (m_ip) {
     if (m_ip->version() == 6) {
@@ -665,8 +664,6 @@ void OutboundUDP::resolve() {
       }
     );
   }
-
-  m_start_time = utils::now();
 
   if (m_retries > 0) {
     if (Log::is_enabled(Log::WARN)) {
