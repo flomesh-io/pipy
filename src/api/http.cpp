@@ -358,6 +358,7 @@ void Agent::Request::on_reply(Event *evt) {
   if (auto msg = m_message_reader.read(evt)) {
     m_settler->resolve(msg);
     EventSource::close();
+    msg->release();
     delete this;
   }
 }
