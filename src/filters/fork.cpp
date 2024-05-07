@@ -116,10 +116,12 @@ void Fork::process(Event *evt) {
       }
     } else {
       m_branches = pjs::PooledArray<Branch>::make(1);
-      auto pipeline = sub_pipeline(0, false)->start(1, &init_arg);
+      if (m_mode != FORK) m_waiting = true;
+      auto pipeline = sub_pipeline(0, m_mode != FORK)->start(1, &init_arg);
       auto &branch = m_branches->at(0);
       branch.fork = this;
       branch.pipeline = pipeline;
+      pipeline->chain(branch.input());
       pipeline->start(1, &init_arg);
     }
   }

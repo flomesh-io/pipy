@@ -304,11 +304,11 @@ void PipelineDesigner::fork(const pjs::Value &init_args) {
   require_sub_pipeline(append_filter(new Fork(init_args)));
 }
 
-void PipelineDesigner::fork_join(pjs::Object *init_args) {
+void PipelineDesigner::fork_join(const pjs::Value &init_args) {
   require_sub_pipeline(append_filter(new Fork(Fork::JOIN, init_args)));
 }
 
-void PipelineDesigner::fork_race(pjs::Object *init_args) {
+void PipelineDesigner::fork_race(const pjs::Value &init_args) {
   require_sub_pipeline(append_filter(new Fork(Fork::RACE, init_args)));
 }
 
@@ -956,28 +956,16 @@ template<> void ClassDef<PipelineDesigner>::init() {
 
   // PipelineDesigner.forkJoin
   filter("forkJoin", [](Context &ctx, PipelineDesigner *obj) {
-    Array *init_args;
-    Function *init_args_f;
-    if (ctx.get(0, init_args) && init_args) {
-      obj->fork_join(init_args);
-    } else if (ctx.get(0, init_args_f) && init_args_f) {
-      obj->fork_join(init_args_f);
-    } else {
-      ctx.error_argument_type(0, "an array or a function");
-    }
+    Value init_args;
+    if (!ctx.arguments(0, &init_args)) return;
+    obj->fork_join(init_args);
   });
 
   // PipelineDesigner.forkRace
   filter("forkRace", [](Context &ctx, PipelineDesigner *obj) {
-    Array *init_args;
-    Function *init_args_f;
-    if (ctx.get(0, init_args) && init_args) {
-      obj->fork_race(init_args);
-    } else if (ctx.get(0, init_args_f) && init_args_f) {
-      obj->fork_race(init_args_f);
-    } else {
-      ctx.error_argument_type(0, "an array or a function");
-    }
+    Value init_args;
+    if (!ctx.arguments(0, &init_args)) return;
+    obj->fork_race(init_args);
   });
 
   // PipelineDesigner.handle
