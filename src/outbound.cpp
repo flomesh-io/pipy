@@ -345,6 +345,23 @@ void OutboundTCP::start(double delay) {
 void OutboundTCP::resolve() {
   m_start_time = utils::now();
 
+  if (options().connect_timeout > 0) {
+    m_connect_timer.schedule(
+      options().connect_timeout,
+      [this]() {
+        connect_error(StreamEnd::CONNECTION_TIMEOUT);
+      }
+    );
+  }
+
+  if (m_retries > 0) {
+    if (Log::is_enabled(Log::WARN)) {
+      char desc[200];
+      describe(desc, sizeof(desc));
+      Log::warn("%s retry connecting... (retries = %d)", desc, m_retries);
+    }
+  }
+
   if (m_ip) {
     if (m_ip->version() == 6) {
       asio::ip::address_v6::bytes_type buf;
@@ -397,24 +414,6 @@ void OutboundTCP::resolve() {
   );
 
   log_debug("resolving hostname...");
-
-  if (options().connect_timeout > 0) {
-    m_connect_timer.schedule(
-      options().connect_timeout,
-      [this]() {
-        connect_error(StreamEnd::CONNECTION_TIMEOUT);
-      }
-    );
-  }
-
-  if (m_retries > 0) {
-    if (Log::is_enabled(Log::WARN)) {
-      char desc[200];
-      describe(desc, sizeof(desc));
-      Log::warn("%s retry connecting... (retries = %d)", desc, m_retries);
-    }
-  }
-
   retain();
 }
 
@@ -603,6 +602,23 @@ void OutboundUDP::start(double delay) {
 void OutboundUDP::resolve() {
   m_start_time = utils::now();
 
+  if (options().connect_timeout > 0) {
+    m_connect_timer.schedule(
+      options().connect_timeout,
+      [this]() {
+        connect_error(StreamEnd::CONNECTION_TIMEOUT);
+      }
+    );
+  }
+
+  if (m_retries > 0) {
+    if (Log::is_enabled(Log::WARN)) {
+      char desc[200];
+      describe(desc, sizeof(desc));
+      Log::warn("%s retry connecting... (retries = %d)", desc, m_retries);
+    }
+  }
+
   if (m_ip) {
     if (m_ip->version() == 6) {
       asio::ip::address_v6::bytes_type buf;
@@ -655,24 +671,6 @@ void OutboundUDP::resolve() {
   );
 
   log_debug("resolving hostname...");
-
-  if (options().connect_timeout > 0) {
-    m_connect_timer.schedule(
-      options().connect_timeout,
-      [this]() {
-        connect_error(StreamEnd::CONNECTION_TIMEOUT);
-      }
-    );
-  }
-
-  if (m_retries > 0) {
-    if (Log::is_enabled(Log::WARN)) {
-      char desc[200];
-      describe(desc, sizeof(desc));
-      Log::warn("%s retry connecting... (retries = %d)", desc, m_retries);
-    }
-  }
-
   retain();
 }
 
