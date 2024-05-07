@@ -50,6 +50,9 @@ thread_local pjs::Ref<stats::Counter> Outbound::s_metric_traffic_in;
 thread_local pjs::Ref<stats::Counter> Outbound::s_metric_traffic_out;
 thread_local pjs::Ref<stats::Histogram> Outbound::s_metric_conn_time;
 
+static const std::string s_localhost("localhost");
+static const std::string s_localhost_ip("127.0.0.1");
+
 Outbound::Outbound(EventTarget::Input *input, const Options &options)
   : m_options(options)
   , m_input(input)
@@ -277,9 +280,23 @@ void OutboundTCP::bind(const std::string &address) {
 }
 
 void OutboundTCP::connect(const std::string &address) {
+  uint8_t v4[4];
+  uint16_t v6[8];
   to_ip_addr(address, m_host, m_port);
-  collect_metrics();
-  start(0);
+  if (m_host == s_localhost) {
+    v4[0] = 127;
+    v4[1] = 0;
+    v4[2] = 0;
+    v4[3] = 1;
+    connect(IP::make(v4), m_port);
+  } else if (utils::get_ip_v4(m_host, v4)) {
+    connect(IP::make(v4), m_port);
+  } else if (utils::get_ip_v6(m_host, v6)) {
+    connect(IP::make(v6), m_port);
+  } else {
+    collect_metrics();
+    start(0);
+  }
 }
 
 void OutboundTCP::connect(IP *ip, int port) {
@@ -326,9 +343,6 @@ void OutboundTCP::start(double delay) {
 }
 
 void OutboundTCP::resolve() {
-  static const std::string s_localhost("localhost");
-  static const std::string s_localhost_ip("127.0.0.1");
-
   if (m_ip) {
     if (m_ip->version() == 6) {
       asio::ip::address_v6::bytes_type buf;
@@ -520,9 +534,23 @@ void OutboundUDP::bind(const std::string &address) {
 }
 
 void OutboundUDP::connect(const std::string &address) {
+  uint8_t v4[4];
+  uint16_t v6[8];
   to_ip_addr(address, m_host, m_port);
-  collect_metrics();
-  start(0);
+  if (m_host == s_localhost) {
+    v4[0] = 127;
+    v4[1] = 0;
+    v4[2] = 0;
+    v4[3] = 1;
+    connect(IP::make(v4), m_port);
+  } else if (utils::get_ip_v4(m_host, v4)) {
+    connect(IP::make(v4), m_port);
+  } else if (utils::get_ip_v6(m_host, v6)) {
+    connect(IP::make(v6), m_port);
+  } else {
+    collect_metrics();
+    start(0);
+  }
 }
 
 void OutboundUDP::connect(IP *ip, int port) {
