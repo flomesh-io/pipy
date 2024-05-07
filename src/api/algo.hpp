@@ -33,6 +33,7 @@
 #include "options.hpp"
 
 #include <atomic>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <set>
@@ -99,6 +100,7 @@ class Quota : public pjs::ObjectTemplate<Quota> {
 public:
   struct Options : public pipy::Options {
     pjs::Ref<pjs::Str> key;
+    double max = std::numeric_limits<double>::infinity();
     double per = 0;
     double produce = 0;
     Options() {}
@@ -111,9 +113,21 @@ public:
 
   class Counter : public pjs::RefCountMT<Counter> {
   public:
-    static auto get(const std::string &key, double initial_value, double produce_value, double produce_cycle) -> Counter*;
+    static auto get(
+      const std::string &key,
+      double initial_value,
+      double maximum_value,
+      double produce_value,
+      double produce_cycle
+    ) -> Counter*;
 
-    void init(double initial_value, double produce_value, double produce_cycle);
+    void init(
+      double initial_value,
+      double maximum_value,
+      double produce_value,
+      double produce_cycle
+    );
+
     auto initial() const -> double { return m_initial_value; }
     auto current() const -> double { return m_current_value.load(); }
     void produce(double value);
@@ -122,11 +136,18 @@ public:
     void dequeue(Quota *quota);
 
   private:
-    Counter(const std::string &key, double initial_value, double produce_value, double produce_cycle);
+    Counter(
+      const std::string &key,
+      double initial_value,
+      double maximum_value,
+      double produce_value,
+      double produce_cycle
+    );
     ~Counter();
 
     std::string m_key;
     std::atomic<double> m_initial_value;
+    std::atomic<double> m_maximum_value;
     std::atomic<double> m_produce_value;
     std::atomic<double> m_produce_cycle;
     std::atomic<double> m_current_value;

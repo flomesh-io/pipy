@@ -228,6 +228,9 @@ Quota::Options::Options(pjs::Object *options) {
   Value(options, "key")
     .get(key)
     .check_nullable();
+  Value(options, "max")
+    .get(max)
+    .check_nullable();
   Value(options, "per")
     .get_seconds(per)
     .check_nullable();
@@ -246,6 +249,7 @@ Quota::Quota(double initial_value, const Options &options)
     m_counter = Counter::get(
       options.key->str(),
       initial_value,
+      options.max,
       options.produce,
       options.per
     );
@@ -270,7 +274,7 @@ void Quota::reset() {
 void Quota::produce(double value) {
   if (m_counter) return m_counter->produce(value);
   if (value <= 0) return;
-  m_current_value += value;
+  m_current_value = std::min(m_options.max, m_current_value + value);
   on_produce();
 }
 
@@ -359,9 +363,16 @@ void Quota::dequeue(Consumer *consumer) {
 std::map<std::string, Quota::Counter*> Quota::Counter::m_counter_map;
 std::mutex Quota::Counter::m_counter_map_mutex;
 
-Quota::Counter::Counter(const std::string &key, double initial_value, double produce_value, double produce_cycle)
+Quota::Counter::Counter(
+  const std::string &key,
+  double initial_value,
+  double maximum_value,
+  double produce_value,
+  double produce_cycle
+)
   : m_key(key)
   , m_initial_value(initial_value)
+  , m_maximum_value(maximum_value)
   , m_produce_value(produce_value)
   , m_produce_cycle(produce_cycle)
   , m_current_value(initial_value)
@@ -375,33 +386,47 @@ Quota::Counter::~Counter() {
   m_counter_map.erase(m_key);
 }
 
-auto Quota::Counter::get(const std::string &key, double initial_value, double produce_value, double produce_cycle) -> Counter* {
+auto Quota::Counter::get(
+  const std::string &key,
+  double initial_value,
+  double maximum_value,
+  double produce_value,
+  double produce_cycle
+) -> Counter* {
   std::lock_guard<std::mutex> lk(m_counter_map_mutex);
   auto i = m_counter_map.find(key);
   if (i != m_counter_map.end()) {
     auto p = i->second;
-    p->init(initial_value, produce_value, produce_cycle);
+    p->init(initial_value, maximum_value, produce_value, produce_cycle);
     return p;
   }
-  return new Counter(key, initial_value, produce_value, produce_cycle);
+  return new Counter(key, initial_value, maximum_value, produce_value, produce_cycle);
 }
 
-void Quota::Counter::init(double initial_value, double produce_value, double produce_cycle) {
+void Quota::Counter::init(
+  double initial_value,
+  double maximum_value,
+  double produce_value,
+  double produce_cycle
+) {
   auto old_initial_value = m_initial_value.load();
   m_initial_value = initial_value;
+  m_maximum_value = maximum_value;
   m_produce_value = produce_value;
   m_produce_cycle = produce_cycle;
-  auto delta = initial_value - old_initial_value;
   auto old = m_current_value.load();
   for (;;) {
-    if (delta > 0) {
-      if (!m_current_value.compare_exchange_weak(old, old + delta)) continue;
-      on_produce();
-    } else if (delta < 0) {
-      if (!m_current_value.compare_exchange_weak(old, std::min(old, initial_value))) continue;
-      schedule_producing();
+    auto val = old;
+    if (initial_value > old_initial_value) val += initial_value - old_initial_value;
+    if (val > maximum_value) val = maximum_value;
+    if (m_current_value.compare_exchange_weak(old, val)) {
+      if (val > old) {
+        on_produce();
+      } else if (val < initial_value) {
+        schedule_producing();
+      }
+      break;
     }
-    break;
   }
 }
 
