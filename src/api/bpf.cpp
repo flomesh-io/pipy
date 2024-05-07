@@ -443,7 +443,7 @@ void Program::load(int type, int attach_type) {
     i.imm = m->fd();
   }
 
-  std::vector<char> log_buf(100*1024);
+  std::vector<char> log_buf(1024*1024);
   union bpf_attr attr;
   int fd = syscall_bpf(
     BPF_PROG_LOAD, &attr, attr_size(line_info_cnt),
