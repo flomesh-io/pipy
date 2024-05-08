@@ -29,8 +29,8 @@
 #include "tar.hpp"
 #include "utils.hpp"
 
-#ifdef PIPY_USE_SAMPLES
-#include "samples.tar.gz.h"
+#ifdef PIPY_USE_CODEBASES
+#include "codebases.tar.gz.h"
 #endif
 
 #include <iostream>
@@ -217,8 +217,8 @@ CodebaseStore::CodebaseStore(Store *store, const std::string &init_path)
     return;
   }
 
-#ifdef PIPY_USE_SAMPLES
-  Data input(s_samples_tar_gz, sizeof(s_samples_tar_gz), &s_dp), output;
+#ifdef PIPY_USE_CODEBASES
+  Data input(s_codebases_tar_gz, sizeof(s_codebases_tar_gz), &s_dp), output;
   auto decompressor = Decompressor::gzip(
     [&](Data &data) {
       output.push(std::move(data));
@@ -265,7 +265,7 @@ CodebaseStore::CodebaseStore(Store *store, const std::string &init_path)
       codebase->commit("1", update_list);
     }
   }
-#endif // PIPY_USE_SAMPLES
+#endif // PIPY_USE_CODEBASES
 }
 
 CodebaseStore::~CodebaseStore() {

@@ -71,26 +71,26 @@ static bool s_has_shutdown = false;
 //
 
 static void show_version() {
-  std::cout << "Version     : " << PIPY_VERSION << std::endl;
-  std::cout << "Commit      : " << PIPY_COMMIT << std::endl;
-  std::cout << "Commit Date : " << PIPY_COMMIT_DATE << std::endl;
-  std::cout << "Host        : " << PIPY_HOST << std::endl;
+  std::cout << "Version          : " << PIPY_VERSION << std::endl;
+  std::cout << "Commit           : " << PIPY_COMMIT << std::endl;
+  std::cout << "Commit Date      : " << PIPY_COMMIT_DATE << std::endl;
+  std::cout << "Host             : " << PIPY_HOST << std::endl;
 #ifdef PIPY_USE_NTLS
-  std::cout << "Tongsuo     : " << TONGSUO_VERSION_TEXT << std::endl;
+  std::cout << "Tongsuo          : " << TONGSUO_VERSION_TEXT << std::endl;
 #else
-  std::cout << "OpenSSL     : " << OPENSSL_VERSION_TEXT << std::endl;
+  std::cout << "OpenSSL          : " << OPENSSL_VERSION_TEXT << std::endl;
 #endif
 
 #ifdef PIPY_USE_GUI
-  std::cout << "Builtin GUI : " << "Yes" << std::endl;
+  std::cout << "Builtin GUI      : " << "Yes" << std::endl;
 #else
-  std::cout << "Builtin GUI : " << "No" << std::endl;
+  std::cout << "Builtin GUI      : " << "No" << std::endl;
 #endif
 
-#ifdef PIPY_USE_SAMPLES
-  std::cout << "Samples     : " << "Yes" << std::endl;
+#ifdef PIPY_USE_CODEBASES
+  std::cout << "Builtin Codebases: " << "Yes" << std::endl;
 #else
-  std::cout << "Samples     : " << "No" << std::endl;
+  std::cout << "Builtin Codebases: " << "No" << std::endl;
 #endif
 }
 

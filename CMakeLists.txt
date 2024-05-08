@@ -6,8 +6,9 @@ endif()
 
 project(pipy)
 
-option(PIPY_GUI "include builtin GUI" ON)
-option(PIPY_SAMPLES "include builtin sample scripts" ON)
+option(PIPY_GUI "include builtin GUI" OFF)
+option(PIPY_CODEBASES "include builtin codebases in the executable" OFF)
+option(PIPY_CUSTOM_CODEBASES "include custom codebases in the executable (<group>/<name>:<path>,<group>/<name>:<path>,...)" "")
 option(PIPY_BPF "enable eBPF support" ON)
 option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
 option(PIPY_ASSERT_SAME_THREAD "enable assertions for strict inner-thread data access" OFF)
@@ -15,7 +16,7 @@ option(PIPY_ZLIB "external zlib location" "")
 option(PIPY_OPENSSL "external libopenssl location" "")
 option(PIPY_BROTLI "external brotli location" "")
 option(PIPY_STATIC "statically link to libc" OFF)
-option(PIPY_LTO "enable LTO" ON)
+option(PIPY_LTO "enable LTO" OFF)
 option(PIPY_USE_NTLS, "Use externally compiled TongSuo Crypto library instead of OpenSSL. Used with PIPY_OPENSSL" OFF)
 option(PIPY_USE_SYSTEM_ZLIB "Use system installed zlib" "")
 
@@ -383,19 +384,19 @@ if(PIPY_GUI)
   add_dependencies(pipy PackGui)
 endif()
 
-if(PIPY_SAMPLES)
-  add_definitions(-DPIPY_USE_SAMPLES)
+if(PIPY_CODEBASES)
+  add_definitions(-DPIPY_USE_CODEBASES)
 
   add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/deps/samples.tar.gz.h
+    OUTPUT ${CMAKE_BINARY_DIR}/deps/codebases.tar.gz.h
     COMMAND node
-    ARGS pack-samples.js ${CMAKE_BINARY_DIR}/deps/samples.tar.gz.h
+    ARGS pack-codebases.js ${CMAKE_BINARY_DIR}/deps/codebases.tar.gz.h ${PIPY_CUSTOM_CODEBASES}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
-    DEPENDS gui/pack-samples.js ${CMAKE_SOURCE_DIR}/tutorial ${CMAKE_SOURCE_DIR}/samples
+    DEPENDS gui/pack-codebases.js ${CMAKE_SOURCE_DIR}/tutorial ${CMAKE_SOURCE_DIR}/samples
   )
 
-  add_custom_target(PackSamples DEPENDS ${CMAKE_BINARY_DIR}/deps/samples.tar.gz.h)
-  add_dependencies(pipy PackSamples)
+  add_custom_target(PackCodebases DEPENDS ${CMAKE_BINARY_DIR}/deps/codebases.tar.gz.h)
+  add_dependencies(pipy PackCodebases)
 endif()
 
 if(PIPY_BPF)

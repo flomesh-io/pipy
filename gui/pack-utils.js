@@ -1,9 +1,30 @@
 const fs = require('fs');
+const path = require('path');
+
+function listFilenames(dirpath, base, filenames) {
+  const names = fs.readdirSync(dirpath);
+  for (const name of names) {
+    const abspath = path.join(dirpath, name);
+    const st = fs.statSync(abspath);
+    if (st.isFile()) {
+      if (name.endsWith('.md') && name !== 'README.md') continue;
+      filenames.push(base + name);
+    } else if (st.isDirectory()) {
+      listFilenames(abspath, base + name + '/', filenames);
+    }
+  }
+}
 
 module.exports = {
   formatSize: size => {
     const s = Math.round(size / 1024).toString();
     return ' '.repeat(6 - s.length) + s + 'K';
+  },
+
+  listFilenames: (dirpath) => {
+    const filenames = [];
+    listFilenames(dirpath, '', filenames);
+    return filenames;
   },
 
   writeBinaryHeaderFile: (filename, name, data) => {

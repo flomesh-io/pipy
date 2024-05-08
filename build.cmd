@@ -23,7 +23,7 @@ IF "%1" == "no-gui" (
 IF NOT EXIST build (MD build)
 
 CD build
-cmake -DPIPY_GUI=%pipy_gui% -DPIPY_SAMPLES=%pipy_gui% -DPIPY_SOIL_FREED_SPACE=OFF -DPIPY_ASSERT_SAME_THREAD=OFF -DPIPY_LTO=OFF ..
+cmake -DPIPY_GUI=%pipy_gui% -DPIPY_CODEBASES=%pipy_gui% -DPIPY_SOIL_FREED_SPACE=OFF -DPIPY_ASSERT_SAME_THREAD=OFF -DPIPY_LTO=OFF ..
 msbuild pipy.sln -t:pipy -p:Configuration=Release
 CD %~dp0
 
