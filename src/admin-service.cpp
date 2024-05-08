@@ -221,7 +221,8 @@ void AdminService::close() {
   m_metrics_history_timer.cancel();
 }
 
-void AdminService::start(const std::string &codebase) {
+void AdminService::start(const std::string &codebase, const std::vector<std::string> &argv) {
+  WorkerManager::get().argv(argv);
   change_program(utils::path_join("/", codebase), false);
 }
 

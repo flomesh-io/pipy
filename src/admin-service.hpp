@@ -42,6 +42,7 @@
 
 #include <chrono>
 #include <map>
+#include <string>
 #include <set>
 #include <vector>
 
@@ -69,7 +70,7 @@ public:
 
   void open(const std::string &ip, int port, const Options &options);
   void close();
-  void start(const std::string &codebase);
+  void start(const std::string &codebase, const std::vector<std::string> &argv);
   void write_log(const std::string &name, const Data &data);
 
 private:

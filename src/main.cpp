@@ -515,7 +515,7 @@ int main(int argc, char *argv[]) {
 #endif
 
       if (!opts.run.empty()) {
-        s_admin->start(opts.run);
+        s_admin->start(opts.run, opts.arguments);
       }
 
     // Start as codebase repo proxy
