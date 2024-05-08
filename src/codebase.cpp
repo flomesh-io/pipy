@@ -210,12 +210,12 @@ void CodebaseFromFS::sync(bool force, const std::function<void(bool)> &on_update
 }
 
 //
-// CodebsaeFromStore
+// CodebaseFromStore
 //
 
-class CodebsaeFromStore : public Codebase {
+class CodebaseFromStore : public Codebase {
 public:
-  CodebsaeFromStore(CodebaseStore *store, const std::string &name);
+  CodebaseFromStore(CodebaseStore *store, const std::string &name);
 
   virtual auto version() const -> const std::string& override { return m_version; }
   virtual bool writable() const override { return false; }
@@ -225,7 +225,7 @@ public:
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override {}
   virtual auto watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* override;
-  virtual void sync(bool force, const std::function<void(bool)> &on_update) override {}
+  virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
 private:
   std::mutex m_mutex;
@@ -234,7 +234,7 @@ private:
   std::map<std::string, pjs::Ref<SharedData>> m_files;
 };
 
-CodebsaeFromStore::CodebsaeFromStore(CodebaseStore *store, const std::string &name) {
+CodebaseFromStore::CodebaseFromStore(CodebaseStore *store, const std::string &name) {
   auto codebase = store->find_codebase(name);
   if (!codebase) {
     std::string msg("Codebase not found: ");
@@ -257,7 +257,7 @@ CodebsaeFromStore::CodebsaeFromStore(CodebaseStore *store, const std::string &na
   }
 }
 
-auto CodebsaeFromStore::list(const std::string &path) -> std::list<std::string> {
+auto CodebaseFromStore::list(const std::string &path) -> std::list<std::string> {
   std::lock_guard<std::mutex> lock(m_mutex);
   std::set<std::string> names;
   auto n = path.length();
@@ -278,7 +278,7 @@ auto CodebsaeFromStore::list(const std::string &path) -> std::list<std::string> 
   return list;
 }
 
-auto CodebsaeFromStore::get(const std::string &path) -> SharedData* {
+auto CodebaseFromStore::get(const std::string &path) -> SharedData* {
   std::lock_guard<std::mutex> lock(m_mutex);
   auto k = path;
   if (k.front() != '/') k.insert(k.begin(), '/');
@@ -287,8 +287,14 @@ auto CodebsaeFromStore::get(const std::string &path) -> SharedData* {
   return i->second->retain();
 }
 
-auto CodebsaeFromStore::watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* {
+auto CodebaseFromStore::watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* {
   return new Watch(on_update);
+}
+
+void CodebaseFromStore::sync(bool force, const std::function<void(bool)> &on_update) {
+  if (force) {
+    on_update(true);
+  }
 }
 
 //
@@ -654,7 +660,7 @@ Codebase* Codebase::from_fs(const std::string &path, const std::string &script) 
 }
 
 Codebase* Codebase::from_store(CodebaseStore *store, const std::string &name) {
-  return new CodebsaeFromStore(store, name);
+  return new CodebaseFromStore(store, name);
 }
 
 Codebase* Codebase::from_http(const std::string &url, const Fetch::Options &options) {

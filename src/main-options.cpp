@@ -50,12 +50,10 @@ void MainOptions::show_help() {
   std::cout << "  -e, -eval, --eval                    Evaluate the given string as script" << std::endl;
   std::cout << "  -f, -file, --file                    Interpret the given string as a pathname" << std::endl;
   std::cout << "  --                                   Indicate the end of Pipy options" << std::endl;
-  std::cout << "  --run=<codebase>                     Start running the specified codebase at startup" << std::endl;
   std::cout << "  --pass-arguments                     Make all arguments afterwards visible to the script" << std::endl;
   std::cout << "  --skip-redundant-arguments           Do not quit at redundant arguments" << std::endl;
   std::cout << "  --skip-unknown-arguments             Do not quit at unknown arguments" << std::endl;
   std::cout << "  --threads=<number>                   Number of worker threads (1, 2, ... max)" << std::endl;
-  std::cout << "  --init-repo=<dirname>                Populate the repo with codebases under the specified directory" << std::endl;
   std::cout << "  --log-file=<filename>                Set the pathname of the log file" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --log-history-limit=<size>           Set size limit of log history" << std::endl;
@@ -65,6 +63,8 @@ void MainOptions::show_help() {
   std::cout << "  --no-status                          Do not report current status to the repo" << std::endl;
   std::cout << "  --no-metrics                         Do not report metrics to the repo" << std::endl;
   std::cout << "  --force-start                        Force to start even at failure of port listening" << std::endl;
+  std::cout << "  --init-repo=<dirname>                Populate the repo with codebases under the specified directory" << std::endl;
+  std::cout << "  --init-code=<codebase>               Start running the specified codebase after repo initialization" << std::endl;
   std::cout << "  --instance-uuid=<uuid>               Specify a UUID for this worker process" << std::endl;
   std::cout << "  --instance-name=<name>               Specify a name for this worker process" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
@@ -155,8 +155,6 @@ void MainOptions::parse(const std::list<std::string> &args) {
         eval = true;
       } else if (k == "-f" || k == "-file" || k == "--file") {
         file = true;
-      } else if (k == "--run") {
-        run = v;
       } else if (k == "--threads") {
         if (v == "max") {
           threads = max_threads;
@@ -170,8 +168,6 @@ void MainOptions::parse(const std::list<std::string> &args) {
             throw std::runtime_error(msg + std::to_string(max_threads));
           }
         }
-      } else if (k == "--init-repo") {
-        init_repo = v;
       } else if (k == "--log-file") {
         log_file = v;
       } else if (k == "--log-level") {
@@ -231,6 +227,10 @@ void MainOptions::parse(const std::list<std::string> &args) {
         no_metrics = true;
       } else if (k == "--force-start") {
         force_start = true;
+      } else if (k == "--init-repo") {
+        init_repo = v;
+      } else if (k == "--init-code") {
+        init_code = v;
       } else if (k == "--instance-uuid") {
         instance_uuid = v;
       } else if (k == "--instance-name") {
@@ -316,7 +316,6 @@ auto MainOptions::to_string() -> std::string {
   std::list<std::string> list;
   std::string str;
 
-  if (!run.empty()) list.push_back("--run=" + run);
   if (threads > 1) list.push_back("--threads=" + std::to_string(threads));
   if (!log_file.empty()) list.push_back("--log-file=" + log_file);
   switch (log_level) {
@@ -356,6 +355,8 @@ auto MainOptions::to_string() -> std::string {
   if (no_status) list.push_back("--no-status");
   if (no_metrics) list.push_back("--no-metrics");
   if (force_start) list.push_back("--force-start");
+  if (!init_repo.empty()) list.push_back("--init-repo=" + init_repo);
+  if (!init_code.empty()) list.push_back("--init-code=" + init_code);
   if (!instance_uuid.empty()) list.push_back("--instance-uuid" + instance_uuid);
   if (!instance_name.empty()) list.push_back("--instance-name" + instance_name);
   if (reuse_port) list.push_back("--reuse-port");
@@ -363,7 +364,7 @@ auto MainOptions::to_string() -> std::string {
   if (!admin_port.empty()) list.push_back("--admin-port=" + admin_port);
   if (!admin_gui.empty()) list.push_back("--admin-gui=" + admin_gui);
   if (!admin_log_file.empty()) list.push_back("--admin-log-file=" + admin_log_file);
-  if (!init_repo.empty()) list.push_back("--init-repo=" + init_repo);
+
   if (!openssl_engine.empty()) list.push_back("--openssl-engine=" + openssl_engine);
 
   for (const auto &opt : list) {

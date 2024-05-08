@@ -437,6 +437,7 @@ int main(int argc, char *argv[]) {
     bool is_repo = false;
     bool is_repo_proxy = false;
     bool is_remote = false;
+    bool is_builtin = false;
     bool is_tls = false;
     bool is_file = false;
     bool is_file_found = false;
@@ -444,6 +445,9 @@ int main(int argc, char *argv[]) {
     if (!opts.eval) {
       if (opts.filename.empty()) {
         is_repo = true;
+
+      } else if (utils::starts_with(opts.filename, "repo://")) {
+        is_builtin = true;
 
       } else if (utils::starts_with(opts.filename, "http://")) {
         is_remote = true;
@@ -481,7 +485,7 @@ int main(int argc, char *argv[]) {
 
     if (!is_repo) {
       if (!opts.init_repo.empty()) throw std::runtime_error("invalid option --init-repo for non-repo mode");
-      if (!opts.run.empty()) throw std::runtime_error("invalid option --run for non-repo mode");
+      if (!opts.init_code.empty()) throw std::runtime_error("invalid option --init-code for non-repo mode");
     }
 
     Store *store = nullptr;
@@ -514,8 +518,8 @@ int main(int argc, char *argv[]) {
       std::cout << std::endl;
 #endif
 
-      if (!opts.run.empty()) {
-        s_admin->start(opts.run, opts.arguments);
+      if (!opts.init_code.empty()) {
+        s_admin->start(opts.init_code, opts.arguments);
       }
 
     // Start as codebase repo proxy
@@ -533,7 +537,12 @@ int main(int argc, char *argv[]) {
 
     // Start as a static codebase
     } else {
-      if (is_remote) {
+      if (is_builtin) {
+        auto name = opts.filename.substr(6);
+        store = Store::open_memory();
+        repo = new CodebaseStore(store);
+        codebase = Codebase::from_store(repo, name);
+      } else if (is_remote) {
         Fetch::Options options;
         options.tls = is_tls;
         options.cert = opts.tls_cert;
