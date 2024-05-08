@@ -433,7 +433,8 @@ void Quota::Counter::init(
 void Quota::Counter::produce(double value) {
   if (value <= 0) return;
   auto old = m_current_value.load();
-  while (!m_current_value.compare_exchange_weak(old, old + value));
+  auto max = m_maximum_value.load();
+  while (!m_current_value.compare_exchange_weak(old, std::min(max, old + value)));
   on_produce();
 }
 
