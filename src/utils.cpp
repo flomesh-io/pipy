@@ -741,6 +741,7 @@ auto path_normalize(const std::string &path) -> std::string {
     output += '/';
     output += path.substr(i, j - i);
   }
+  if (output.empty()) output += '/';
   return output;
 }
 
