@@ -481,7 +481,7 @@ int main(int argc, char *argv[]) {
 
     if (!is_repo) {
       if (!opts.init_repo.empty()) throw std::runtime_error("invalid option --init-repo for non-repo mode");
-      if (!opts.init_code.empty()) throw std::runtime_error("invalid option --init-code for non-repo mode");
+      if (!opts.run.empty()) throw std::runtime_error("invalid option --run for non-repo mode");
     }
 
     Store *store = nullptr;
@@ -514,8 +514,8 @@ int main(int argc, char *argv[]) {
       std::cout << std::endl;
 #endif
 
-      if (!opts.init_code.empty()) {
-        s_admin->start(opts.init_code);
+      if (!opts.run.empty()) {
+        s_admin->start(opts.run);
       }
 
     // Start as codebase repo proxy

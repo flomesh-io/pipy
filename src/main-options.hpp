@@ -57,6 +57,8 @@ public:
   bool        force_start = false;
   bool        reuse_port = false;
   int         threads = 1;
+  std::string run;
+  std::string init_repo;
   std::string log_file;
   Log::Level  log_level = Log::INFO;
   Log::Output log_local = Log::OUTPUT_STDERR;
@@ -69,8 +71,6 @@ public:
   std::string admin_log_file;
   std::string instance_uuid;
   std::string instance_name;
-  std::string init_repo;
-  std::string init_code;
   std::string openssl_engine;
 
   pjs::Ref<crypto::Certificate>               admin_tls_cert;

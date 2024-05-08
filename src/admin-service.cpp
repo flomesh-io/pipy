@@ -222,7 +222,7 @@ void AdminService::close() {
 }
 
 void AdminService::start(const std::string &codebase) {
-  change_program(codebase, false);
+  change_program(utils::path_join("/", codebase), false);
 }
 
 void AdminService::write_log(const std::string &name, const Data &data) {
