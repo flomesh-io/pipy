@@ -56,7 +56,7 @@ void MainOptions::show_help() {
   std::cout << "  --threads=<number>                   Number of worker threads (1, 2, ... max)" << std::endl;
   std::cout << "  --log-file=<filename>                Set the pathname of the log file" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
-  std::cout << "  --log-history-limit=<size>           Set size limit of log history" << std::endl;
+  std::cout << "  --log-history-limit=<size>           Set size limit of log history in bytes" << std::endl;
   std::cout << "  --log-local=<stdout|stderr|null>     Select local output for system log" << std::endl;
   std::cout << "  --log-local-only                     Do not send out system log" << std::endl;
   std::cout << "  --no-graph                           Do not print pipeline graphs to the log" << std::endl;

@@ -412,7 +412,7 @@ int main(int argc, char *argv[]) {
     Log::set_local_output(opts.log_local);
     Log::set_local_only(opts.log_local_only);
     Log::init();
-    logging::Logger::set_history_length(opts.log_history_limit);
+    logging::Logger::set_history_size(opts.log_history_limit);
     Listener::set_reuse_port(opts.reuse_port);
     pjs::Math::init();
     crypto::Crypto::init(opts.openssl_engine);

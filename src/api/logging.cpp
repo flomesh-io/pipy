@@ -61,8 +61,7 @@ thread_local static Data::Producer s_dp_json("JSONLogger");
 
 AdminService* Logger::s_admin_service = nullptr;
 AdminLink* Logger::s_admin_link = nullptr;
-size_t Logger::s_history_length = 1000;
-size_t Logger::s_history_size = 1024 * 1024;
+std::atomic<size_t> Logger::s_history_size(1024 * 1024);
 std::atomic<int> Logger::s_history_sending_size(0);
 
 void Logger::set_admin_service(AdminService *admin_service) {
@@ -196,42 +195,71 @@ void Logger::History::for_each(const std::function<void(History*)> &cb) {
 }
 
 void Logger::History::write_message(const Data &msg) {
-  InputContext ic;
+  if (s_history_size == 0) return;
 
-  m_messages.push(new LogMessage(msg));
-  m_size += msg.size();
-  while (m_size > s_history_size || m_messages.size() > s_history_length) {
-    auto *m = m_messages.head();
-    m_messages.remove(m);
-    m_size -= m->data.size();
-    delete m;
+  if (m_buffer.size() != s_history_size) {
+    m_buffer.resize(s_history_size);
+    m_head = m_tail = 0;
   }
 
-  Data msg_endl;
-  s_dp.pack(&msg_endl, &msg);
-  s_dp.push(&msg_endl, '\n');
-
-  if (s_admin_service) {
-    s_admin_service->write_log(m_name, msg_endl);
+  while (m_head < m_tail && size() + msg.size() + 1 > m_buffer.size()) {
+    auto p = m_head % m_buffer.size();
+    while (m_head < m_tail) {
+      m_head++;
+      if (m_buffer[p++] == '\n') break;
+      if (p == m_buffer.size()) p = 0;
+    }
   }
 
-  if (s_admin_link && m_streaming_enabled) {
-    static const std::string s_prefix("log/");
-    Data buf;
-    Data::Builder db(buf, &s_dp);
-    db.push(s_prefix);
-    db.push(m_name);
-    db.push('\n');
-    db.flush();
-    buf.push(msg_endl);
-    s_admin_link->send(buf);
+  Data data(msg);
+  while (data.size() > 0 && size() < m_buffer.size()) {
+    auto p = m_tail % m_buffer.size();
+    auto r = m_buffer.size() - p;
+    auto n = std::min((int)r, data.size());
+    Data part;
+    data.shift(n, part);
+    part.to_bytes(m_buffer.data() + p);
+    m_tail += n;
+  }
+
+  if (data.empty() && size() + 1 <= m_buffer.size()) {
+    m_buffer[m_tail++ % m_buffer.size()] = '\n';
+  }
+
+  if (s_admin_service || (s_admin_link && m_streaming_enabled)) {
+    InputContext ic;
+
+    Data msg_endl;
+    s_dp.pack(&msg_endl, &msg);
+    s_dp.push(&msg_endl, '\n');
+
+    if (s_admin_service) {
+      s_admin_service->write_log(m_name, msg_endl);
+    }
+
+    if (s_admin_link && m_streaming_enabled) {
+      static const std::string s_prefix("log/");
+      Data buf;
+      Data::Builder db(buf, &s_dp);
+      db.push(s_prefix);
+      db.push(m_name);
+      db.push('\n');
+      db.flush();
+      buf.push(msg_endl);
+      s_admin_link->send(buf);
+    }
   }
 }
 
 void Logger::History::dump_messages(Data &buffer) {
-  for (auto *m = m_messages.head(); m; m = m->next()) {
-    s_dp.pack(&buffer, &m->data);
-    s_dp.push(&buffer, '\n');
+  if (m_buffer.size() > 0) {
+    auto p = m_head;
+    while (p < m_tail) {
+      auto i = p % m_buffer.size();
+      auto r = std::min(m_buffer.size() - i, m_tail - p);
+      s_dp.push(&buffer, m_buffer.data() + i, r);
+      p += r;
+    }
   }
 }
 

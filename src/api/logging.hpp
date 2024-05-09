@@ -59,7 +59,6 @@ class Logger : public pjs::ObjectTemplate<Logger> {
 public:
   static void set_admin_service(AdminService *admin_service);
   static void set_admin_link(AdminLink *admin_link);
-  static void set_history_length(size_t length) { s_history_length = length; }
   static void set_history_size(size_t size) { s_history_size = size; }
   static void get_names(const std::function<void(const std::string &)> &cb);
   static bool tail(const std::string &name, Data &buffer);
@@ -246,19 +245,13 @@ private:
     static void for_each(const std::function<void(History*)> &cb);
 
     auto name() const -> const std::string& { return m_name; }
+    auto size() const -> size_t { return m_tail - m_head; }
 
   private:
-    struct Message :
-      public pjs::Pooled<Message>,
-      public List<Message>::Item
-    {
-      Message(const Data &msg) : data(msg) {}
-      Data data;
-    };
-
     std::string m_name;
-    List<LogMessage> m_messages;
-    size_t m_size = 0;
+    std::vector<uint8_t> m_buffer;
+    size_t m_head = 0;
+    size_t m_tail = 0;
     bool m_streaming_enabled = false;
 
     void write_message(const Data &msg);
@@ -274,8 +267,7 @@ private:
 
   static AdminService* s_admin_service;
   static AdminLink* s_admin_link;
-  static size_t s_history_length;
-  static size_t s_history_size;
+  static std::atomic<size_t> s_history_size;
   static std::atomic<int> s_history_sending_size;
 
   friend class pjs::ObjectTemplate<Logger>;

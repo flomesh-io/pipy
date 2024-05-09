@@ -60,7 +60,7 @@ public:
   std::string log_file;
   Log::Level  log_level = Log::INFO;
   Log::Output log_local = Log::OUTPUT_STDERR;
-  size_t      log_history_limit = 1000;
+  size_t      log_history_limit = 1024*1024;
   int         log_topics = 0;
   bool        log_local_only = false;
   bool        admin_port_off = false;
