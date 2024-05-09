@@ -2197,7 +2197,7 @@ void Promise::cancel() {
 
 void Promise::enqueue() {
   if (!m_queued) {
-    auto *period = Period::current();
+    auto period = m_period.get();
     if (!period->m_ended) {
       if (period->m_settled_queue_tail) {
         period->m_settled_queue_tail->m_next = this;
@@ -2338,6 +2338,7 @@ void Promise::Period::set_current() {
 }
 
 void Promise::Period::run(int max_iterations) {
+  if (m_paused) return;
   auto n = max_iterations;
   while (n > 0 && run_queue()) n--;
 }

@@ -3060,7 +3060,7 @@ private:
     friend class Promise;
   };
 
-  Promise() {}
+  Promise() : m_period(Period::current()) {}
   ~Promise() { clear_thens(); }
 
   void add_then(Then *then);
@@ -3076,6 +3076,7 @@ private:
   Then* m_thens_tail = nullptr;
   Promise* m_next = nullptr;
   Ref<Promise> m_dependent;
+  Ref<Period> m_period;
   bool m_queued = false;
 
   thread_local static Promise *s_settled_queue_head;
