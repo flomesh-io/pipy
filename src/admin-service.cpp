@@ -1544,22 +1544,27 @@ void AdminService::WebSocketHandler::process(Event *evt) {
       static const std::string s_log_prefix("log/");
       static const std::string s_log_tail_prefix("log-tail/");
 
+      // Log message received from a worker
       if (utils::starts_with(command, s_log_prefix)) {
         auto name = utils::trim(command.substr(s_log_prefix.length()));
         m_service->on_log(ctx, name, m_payload);
 
+      // Log history received from a worker
       } else if (utils::starts_with(command, s_log_tail_prefix)) {
         auto name = utils::trim(command.substr(s_log_tail_prefix.length()));
         m_service->on_log_tail(ctx, name, m_payload);
 
+      // Log streaming requested from a browser
       } else if (command == "watch\n") {
         if (auto *w = ctx->log_watcher) {
           w->set_handler(this);
           if (ctx->instance_uuid.empty()) {
+            // Start streaming local log
             Data buf;
             logging::Logger::tail(ctx->log_name, buf);
             w->start(buf);
           } else if (inst) {
+            // Start streaming log from a remote worker
             if (auto *admin_link = inst->admin_link) {
               admin_link->log_tail(ctx->log_name);
             }
@@ -1581,25 +1586,29 @@ void AdminService::WebSocketHandler::log_enable(const std::string &name, bool en
   static const std::string s_off("log/off/");
   auto body = (enabled ? s_on : s_off) + name;
   auto head = websocket::MessageHead::make();
-  Filter::output(Message::make(head, body));
+  pjs::Ref<Message> msg = Message::make(head, body);
+  Filter::output(msg);
 }
 
 void AdminService::WebSocketHandler::log_tail(const std::string &name) {
   static const std::string s_tail("log/tail/");
   auto body = s_tail + name;
   auto head = websocket::MessageHead::make();
-  Filter::output(Message::make(head, body));
+  pjs::Ref<Message> msg = Message::make(head, body);
+  Filter::output(msg);
 }
 
 void AdminService::WebSocketHandler::log_broadcast(const Data &data) {
   auto head = websocket::MessageHead::make();
-  Filter::output(Message::make(head, Data::make(data)));
+  pjs::Ref<Message> msg = Message::make(head, Data::make(data));
+  Filter::output(msg);
 }
 
 void AdminService::WebSocketHandler::signal_reload() {
   static const std::string s_reload("reload");
   auto head = websocket::MessageHead::make();
-  Filter::output(Message::make(head, s_reload));
+  pjs::Ref<Message> msg = Message::make(head, s_reload);
+  Filter::output(msg);
 }
 
 void AdminService::WebSocketHandler::dump(Dump &d) {
