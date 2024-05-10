@@ -28,7 +28,7 @@
 namespace pipy {
 namespace mqtt {
 
-thread_local static Data::Producer s_dp("MQTT");
+static Data::Producer s_dp("MQTT");
 
 //
 // PropertyMap

@@ -30,7 +30,7 @@
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("LevelDB");
+static Data::Producer s_dp("LevelDB");
 
 //
 // MemoryStore

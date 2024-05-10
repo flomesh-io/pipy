@@ -162,7 +162,7 @@ private:
   pjs::Ref<PipelineLayout> m_pipeline_layout;
   pjs::Ref<pjs::Str> m_host;
 
-  thread_local static Data::Producer s_dp;
+  static Data::Producer s_dp;
 
   friend class pjs::ObjectTemplate<Agent>;
 };
@@ -236,7 +236,7 @@ private:
 
   auto get_encoded_response(pjs::Context &ctx, File &file, RequestHead *request) -> Message*;
 
-  thread_local static Data::Producer s_dp;
+  static Data::Producer s_dp;
 };
 
 //

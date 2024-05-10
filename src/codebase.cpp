@@ -41,7 +41,7 @@
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("Codebase");
+static Data::Producer s_dp("Codebase");
 static const pjs::Ref<pjs::Str> s_etag(pjs::Str::make("etag"));
 static const pjs::Ref<pjs::Str> s_date(pjs::Str::make("last-modified"));
 

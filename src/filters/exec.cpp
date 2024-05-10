@@ -39,7 +39,7 @@
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("exec()");
+static Data::Producer s_dp("exec()");
 
 //
 // Exec::Options

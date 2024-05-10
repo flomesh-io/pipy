@@ -29,7 +29,7 @@
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("CStruct");
+static Data::Producer s_dp("CStruct");
 
 //
 // CStructBase

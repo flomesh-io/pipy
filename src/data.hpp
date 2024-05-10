@@ -83,7 +83,7 @@ public:
       s_all_producers.push(this);
     }
 
-    auto name() const -> pjs::Str* { return m_name; }
+    auto name() const -> pjs::Str::CharData* { return m_name->data(); }
     auto count() const -> size_t { return m_count.load(std::memory_order_relaxed); }
 
     Data* make(int size) { return Data::make(size, this); }
@@ -109,7 +109,7 @@ public:
     void increase() { m_count.fetch_add(1, std::memory_order_relaxed); }
     void decrease() { m_count.fetch_sub(1, std::memory_order_relaxed); }
 
-    thread_local static List<Producer> s_all_producers;
+    static List<Producer> s_all_producers;
 
     friend struct Chunk;
   };
@@ -1059,7 +1059,7 @@ private:
     m_size += size;
   }
 
-  thread_local static Producer s_unknown_producer;
+  static Producer s_unknown_producer;
 
   friend class SharedData;
 };

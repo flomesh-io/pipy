@@ -47,7 +47,7 @@ static int s_log_topics = 0;
 static bool s_log_local_only = false;
 
 thread_local static logging::Logger *s_logger = nullptr;
-thread_local static Data::Producer s_dp("Log");
+static Data::Producer s_dp("Log");
 
 static const char *s_levels[] = {
   "[DBG]", // DEBUG

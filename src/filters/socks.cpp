@@ -31,7 +31,7 @@
 namespace pipy {
 namespace socks {
 
-thread_local static Data::Producer s_dp("SOCKS");
+static Data::Producer s_dp("SOCKS");
 
 //
 // Server

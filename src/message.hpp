@@ -111,7 +111,7 @@ private:
   pjs::Value m_payload;
   bool m_in_buffer = false;
 
-  thread_local static Data::Producer s_dp;
+  static Data::Producer s_dp;
 
   friend class pjs::ObjectTemplate<Message>;
   friend class MessageBuffer;

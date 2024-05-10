@@ -72,7 +72,7 @@ void Pipy::on_exit(const std::function<void(int)> &on_exit) {
   s_on_exit = on_exit;
 }
 
-thread_local static Data::Producer s_dp("pipy.exec()");
+static Data::Producer s_dp("pipy.exec()");
 
 Pipy::ExecOptions::ExecOptions(pjs::Object *options) {
   Value(options, "stdin")

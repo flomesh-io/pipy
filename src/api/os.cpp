@@ -90,7 +90,7 @@ auto OS::list(const std::string &pathname) -> pjs::Array* {
 }
 
 auto OS::read(const std::string &pathname) -> Data* {
-  thread_local static Data::Producer s_dp("os.read()");
+  static Data::Producer s_dp("os.read()");
   std::ifstream fs(pathname, std::ios::in|std::ios::binary);
   if (!fs.is_open()) {
     throw std::runtime_error("cannot open file: " + pathname);

@@ -258,7 +258,7 @@ void Match::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
 // Agent
 //
 
-thread_local Data::Producer Agent::s_dp("http.Agent");
+Data::Producer Agent::s_dp("http.Agent");
 
 Agent::Agent(pjs::Str *host, pjs::Object *options)
   : m_module(new Module)
@@ -394,7 +394,7 @@ Directory::Options::Options(pjs::Object *options) {
 // Directory
 //
 
-thread_local Data::Producer Directory::s_dp("http::Directory");
+Data::Producer Directory::s_dp("http::Directory");
 
 Directory::Directory(const std::string &path)
   : Directory(path, Options()) {}
@@ -689,7 +689,7 @@ enum StringConstants {
   CONTENT_ENCODING_BR,
 };
 
-thread_local static Data::Producer s_dp_http_file("http.File");
+static Data::Producer s_dp_http_file("http.File");
 
 auto File::from(const std::string &path) -> File* {
   try {

@@ -81,7 +81,7 @@ void SocketBase::log_error(const char *msg) {
 // SocketTCP
 //
 
-thread_local Data::Producer SocketTCP::s_dp("TCP Socket");
+Data::Producer SocketTCP::s_dp("TCP Socket");
 
 SocketTCP::~SocketTCP() {
   Ticker::get()->unwatch(this);
@@ -363,7 +363,7 @@ void SocketTCP::on_send(const std::error_code &ec, std::size_t n) {
 // SocketUDP
 //
 
-thread_local Data::Producer SocketUDP::s_dp("UDP Socket");
+Data::Producer SocketUDP::s_dp("UDP Socket");
 
 SocketUDP::~SocketUDP() {
   Ticker::get()->unwatch(this);
@@ -663,7 +663,7 @@ void SocketUDP::Peer::close() {
 // SocketNetlink
 //
 
-thread_local Data::Producer SocketNetlink::s_dp("Netlink Socket");
+Data::Producer SocketNetlink::s_dp("Netlink Socket");
 
 void SocketNetlink::open() {
   m_endpoint = m_socket.local_endpoint();

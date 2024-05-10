@@ -34,7 +34,7 @@ namespace pipy {
 // RESP
 //
 
-thread_local static Data::Producer s_dp("RESP");
+static Data::Producer s_dp("RESP");
 
 auto RESP::decode(const Data &data) -> pjs::Array* {
   pjs::Array *a = pjs::Array::make();

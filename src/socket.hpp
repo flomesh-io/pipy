@@ -145,7 +145,7 @@ private:
     void operator()(const std::error_code &ec, std::size_t n) { self->on_send(ec, n); }
   };
 
-  thread_local static Data::Producer s_dp;
+  static Data::Producer s_dp;
 };
 
 //
@@ -249,7 +249,7 @@ private:
     void operator()(const std::error_code &ec, std::size_t n) { self->on_send(data, ec, n); }
   };
 
-  thread_local static Data::Producer s_dp;
+  static Data::Producer s_dp;
 };
 
 //
@@ -312,7 +312,7 @@ private:
     void operator()(const std::error_code &ec, std::size_t n) { self->on_send(data, ec, n); }
   };
 
-  thread_local static Data::Producer s_dp;
+  static Data::Producer s_dp;
 };
 
 //

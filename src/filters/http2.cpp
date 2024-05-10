@@ -51,7 +51,7 @@
 namespace pipy {
 namespace http2 {
 
-thread_local static Data::Producer s_dp("HTTP/2");
+static Data::Producer s_dp("HTTP/2");
 
 //
 // HPACK static table

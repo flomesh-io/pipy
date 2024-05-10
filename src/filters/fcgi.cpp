@@ -28,7 +28,7 @@
 namespace pipy {
 namespace fcgi {
 
-thread_local static Data::Producer s_dp("FastCGI");
+static Data::Producer s_dp("FastCGI");
 
 //
 // The following macro definitions and structures

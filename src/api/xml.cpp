@@ -111,7 +111,7 @@ template<> void ClassDef<Constructor<XML::Node>>::init() {
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("XML");
+static Data::Producer s_dp("XML");
 
 //
 // XMLParser

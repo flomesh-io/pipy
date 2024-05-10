@@ -47,7 +47,7 @@
 namespace pipy {
 namespace bpf {
 
-thread_local static Data::Producer s_dp("BPF");
+static Data::Producer s_dp("BPF");
 
 #ifdef PIPY_USE_BPF
 

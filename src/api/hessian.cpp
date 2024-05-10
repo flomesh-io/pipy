@@ -174,7 +174,7 @@ namespace pipy {
 // Hessian
 //
 
-thread_local static Data::Producer s_dp("Hessian");
+static Data::Producer s_dp("Hessian");
 
 auto Hessian::decode(const Data &data) -> pjs::Array* {
   pjs::Array *a = pjs::Array::make();

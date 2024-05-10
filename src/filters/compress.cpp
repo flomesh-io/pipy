@@ -36,7 +36,7 @@ thread_local static const pjs::ConstStr s_gzip("gzip");
 thread_local static const pjs::ConstStr s_deflate("deflate");
 thread_local static const pjs::ConstStr s_inflate("inflate");
 
-thread_local static Data::Producer s_dp("compressMessage()");
+static Data::Producer s_dp("compressMessage()");
 
 //
 // Compress

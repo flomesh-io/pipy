@@ -34,7 +34,7 @@
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("Admin Proxy");
+static Data::Producer s_dp("Admin Proxy");
 
 static std::string s_server_name("pipy-repo");
 

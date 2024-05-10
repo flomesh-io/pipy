@@ -26,6 +26,7 @@
 #include "status.hpp"
 #include "buffer.hpp"
 #include "worker.hpp"
+#include "worker-thread.hpp"
 #include "module.hpp"
 #include "pipeline.hpp"
 #include "graph.hpp"
@@ -347,12 +348,14 @@ void Status::update_local() {
     }
   }
 
-  Data::Producer::for_each([&](Data::Producer *producer) {
-    chunks.insert({
-      producer->name()->str(),
-      producer->count(),
+  if (WorkerThread::current()->index() == 0) {
+    Data::Producer::for_each([&](Data::Producer *producer) {
+      chunks.insert({
+        producer->name()->str(),
+        producer->count(),
+      });
     });
-  });
+  }
 
   BufferStats::for_each(
     [&](BufferStats *bs) {

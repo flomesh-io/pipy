@@ -139,7 +139,7 @@ template<> void ClassDef<YAML>::init() {
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("YAML");
+static Data::Producer s_dp("YAML");
 
 static int yaml_read(void *ext, unsigned char *buffer, size_t size, size_t *length) {
   Data::Reader *dr = (Data::Reader*)ext;

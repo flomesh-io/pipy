@@ -34,7 +34,7 @@
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("Command Line Options");
+static Data::Producer s_dp("Command Line Options");
 
 auto MainOptions::global() -> MainOptions& {
   static MainOptions s_global;

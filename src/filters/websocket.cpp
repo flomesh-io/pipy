@@ -48,7 +48,7 @@ namespace websocket {
 // |                     Payload Data continued ...                |
 // +---------------------------------------------------------------+
 
-thread_local static Data::Producer s_dp("WebSocket");
+static Data::Producer s_dp("WebSocket");
 
 //
 // Decoder

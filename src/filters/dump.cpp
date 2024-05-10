@@ -37,7 +37,7 @@
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("dump()");
+static Data::Producer s_dp("dump()");
 
 Dump::Dump() {
 }

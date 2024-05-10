@@ -36,7 +36,7 @@ namespace pipy {
 // BGP
 //
 
-thread_local static Data::Producer s_dp("BGP");
+static Data::Producer s_dp("BGP");
 
 inline static void clamp_data_size(Data &data, size_t limit) {
   if (data.size() > limit) {

@@ -30,7 +30,7 @@
 namespace pipy {
 namespace sqlite {
 
-thread_local static Data::Producer s_dp("SQLite");
+static Data::Producer s_dp("SQLite");
 
 static void free_blob_buffer(void *ptr) {
   std::free(ptr);

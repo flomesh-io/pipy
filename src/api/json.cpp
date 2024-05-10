@@ -137,7 +137,7 @@ template<> void ClassDef<JSON>::init() {
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("JSON");
+static Data::Producer s_dp("JSON");
 
 //
 // JSONVisitor

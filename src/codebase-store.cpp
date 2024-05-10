@@ -40,7 +40,7 @@
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("Codebase Store");
+static Data::Producer s_dp("Codebase Store");
 
 static std::string s_initial_code_template(
 R"***(((

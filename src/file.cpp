@@ -35,7 +35,7 @@
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("File I/O");
+static Data::Producer s_dp("File I/O");
 
 void File::open_read(const std::function<void(FileStream*)> &cb) {
   open_read(0, cb);

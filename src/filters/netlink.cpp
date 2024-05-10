@@ -40,7 +40,7 @@ namespace netlink {
 // |                      Process ID (PID)                       |
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-thread_local static Data::Producer s_dp("Netlink");
+static Data::Producer s_dp("Netlink");
 
 //
 // Decoder

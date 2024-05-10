@@ -375,10 +375,12 @@ void WorkerThread::init_metrics() {
     pjs::Str::make("pipy_chunk_count"),
     label_names,
     [](stats::Gauge *gauge) {
+      if (WorkerThread::current()->index() > 0) return;
       double total = 0;
       Data::Producer::for_each([&](Data::Producer *producer) {
         if (auto n = producer->count()) {
-          pjs::Str *name = producer->name();
+          pjs::Ref<pjs::Str> str(pjs::Str::make(producer->name()));
+          pjs::Str *name = str.get();
           auto metric = gauge->with_labels(&name, 1);
           metric->set(n);
           total += n;

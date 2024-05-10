@@ -123,7 +123,7 @@ namespace pipy {
 // Thrift
 //
 
-thread_local static Data::Producer s_dp("Thrift");
+static Data::Producer s_dp("Thrift");
 
 auto Thrift::decode(const Data &data) -> pjs::Array* {
   pjs::Array *a = pjs::Array::make();

@@ -94,7 +94,7 @@ static const unsigned int DNS_MAX_DOMAINLEN = 255;
 
 // clang-format on
 
-thread_local static Data::Producer s_dp("DNS");
+static Data::Producer s_dp("DNS");
 
 static int push_int8(Data::Builder &db, int value) {
   db.push(uint8_t(value));

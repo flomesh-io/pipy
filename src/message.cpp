@@ -32,7 +32,7 @@ namespace pipy {
 // Message
 //
 
-thread_local Data::Producer Message::s_dp("Message");
+Data::Producer Message::s_dp("Message");
 
 bool Message::is_events(pjs::Object *obj) {
   if (!obj) return false;

@@ -44,8 +44,8 @@ using tcp = asio::ip::tcp;
 // Inbound
 //
 
-thread_local static Data::Producer s_dp_tcp("InboundTCP");
-thread_local static Data::Producer s_dp_udp("InboundUDP Raw");
+static Data::Producer s_dp_tcp("InboundTCP");
+static Data::Producer s_dp_udp("InboundUDP Raw");
 
 std::atomic<uint64_t> Inbound::s_inbound_id;
 

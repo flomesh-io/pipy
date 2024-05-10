@@ -28,7 +28,7 @@
 namespace pipy {
 namespace dubbo {
 
-thread_local static Data::Producer s_dp("Dubbo");
+static Data::Producer s_dp("Dubbo");
 
 //
 // Decoder

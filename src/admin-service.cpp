@@ -49,7 +49,7 @@
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp("Codebase Service");
+static Data::Producer s_dp("Codebase Service");
 
 static std::string s_server_name("pipy-repo");
 

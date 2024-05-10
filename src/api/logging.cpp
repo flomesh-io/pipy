@@ -53,11 +53,11 @@ namespace logging {
 // Logger
 //
 
-thread_local static Data::Producer s_dp("Logger");
-thread_local static Data::Producer s_dp_stdout("Logger::StdoutTarget");
-thread_local static Data::Producer s_dp_binary("BinaryLogger");
-thread_local static Data::Producer s_dp_text("TextLogger");
-thread_local static Data::Producer s_dp_json("JSONLogger");
+static Data::Producer s_dp("Logger");
+static Data::Producer s_dp_stdout("Logger::StdoutTarget");
+static Data::Producer s_dp_binary("BinaryLogger");
+static Data::Producer s_dp_text("TextLogger");
+static Data::Producer s_dp_json("JSONLogger");
 
 AdminService* Logger::s_admin_service = nullptr;
 AdminLink* Logger::s_admin_link = nullptr;

@@ -34,8 +34,8 @@
 
 namespace pipy {
 
-thread_local static Data::Producer s_dp_inflate("inflate");
-thread_local static Data::Producer s_dp_brotli("brotli");
+static Data::Producer s_dp_inflate("inflate");
+static Data::Producer s_dp_brotli("brotli");
 
 //
 // Inflate
@@ -96,10 +96,10 @@ private:
     return true;
   }
 
-  thread_local static Data::Producer s_dp;
+  static Data::Producer s_dp;
 };
 
-thread_local Data::Producer Inflate::s_dp("Decompress (inflate)");
+Data::Producer Inflate::s_dp("Decompress (inflate)");
 
 //
 // BrotliDecoder
@@ -177,10 +177,10 @@ private:
     return true;
   }
 
-  thread_local static Data::Producer s_dp;
+  static Data::Producer s_dp;
 };
 
-thread_local Data::Producer BrotliDecoder::s_dp("Decompress (brotli)");
+Data::Producer BrotliDecoder::s_dp("Decompress (brotli)");
 
 //
 // Deflate
@@ -263,10 +263,10 @@ private:
     return true;
   }
 
-  thread_local static Data::Producer s_dp;
+  static Data::Producer s_dp;
 };
 
-thread_local Data::Producer Deflate::s_dp("Compress (defalte)");
+Data::Producer Deflate::s_dp("Compress (defalte)");
 
 //
 // Decompressor
