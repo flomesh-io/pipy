@@ -571,7 +571,7 @@ bool WorkerManager::start(int concurrency, bool force) {
 }
 
 auto WorkerManager::status() -> Status& {
-  if (!m_querying_status && !m_reloading) {
+  if (!m_querying_status && !m_reloading && !m_stopping) {
     m_querying_status = true;
 
     if (auto n = m_worker_threads.size()) {
@@ -608,7 +608,7 @@ auto WorkerManager::status() -> Status& {
 }
 
 bool WorkerManager::status(const std::function<void(Status&)> &cb) {
-  if (m_querying_status || m_reloading) return false;
+  if (m_querying_status || m_reloading || m_stopping) return false;
   if (m_worker_threads.empty()) return false;
 
   m_querying_status = true;
@@ -642,7 +642,7 @@ bool WorkerManager::status(const std::function<void(Status&)> &cb) {
 }
 
 auto WorkerManager::stats() -> stats::MetricDataSum& {
-  if (!m_querying_stats && !m_reloading) {
+  if (!m_querying_stats && !m_reloading && !m_stopping) {
     m_querying_stats = true;
 
     if (auto n = m_worker_threads.size()) {
@@ -678,7 +678,7 @@ auto WorkerManager::stats() -> stats::MetricDataSum& {
 }
 
 bool WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) {
-  if (m_querying_stats || m_reloading) return false;
+  if (m_querying_stats || m_reloading || m_stopping) return false;
   if (m_worker_threads.empty()) return false;
 
   m_querying_stats = true;
@@ -722,6 +722,7 @@ void WorkerManager::recycle() {
 }
 
 void WorkerManager::reload() {
+  if (m_stopping) return;
   if (m_reloading || m_querying_status || m_querying_stats || !m_admin_requests.empty()) {
     m_reloading_requested = true;
   } else {
@@ -730,7 +731,7 @@ void WorkerManager::reload() {
 }
 
 bool WorkerManager::admin(pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond) {
-  if (m_reloading) return false;
+  if (m_reloading || m_stopping) return false;
   if (m_worker_threads.empty()) return false;
   new AdminRequest(this, path, request, respond);
   next_admin_request();
@@ -782,6 +783,9 @@ void WorkerManager::start_reloading() {
 
 bool WorkerManager::stop(bool force) {
   if (m_stopped) return true;
+  m_stopping = true;
+  m_loading_pipeline_lb = nullptr;
+  m_running_pipeline_lb = nullptr;
   bool pending = false;
   for (auto *wt : m_worker_threads) {
     if (wt) {

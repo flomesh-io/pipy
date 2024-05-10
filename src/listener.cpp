@@ -61,9 +61,9 @@ bool Port::increase_num_connections() {
 }
 
 bool Port::decrease_num_connections() {
+  auto n = m_num_connections.fetch_sub(1);
   auto max = m_max_connections.load();
   if (max >= 0) {
-    auto n = m_num_connections.fetch_sub(1);
     if (n == max) wake_up_listeners();
     return n <= max;
   } else {
@@ -665,11 +665,16 @@ void ListenerArray::apply(Worker *worker, PipelineLayout *layout) {
   if (m_worker) {
     throw std::runtime_error("ListenerArray is being listened already");
   }
-  m_worker = worker;
   m_pipeline_layout = layout;
+  m_worker = worker;
+  m_worker->add_listener_array(this);
   for (const auto &p : m_listeners) {
     worker->add_listener(p.first, layout, p.second);
   }
+}
+
+void ListenerArray::close() {
+  m_pipeline_layout = nullptr;
 }
 
 void ListenerArray::get_ip_port(const std::string &ip_port, std::string &ip, int &port) {

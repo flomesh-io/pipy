@@ -190,6 +190,7 @@ private:
   bool m_reloading = false;
   bool m_querying_status = false;
   bool m_querying_stats = false;
+  bool m_stopping = false;
   bool m_stopped = false;
   List<AdminRequest> m_admin_requests;
   AdminRequest* m_current_admin_request = nullptr;

@@ -267,6 +267,7 @@ public:
   auto remove_listener(pjs::Str *port, pjs::Object *options = nullptr) -> Listener*;
   void set_listeners(pjs::Array *array);
   void apply(Worker *worker, PipelineLayout *layout);
+  void close();
 
 private:
   ListenerArray(pjs::Object *options = nullptr)

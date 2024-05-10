@@ -67,6 +67,7 @@ public:
   auto load_js_module(const std::string &path, pjs::Value &result) -> JSModule*;
   auto load_native_module(const std::string &path) -> nmi::NativeModule*;
   auto load_module(pjs::Module *referer, const std::string &path) -> pjs::Module*;
+  void add_listener_array(ListenerArray *la);
   void add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options);
   void remove_listener(Listener *listener);
   bool update_listeners(bool force);
@@ -170,6 +171,7 @@ private:
   std::set<Watch*> m_watches;
   std::list<Exit*> m_exits;
   std::list<Admin*> m_admins;
+  std::list<pjs::Ref<ListenerArray>> m_listener_arrays;
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
   std::map<pjs::Ref<pjs::Str>, SolvedFile> m_solved_files;
   std::unique_ptr<Signal> m_exit_signal;

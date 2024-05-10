@@ -337,6 +337,10 @@ auto Worker::load_module(pjs::Module *referer, const std::string &path) -> pjs::
   return mod;
 }
 
+void Worker::add_listener_array(ListenerArray *la) {
+  m_listener_arrays.push_back(la);
+}
+
 void Worker::add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options) {
   auto &p = m_listeners[listener];
   p.pipeline_layout = layout;
@@ -631,11 +635,17 @@ void Worker::on_exit(Exit *exit) {
 void Worker::end_all() {
   m_period->end();
   if (s_current == this) s_current = nullptr;
+
   for (auto *pt : m_pipeline_templates) pt->shutdown();
   for (auto *task : m_tasks) task->end();
   for (auto *watch : m_watches) watch->end();
   for (auto *exit : m_exits) exit->end();
   for (auto *admin : m_admins) admin->end();
+
+  for (const auto &la : m_listener_arrays) la->close();
+  m_listener_arrays.clear();
+  m_pipeline_lb = nullptr;
+
   if (m_pipeline_templates.empty()) {
     for (auto *mod : m_legacy_modules) if (mod) mod->unload();
   } else {
