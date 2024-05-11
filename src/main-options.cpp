@@ -44,12 +44,17 @@ auto MainOptions::global() -> MainOptions& {
 void MainOptions::show_help() {
   std::cout << "Usage: pipy [options] [<expression | pathname | URL>]" << std::endl;
   std::cout << std::endl;
+  std::cout << "URL can be one of:" << std::endl;
+  std::cout << "  - http[s]://<host>:<port>/<codebase> Run <codebase> from the remote repo at <host>:<port>" << std::endl;
+  std::cout << "  - http[s]://<host>:<port>            Run as a proxy to the remote repo at <host>:<port>" << std::endl;
+  std::cout << "  - repo://<codebase>                  Run a builtin codebase" << std::endl;
+  std::cout << std::endl;
   std::cout << "Options:" << std::endl;
   std::cout << "  -h, -help, --help                    Show help information" << std::endl;
   std::cout << "  -v, -version, --version              Show version information" << std::endl;
   std::cout << "  -e, -eval, --eval                    Evaluate the given string as script" << std::endl;
   std::cout << "  -f, -file, --file                    Interpret the given string as a pathname" << std::endl;
-  std::cout << "  --                                   Indicate the end of Pipy options" << std::endl;
+  std::cout << "  --, -args, --args                    Indicate the end of Pipy options and the start of script arguments" << std::endl;
   std::cout << "  --pass-arguments                     Make all arguments afterwards visible to the script" << std::endl;
   std::cout << "  --skip-redundant-arguments           Do not quit at redundant arguments" << std::endl;
   std::cout << "  --skip-unknown-arguments             Do not quit at unknown arguments" << std::endl;
@@ -139,7 +144,7 @@ void MainOptions::parse(const std::list<std::string> &args) {
       auto i = term.find('=');
       auto k = (i == std::string::npos ? term : term.substr(0, i));
       auto v = (i == std::string::npos ? std::string() : term.substr(i + 1));
-      if (k == "--") {
+      if (k == "--" || k == "-args" || k == "--args") {
         end_of_options = true;
       } else if (k == "--pass-arguments") {
         pass_arguments = true;
