@@ -255,7 +255,7 @@ CodebaseStore::CodebaseStore(Store *store, const std::string &init_path)
       for (const auto &name : i.second) {
         size_t size;
         if (auto data = tarball.get(i.first + name, size)) {
-          codebase->set_file(name, Data(data, &s_dp));
+          codebase->set_file(name, Data(data, size, &s_dp));
           if (name == "/main.js" || name == "/proxy.js") {
             codebase->set_main(name);
           }

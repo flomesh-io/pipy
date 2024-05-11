@@ -33,7 +33,7 @@ function addCodebase(name, dirname) {
   const filenames = listFilenames(dirpath);
   const files = {};
   for (const name of filenames) {
-    let content = fs.readFileSync(path.join(dirpath, name), 'utf8');
+    let content = fs.readFileSync(path.join(dirpath, name));
     if (content !== null) {
       files[name] = content;
       console.log('  ' + name);
