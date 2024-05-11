@@ -88,7 +88,6 @@ Inbound::Inbound(Listener *listener, const Options &options)
 
 Inbound::~Inbound() {
   Log::debug(Log::ALLOC, "[inbound  %p] --", this);
-  if (m_listener) m_listener->close(this);
 }
 
 auto Inbound::local_address() -> pjs::Str* {
@@ -138,6 +137,11 @@ void Inbound::start() {
     pjs::Value arg(InboundWrapper::make(this));
     p->start(1, &arg);
   }
+}
+
+void Inbound::end() {
+  if (m_listener) m_listener->close(this);
+  m_pipeline = nullptr;
 }
 
 void Inbound::collect() {
@@ -412,6 +416,7 @@ void InboundUDP::on_peer_input(Event *evt) {
 }
 
 void InboundUDP::on_peer_close() {
+  Inbound::end();
   Inbound::release();
 }
 

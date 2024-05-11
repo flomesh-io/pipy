@@ -62,7 +62,6 @@ public:
   static void for_each(const std::function<bool(Inbound*)> &cb);
 
   auto id() const -> uint64_t { return m_id; }
-  auto pipeline() const -> Pipeline* { return m_pipeline; }
   auto local_address() -> pjs::Str*;
   auto local_port() -> int { address(); return m_local_port; }
   auto remote_address() -> pjs::Str*;
@@ -100,6 +99,7 @@ protected:
   pjs::Ref<EventTarget::Input> m_input;
 
   void start();
+  void end();
   void collect();
   void address();
 
@@ -155,7 +155,7 @@ private:
   virtual void on_get_address() override;
   virtual void on_event(Event *evt) override { SocketTCP::output(evt); }
   virtual void on_socket_input(Event *evt) override { m_input->input(evt); }
-  virtual void on_socket_close() override { release(); }
+  virtual void on_socket_close() override { Inbound::end(); release(); }
   virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
 
   void start();
