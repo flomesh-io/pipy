@@ -169,7 +169,7 @@ private:
 class BPF : public pjs::ObjectTemplate<BPF> {
 public:
   static void pin(const std::string &pathname, int fd);
-  static auto get(const std::string &pathname) -> int;
+  static auto get_pinned(const std::string &pathname) -> int;
   static void attach(int attach_type, int fd);
   static void detach(int attach_type, int fd);
   static void attach(int attach_type, int fd, const std::string &cgroup);
