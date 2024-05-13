@@ -855,7 +855,7 @@ void BPF::pin(const std::string &pathname, int fd) {
   )) syscall_error("BPF_OBJ_PIN");
 }
 
-auto BPF::get_pinned(const std::string &pathname) -> int {
+auto BPF::get(const std::string &pathname) -> int {
   union bpf_attr attr;
   int fd = syscall_bpf(
     BPF_OBJ_GET, &attr, attr_size(file_flags),
@@ -1009,6 +1009,11 @@ void Map::close() {
 
 void BPF::pin(const std::string &pathname, int fd) {
   unsupported();
+}
+
+auto BPF::get(const std::string &pathname) -> int {
+  unsupported();
+  return 0;
 }
 
 void BPF::attach(int attach_type, int fd) {
@@ -1241,7 +1246,7 @@ template<> void ClassDef<BPF>::init() {
     Str *pathname;
     try {
       if (!ctx.arguments(1, &pathname)) return;
-      ret.set(BPF::get_pinned(pathname->str()));
+      ret.set(BPF::get(pathname->str()));
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
