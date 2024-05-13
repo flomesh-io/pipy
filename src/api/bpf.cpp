@@ -855,6 +855,18 @@ void BPF::pin(const std::string &pathname, int fd) {
   )) syscall_error("BPF_OBJ_PIN");
 }
 
+auto BPF::get(const std::string &pathname) -> int {
+  union bpf_attr attr;
+  int fd = syscall_bpf(
+    BPF_OBJ_GET, &attr, attr_size(file_flags),
+    [&](union bpf_attr &attr) {
+      attr.pathname = (uintptr_t)pathname.c_str();
+    }
+  );
+  if (fd < 0) syscall_error("BPF_OBJ_GET");
+  return fd;
+}
+
 static void bpf_prog_attach(int attach_type, int fd, int target_fd = 0) {
   union bpf_attr attr;
   if (syscall_bpf(
@@ -1220,6 +1232,16 @@ template<> void ClassDef<BPF>::init() {
     try {
       if (!ctx.arguments(2, &pathname, &fd)) return;
       BPF::pin(pathname->str(), fd);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  method("get", [](Context &ctx, Object *obj, Value &ret) {
+    Str *pathname;
+    try {
+      if (!ctx.arguments(1, &pathname)) return;
+      ret.set(BPF::get(pathname->str()));
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
