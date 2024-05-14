@@ -67,10 +67,6 @@ public:
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
 private:
-  virtual void activate() override {
-    fs::change_dir(m_base);
-  }
-
   struct WatchedFile {
     double time;
     std::set<pjs::Ref<Watch>> watches;
