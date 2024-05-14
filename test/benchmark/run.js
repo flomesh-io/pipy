@@ -276,7 +276,7 @@ function startBaseline() {
 
 function startPipy(args, env) {
   return startProcess(
-    join(binPath, pipyExe), args, env,
+    join(binPath, pipyExe), ['--log-level=debug:thread', ...args], env,
     'pipy', 'Thread 0 started',
   );
 }

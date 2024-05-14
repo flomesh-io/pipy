@@ -155,7 +155,7 @@ async function startCodebase(url, opt) {
     new Promise(
       resolve => {
         const proc = startProcess(
-          pipyBinPath, ['--no-graph', url, ...(opt?.options || [])],
+          pipyBinPath, ['--no-graph', '--log-level=debug:thread', url, ...(opt?.options || [])],
           line => {
             if (!opt?.silent || !started) {
               log(chalk.bgGreen('worker >>>'), line);

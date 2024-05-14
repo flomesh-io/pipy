@@ -92,6 +92,7 @@ static const struct {
   const char *name;
 } s_topic_names[] = {
   { Log::ALLOC    , "alloc" },
+  { Log::THREAD   , "thread" },
   { Log::PIPELINE , "pipeline" },
   { Log::DUMP     , "dump" },
   { Log::LISTENER , "listener" },

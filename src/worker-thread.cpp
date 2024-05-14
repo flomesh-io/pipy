@@ -484,7 +484,7 @@ void WorkerThread::main() {
   }
 
   if (started && !failed) {
-    Log::info("[worker] Thread %d started", m_index);
+    Log::debug(Log::THREAD, "[thread] Thread %d started", m_index);
 
     init_metrics();
 
@@ -495,7 +495,7 @@ void WorkerThread::main() {
       m_done = true;
       m_manager->on_thread_done(m_index);
 
-      Log::info("[worker] Thread %d done", m_index);
+      Log::debug(Log::THREAD, "[thread] Thread %d done", m_index);
 
       if (m_shutdown) break;
 
@@ -511,11 +511,11 @@ void WorkerThread::main() {
       if (m_working) {
         m_done = false;
         Net::current().restart();
-        Log::info("[worker] Thread %d restarted", m_index);
+        Log::debug(Log::THREAD, "[thread] Thread %d restarted", m_index);
       }
     }
 
-    Log::info("[worker] Thread %d ended", m_index);
+    Log::debug(Log::THREAD, "[thread] Thread %d ended", m_index);
 
   } else {
     m_new_worker->stop(true);

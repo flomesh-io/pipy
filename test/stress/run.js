@@ -153,7 +153,7 @@ function startCodebase(url, opt) {
       resolve => {
         let started = false;
         const proc = startProcess(
-          pipyBinPath, ['--no-graph', url, ...(opt?.options || [])],
+          pipyBinPath, ['--no-graph', '--log-level=debug:thread', url, ...(opt?.options || [])],
           line => {
             if (!opt?.silent || !started) {
               log(chalk.bgGreen('worker >>>'), line);

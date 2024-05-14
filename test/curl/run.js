@@ -118,7 +118,7 @@ async function test(name) {
 async function startPipy(filename) {
   log('Starting Pipy...');
   log(pipyBinPath, filename);
-  const proc = spawn(pipyBinPath, [filename]);
+  const proc = spawn(pipyBinPath, [filename, '--log-level=debug:thread']);
   const lineBuffer = [];
   let started = false;
   return await Promise.race([
