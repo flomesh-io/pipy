@@ -78,13 +78,16 @@ void Block::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *im
 }
 
 void Block::execute(Context &ctx, Result &result) {
-  if (!m_stmts.empty()) {
-    for (const auto &p : m_stmts) {
-      p->execute(ctx, result);
-      if (!result.is_done()) return;
-    }
+  if (m_stmts.empty()) {
+    result.value = Value::undefined;
     result.set_done();
+    return;
   }
+  for (const auto &p : m_stmts) {
+    p->execute(ctx, result);
+    if (!result.is_done()) return;
+  }
+  result.set_done();
 }
 
 void Block::dump(std::ostream &out, const std::string &indent) {
