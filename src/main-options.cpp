@@ -55,9 +55,7 @@ void MainOptions::show_help() {
   std::cout << "  -e, -eval, --eval                    Evaluate the given string as script" << std::endl;
   std::cout << "  -f, -file, --file                    Interpret the given string as a pathname" << std::endl;
   std::cout << "  --, -args, --args                    Indicate the end of Pipy options and the start of script arguments" << std::endl;
-  std::cout << "  --pass-arguments                     Make all arguments afterwards visible to the script" << std::endl;
-  std::cout << "  --skip-redundant-arguments           Do not quit at redundant arguments" << std::endl;
-  std::cout << "  --skip-unknown-arguments             Do not quit at unknown arguments" << std::endl;
+  std::cout << "  --pipy-options                       Indicate the beginning of Pipy options while processing script arguments" << std::endl;
   std::cout << "  --threads=<number>                   Number of worker threads (1, 2, ... max)" << std::endl;
   std::cout << "  --log-file=<filename>                Set the pathname of the log file" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
@@ -123,21 +121,20 @@ void MainOptions::parse(int argc, char *argv[]) {
 void MainOptions::parse(const std::list<std::string> &args) {
   auto max_threads = std::thread::hardware_concurrency();
   bool end_of_options = false;
-  bool pass_arguments = false;
-  bool skip_redundant_arguments = false;
-  bool skip_unknown_options = false;
 
   for (const auto &term : args) {
-    if (pass_arguments) arguments.push_back(term);
     if (end_of_options) {
-      if (!pass_arguments) arguments.push_back(term);
+      if (term == "--pipy-options") {
+        end_of_options = false;
+      } else {
+        if (term[0] != '-' && filename.empty()) filename = term;
+        arguments.push_back(term);
+      }
       continue;
     }
     if (term[0] != '-') {
       if (filename.empty()) {
         filename = term;
-      } else if (skip_redundant_arguments) {
-        if (!pass_arguments) arguments.push_back(term);
       } else {
         throw std::runtime_error("redundant argument: " + term);
       }
@@ -147,12 +144,6 @@ void MainOptions::parse(const std::list<std::string> &args) {
       auto v = (i == std::string::npos ? std::string() : term.substr(i + 1));
       if (k == "--" || k == "-args" || k == "--args") {
         end_of_options = true;
-      } else if (k == "--pass-arguments") {
-        pass_arguments = true;
-      } else if (k == "--skip-redundant-arguments") {
-        skip_redundant_arguments = true;
-      } else if (k == "--skip-unknown-arguments") {
-        skip_unknown_options = true;
       } else if (k == "-v" || k == "-version" || k == "--version") {
         version = true;
       } else if (k == "-h" || k == "-help" || k == "--help") {
@@ -265,8 +256,6 @@ void MainOptions::parse(const std::list<std::string> &args) {
         load_certificate_list(v, tls_trusted);
       } else if (k == "--openssl-engine") {
         openssl_engine = v;
-      } else if (skip_unknown_options) {
-        if (!pass_arguments) arguments.push_back(term);
       } else {
         throw std::runtime_error("unknown option: " + k);
       }
