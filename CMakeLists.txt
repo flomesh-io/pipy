@@ -8,7 +8,8 @@ project(pipy)
 
 option(PIPY_GUI "include builtin GUI" OFF)
 option(PIPY_CODEBASES "include builtin codebases in the executable" OFF)
-option(PIPY_CUSTOM_CODEBASES "include custom codebases in the executable (<group>/<name>:<path>,<group>/<name>:<path>,...)" "")
+option(PIPY_CUSTOM_CODEBASES "include custom codebases in the executable (<group>/<name>:<path>,<group>/<name>:<path>,...)" OFF)
+option(PIPY_DEFAULT_OPTIONS "fixed command line options to insert before user options" OFF)
 option(PIPY_BPF "enable eBPF support" ON)
 option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
 option(PIPY_ASSERT_SAME_THREAD "enable assertions for strict inner-thread data access" OFF)
@@ -397,6 +398,10 @@ if(PIPY_CODEBASES)
 
   add_custom_target(PackCodebases DEPENDS ${CMAKE_BINARY_DIR}/deps/codebases.tar.gz.h)
   add_dependencies(pipy PackCodebases)
+endif()
+
+if(PIPY_DEFAULT_OPTIONS)
+  add_definitions(-DPIPY_DEFAULT_OPTIONS="${PIPY_DEFAULT_OPTIONS}")
 endif()
 
 if(PIPY_BPF)

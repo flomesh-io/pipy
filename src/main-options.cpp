@@ -44,11 +44,20 @@ auto MainOptions::global() -> MainOptions& {
 void MainOptions::show_help() {
   std::cout << "Usage: pipy [options] [<expression | pathname | URL>]" << std::endl;
   std::cout << std::endl;
+
   std::cout << "URL can be one of:" << std::endl;
   std::cout << "  - http[s]://<host>:<port>/<codebase> Run <codebase> from the remote repo at <host>:<port>" << std::endl;
   std::cout << "  - http[s]://<host>:<port>            Run as a proxy to the remote repo at <host>:<port>" << std::endl;
   std::cout << "  - repo://<codebase>                  Run a builtin codebase" << std::endl;
   std::cout << std::endl;
+
+#ifdef PIPY_DEFAULT_OPTIONS
+  std::cout << "Default options: " << std::endl;
+  std::cout << "  " << PIPY_DEFAULT_OPTIONS << std::endl;
+  std::cout << "  Start your options with --pipy to cancel all default options" << std::endl;
+  std::cout << std::endl;
+#endif
+
   std::cout << "Options:" << std::endl;
   std::cout << "  -h, -help, --help                    Show help information" << std::endl;
   std::cout << "  -v, -version, --version              Show version information" << std::endl;
@@ -111,10 +120,23 @@ static const struct {
 void MainOptions::parse(int argc, char *argv[]) {
   arguments.push_back(argv[0]);
 
+#ifdef PIPY_DEFAULT_OPTIONS
+  std::list<std::string> args = utils::split_argv(PIPY_DEFAULT_OPTIONS);
+#else
   std::list<std::string> args;
+#endif
+
   for (int i = 1; i < argc; i++) {
-    args.push_back(argv[i]);
+    std::string opt(argv[i]);
+#ifdef PIPY_DEFAULT_OPTIONS
+    if (opt == "--pipy") {
+      args.clear();
+      continue;
+    }
+#endif
+    args.push_back(opt);
   }
+
   parse(args);
 }
 

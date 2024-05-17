@@ -92,6 +92,10 @@ static void show_version() {
 #else
   std::cout << "Builtin Codebases: " << "No" << std::endl;
 #endif
+
+#ifdef PIPY_DEFAULT_OPTIONS
+  std::cout << "Default Options  : " << PIPY_DEFAULT_OPTIONS << std::endl;
+#endif
 }
 
 //
