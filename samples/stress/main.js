@@ -1,4 +1,4 @@
-#!/usr/bin/env -S pipy --skip-redundant-arguments --skip-unknown-arguments --log-local=null
+#!/usr/bin/env -S pipy --log-local=null --args
 
 var options = parseOptions({
   defaults: {
@@ -68,7 +68,7 @@ function parseOptions({ defaults, shorthands }) {
   return { args, ...defaults, ...opts }
 }
 
-if (options.args.length !== 1) {
+if (options.args.length !== 2) {
   println('Usage: stress <options> <URL>')
   println('Options:')
   println('  -c, --connections <number>  Number of connections')
@@ -79,7 +79,7 @@ if (options.args.length !== 1) {
   return
 }
 
-var urlStr = options.args[0]
+var urlStr = options.args[1]
 if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
   urlStr = 'http://' + urlStr
 }
@@ -112,7 +112,7 @@ var request = new Message(
 
 var connections = options['--connections']
 var duration = options['--duration']
-var endTime = Date.now() + options['--duration'] * 1000
+var endTime = Date.now() + duration * 1000
 
 if (pipy.thread.id === 0) {
   println('Stress testing', url.href)
@@ -136,6 +136,14 @@ var stopPromise = new Promise(r => stopAll = r)
 var $time
 var $conn
 
+var tcp = pipeline($=>$
+  .connect(`${url.hostname}:${url.port}`)
+)
+
+var tls = pipeline($=>$
+  .connectTLS({ sni: url.host }).to(tcp)
+)
+
 pipeline($=>$
   .onStart(request)
   .forkJoin(Array(connections)).to($=>$
@@ -146,7 +154,6 @@ pipeline($=>$
       .mux(() => $conn).to($=>$
         .insert(() => stopPromise.then(new StreamEnd))
         .pipe(url.protocol === 'https:' ? tls : tcp)
-        .connect(`${url.hostname}:${url.port}`)
         .decodeHTTPResponse()
       )
       .handleMessageStart(
@@ -190,14 +197,6 @@ pipeline($=>$
       )
     }
   }
-)
-
-var tcp = pipeline($=>$
-  .connect(`${url.hostname}:${url.port}`)
-)
-
-var tls = pipeline($=>$
-  .connectTLS({ sni: url.host }).to(tcp)
 )
 
 function formatPercentage(n) {

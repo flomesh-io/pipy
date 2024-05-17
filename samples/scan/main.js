@@ -1,4 +1,4 @@
-#!/usr/bin/env -S pipy --skip-redundant-arguments --skip-unknown-arguments --log-local=null
+#!/usr/bin/env -S pipy --log-local=null --args
 
 var options = parseOptions({
   defaults: {
