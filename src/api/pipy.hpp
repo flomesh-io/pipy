@@ -106,6 +106,7 @@ public:
     void on_file_changed(bool changed);
   };
 
+  static auto version() -> pjs::Object*;
   static auto argv() -> pjs::Array*;
   static void argv(const std::vector<std::string> &argv);
   static void on_exit(const std::function<void(int)> &on_exit);

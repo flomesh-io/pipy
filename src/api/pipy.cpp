@@ -44,6 +44,8 @@
 
 #include <exception>
 
+#include "version.h"
+
 #ifndef _WIN32
 #include <unistd.h>
 #include <signal.h>
@@ -54,6 +56,14 @@ namespace pipy {
 
 thread_local static pjs::Ref<pjs::Array> s_argv;
 thread_local static std::list<pjs::Ref<pjs::Function>> s_exit_callbacks;
+
+auto Pipy::version() -> pjs::Object* {
+  auto obj = pjs::Object::make();
+  obj->set("version", PIPY_VERSION);
+  obj->set("commit", PIPY_COMMIT);
+  obj->set("date", PIPY_COMMIT_DATE);
+  return obj;
+}
 
 auto Pipy::argv() -> pjs::Array* {
   return s_argv;
@@ -606,6 +616,10 @@ template<> void ClassDef<Pipy>::init() {
 
   variable("inbound", class_of<Pipy::Inbound>());
   variable("outbound", class_of<Pipy::Outbound>());
+
+  accessor("version", [](Object *, Value &ret) {
+    ret.set(Pipy::version());
+  });
 
   accessor("pid", [](Object *, Value &ret) {
     ret.set(os::process_id());

@@ -10,7 +10,9 @@ else
   COMMIT_DATE=`git log -1 --format=%cD`
 fi
 
-echo "
+OLD=`cat $1`
+
+NEW="
 #ifndef __VERSION_H__
 #define __VERSION_H__
 
@@ -18,5 +20,11 @@ echo "
 #define PIPY_COMMIT \"$COMMIT\"
 #define PIPY_COMMIT_DATE \"$COMMIT_DATE\"
 
-#endif // __VERSION_H__
-" > $1
+#endif // __VERSION_H__"
+
+if [ "$NEW" != "$OLD" ]; then
+  echo "Writing $1..."
+  echo "$NEW" > $1;
+else
+  echo "Version file $1 has no changes"
+fi

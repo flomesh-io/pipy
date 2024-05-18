@@ -356,10 +356,8 @@ add_executable(pipy
   deps/sqlite-3.43.2/sqlite3.c
 )
 
-add_custom_command(
-  OUTPUT ${CMAKE_BINARY_DIR}/deps/version.h
-  COMMAND ${CMAKE_SOURCE_DIR}/generate_version_h.${EXT_SHELL}
-  ARGS ${CMAKE_BINARY_DIR}/deps/version.h
+execute_process(
+  COMMAND ${CMAKE_SOURCE_DIR}/generate_version_h.${EXT_SHELL} ${CMAKE_BINARY_DIR}/deps/version.h
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
