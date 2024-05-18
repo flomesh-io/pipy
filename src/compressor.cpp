@@ -81,7 +81,7 @@ private:
           db.push(buf, size);
         }
         if (ret == Z_STREAM_END) { m_done = true; break; }
-        if (ret != Z_OK) return false;
+        if (ret != Z_OK && ret != Z_BUF_ERROR) return false;
       } while (m_zs.avail_out == 0);
       if (m_done) break;
     }
