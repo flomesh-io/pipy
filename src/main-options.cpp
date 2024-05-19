@@ -149,8 +149,11 @@ void MainOptions::parse(const std::list<std::string> &args) {
       if (term == "--pipy-options") {
         end_of_options = false;
       } else {
-        if (term[0] != '-' && filename.empty()) filename = term;
-        arguments.push_back(term);
+        if (term[0] != '-' && filename.empty()) {
+          filename = term;
+        } else {
+          arguments.push_back(term);
+        }
       }
       continue;
     }
