@@ -40,6 +40,8 @@ auto process_id() -> int;
 
 #ifdef _WIN32
 
+#define PIPY_API __declspec(dllexport)
+
 #include <Windows.h>
 #include <UserEnv.h>
 
@@ -102,6 +104,8 @@ auto get_last_error() -> std::string;
 } // namespace pipy
 
 #else // !_WIN32
+
+#define PIPY_API
 
 #include <stdio.h>
 #include <signal.h>

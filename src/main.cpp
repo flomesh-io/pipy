@@ -380,17 +380,10 @@ static SignalHandler s_signal_handler;
 //
 // Program entrance
 //
-#ifndef PIPY_SHARED
-int main(int argc, char *argv[]) {
-#else
-#ifdef _WIN32
-  #define PIPY_API __declspec(dllexport)
-#else
-  #define PIPY_API
-#endif
 
-extern "C" PIPY_API int pipy_main(int argc, char *argv[]) {
-#endif
+extern "C" PIPY_API
+int pipy_main(int argc, char *argv[]) {
+
   int exit_code = 0;
 
   try {
@@ -689,3 +682,11 @@ extern "C" PIPY_API int pipy_main(int argc, char *argv[]) {
 
   return exit_code;
 }
+
+#ifndef PIPY_SHARED
+
+int main(int argc, char *argv[]) {
+  return pipy_main(argc, argv);
+}
+
+#endif // !PIPY_SHARED
