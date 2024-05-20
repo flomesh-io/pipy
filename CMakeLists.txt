@@ -6,6 +6,7 @@ endif()
 
 project(pipy)
 
+option(PIPY_SHARED "Build Pipy as dynamic library" OFF)
 option(PIPY_GUI "include builtin GUI" OFF)
 option(PIPY_CODEBASES "include builtin codebases in the executable" OFF)
 option(PIPY_CUSTOM_CODEBASES "include custom codebases in the executable (<group>/<name>:<path>,<group>/<name>:<path>,...)" "")
@@ -213,7 +214,7 @@ endif()
 
 add_subdirectory(test/benchmark/baseline)
 
-add_executable(pipy
+SET(PIPY_SRC
   src/admin-link.cpp
   src/admin-proxy.cpp
   src/admin-service.cpp
@@ -355,6 +356,13 @@ add_executable(pipy
   src/worker-thread.cpp
   deps/sqlite-3.43.2/sqlite3.c
 )
+
+if(NOT PIPY_SHARED)
+  add_executable(pipy ${PIPY_SRC})
+else()
+  add_definitions(-DPIPY_SHARED)
+  add_library(pipy SHARED ${PIPY_SRC})
+endif()
 
 execute_process(
   COMMAND ${CMAKE_SOURCE_DIR}/generate_version_h.${EXT_SHELL} ${CMAKE_BINARY_DIR}/deps/version.h
