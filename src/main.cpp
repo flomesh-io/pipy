@@ -389,7 +389,7 @@ int main(int argc, char *argv[]) {
   #define PIPY_API
 #endif
 
-extern "C" PIPY_API int initialize(int argc, char *argv[]) {
+extern "C" PIPY_API int pipy_main(int argc, char *argv[]) {
 #endif
   int exit_code = 0;
 
