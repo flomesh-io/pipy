@@ -204,8 +204,13 @@ PipeNext::PipeNext()
 {
 }
 
+PipeNext::PipeNext(const pjs::Value &args) : m_args(args)
+{
+}
+
 PipeNext::PipeNext(const PipeNext &r)
   : Filter(r)
+  , m_args(r.m_args)
 {
 }
 
@@ -230,12 +235,17 @@ void PipeNext::reset() {
 void PipeNext::process(Event *evt) {
   if (auto *chain = Filter::pipeline()->chain()) {
     if (!m_next) {
-      auto &a = Filter::pipeline()->chain_args();
       auto *p = Pipeline::make(chain->layout, context());
-      p->chain(chain->next, a);
-      p->chain(Filter::output());
-      p->start(a);
       m_next = p;
+      if (!m_args.is_undefined()) {
+        pjs::Value a;
+        if (!Filter::eval(m_args, a)) return;
+        p->chain(chain->next, a);
+      } else {
+        p->chain(chain->next, Filter::pipeline()->chain_args());
+      }
+      p->chain(Filter::output());
+      p->start(p->chain_args());
     }
   }
 

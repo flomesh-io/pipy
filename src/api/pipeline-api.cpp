@@ -388,8 +388,8 @@ void PipelineDesigner::pipe(const pjs::Value &target, pjs::Object *target_map, p
   append_filter(new Pipe(target, target_map, init_args));
 }
 
-void PipelineDesigner::pipe_next() {
-  append_filter(new PipeNext());
+void PipelineDesigner::pipe_next(const pjs::Value &args) {
+  append_filter(new PipeNext(args));
 }
 
 void PipelineDesigner::print() {
@@ -1131,7 +1131,9 @@ template<> void ClassDef<PipelineDesigner>::init() {
 
   // PipelineDesigner.pipeNext
   filter("pipeNext", [](Context &ctx, PipelineDesigner *obj) {
-    obj->pipe_next();
+    Value args;
+    if (!ctx.arguments(0, &args)) return;
+    obj->pipe_next(args);
   });
 
   // PipelineDesigner.print

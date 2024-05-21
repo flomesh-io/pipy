@@ -70,6 +70,7 @@ private:
 class PipeNext : public Filter {
 public:
   PipeNext();
+  PipeNext(const pjs::Value &args);
 
 private:
   PipeNext(const PipeNext &r);
@@ -81,6 +82,7 @@ private:
   virtual void dump(Dump &d) override;
 
   pjs::Ref<Pipeline> m_next;
+  pjs::Value m_args;
 };
 
 } // namespace pipy
