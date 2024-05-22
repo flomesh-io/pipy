@@ -236,6 +236,13 @@ template<> void ClassDef<OS>::init() {
     ret.set(OS::home());
   });
 
+  // os.abspath
+  method("abspath", [](Context &ctx, Object*, Value &ret) {
+    Str *pathname;
+    if (!ctx.arguments(1, &pathname)) return;
+    ret.set(fs::abs_path(pathname->str()));
+  });
+
   // os.stat
   method("stat", [](Context &ctx, Object*, Value &ret) {
     Str *filename;
