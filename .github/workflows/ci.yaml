@@ -23,7 +23,7 @@ jobs:
     name: set-release-version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: pipy
 
@@ -57,16 +57,12 @@ jobs:
     name: x86-binary
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: pipy
 
       - name: Show envs
         run: export
-
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16
 
       - name: Build
         id: build
@@ -110,12 +106,12 @@ jobs:
     name: x86-alpine-docker
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: pipy
 
       - name: Setup buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Show envs
         run: export
@@ -162,16 +158,12 @@ jobs:
     name: aarch64-binary
     runs-on: [self-hosted, arm64]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: pipy
 
       - name: Show envs
         run: export
-
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16
 
       - name: Build
         id: build
@@ -214,12 +206,12 @@ jobs:
     name: aarch64-alpine-docker
     runs-on: [self-hosted, arm64]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: pipy
 
       - name: Setup buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Show envs
         run: export
@@ -266,7 +258,7 @@ jobs:
     name: x86-rpm
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: pipy
 
@@ -322,7 +314,7 @@ jobs:
       - x86-rpm
     steps:
       - name: Save log
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v3
         with:
           token:  ${{ secrets.REPO_DISPATCH_PAT }}
           repository: ${{ secrets.REPO_FOR_LOG }}
