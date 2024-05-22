@@ -149,7 +149,7 @@ else()
       OUTPUT ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL}
       WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
       COMMAND mkdir -p ${OPENSSL_SRC_DIR}/build
-      COMMAND cd ${OPENSSL_SRC_DIR}/build && ../config no-shared no-tests && make -j2
+      COMMAND cd ${OPENSSL_SRC_DIR}/build && CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} ../config no-shared no-tests && make -j2
       VERBATIM
       COMMENT "Building OpenSSL"
     )
