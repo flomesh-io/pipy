@@ -856,14 +856,17 @@ void LoadBalancer::Resource::increase_load() {
 
 LoadBalancerBase::~LoadBalancerBase() {
   for (const auto &i : m_sessions) {
+    if (auto res = i.second->resource()) res->release();
     delete i.second;
   }
   for (const auto &i : m_targets) {
-    auto &resources = i.second->resources;
+    auto t = i.second;
+    auto &resources = t->resources;
     while (auto r = resources.head()) {
       resources.remove(r);
       r->release();
     }
+    delete t;
   }
 }
 
