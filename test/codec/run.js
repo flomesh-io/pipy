@@ -19,8 +19,8 @@ const hexMap = new Array(256).fill().map((_, i) => (i < 16 ? '0' + i.toString(16
 const charMap = new Array(256).fill().map((_, i) => (0x20 <= i && i < 0x80 ? String.fromCharCode(i) : '.'));
 const testResults = {};
 
-function startProcess(cmd, args, onStderr, onStdout) {
-  const proc = spawn(cmd, args);
+function startProcess(cmd, args, cwd, onStderr, onStdout) {
+  const proc = spawn(cmd, args, { cwd });
   const lineBuffer = [];
   proc.stderr.on('data', data => {
     let i = 0, n = data.length;
@@ -40,9 +40,9 @@ function startProcess(cmd, args, onStderr, onStdout) {
   return proc;
 }
 
-function startPipy(filename, onStdout) {
+function startPipy(filename, cwd, onStdout) {
   return startProcess(
-    pipyBinPath, ['--no-graph', filename],
+    pipyBinPath, ['--no-graph', filename], cwd,
     line => log(chalk.bgGreen('worker >>>'), line),
     onStdout
   );
@@ -99,7 +99,7 @@ async function runTest(name) {
     log(`Testing ${chalk.cyan(name)}...`);
     const stdoutBuffer = [];
     worker = startPipy(
-      `${basePath}/main.js`,
+      `${basePath}/main.js`, basePath,
       data => stdoutBuffer.push(data)
     );
 
