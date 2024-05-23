@@ -352,7 +352,7 @@ void Quota::dequeue(Consumer *consumer) {
   if (consumer->m_quota == this) {
     m_consumers.remove(consumer);
     consumer->m_quota = nullptr;
-    if (m_consumers.empty()) m_counter->dequeue(this);
+    if (m_counter && m_consumers.empty()) m_counter->dequeue(this);
   }
 }
 
