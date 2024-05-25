@@ -212,6 +212,57 @@ OS::RmdirOptions::RmdirOptions(pjs::Object *options) : MkdirOptions(options) {
     .check_nullable();
 }
 
+//
+// OS::Path
+//
+
+auto OS::Path::dirname(const std::string &path) -> std::string {
+  return utils::path_dirname(path);
+}
+
+auto OS::Path::join(int argc, const pjs::Value argv[]) -> std::string {
+  if (argc == 0) return ".";
+
+  std::string path;
+  for (int i = 0; i < argc; i++) {
+    auto s = argv[i].to_string();
+    if (!s->str().empty()) {
+      if (path.empty()) {
+        path = s->str();
+      } else {
+        path = utils::path_join(path, s->str());
+      }
+    }
+    s->release();
+  }
+
+  return path;
+}
+
+auto OS::Path::resolve(int argc, const pjs::Value argv[]) -> std::string {
+  if (argc == 0) return fs::abs_path(".");
+
+  std::string path;
+  for (int i = 0; i < argc; i++) {
+    auto s = argv[i].to_string();
+    if (!s->str().empty()) {
+      if (path.empty() || s->str()[0] == '/') {
+        path = s->str();
+      } else {
+        path = utils::path_join(path, s->str());
+      }
+    }
+    s->release();
+  }
+
+  if (path.empty()) path = ".";
+  return fs::abs_path(path);
+}
+
+auto OS::Path::normalize(const std::string &path) -> std::string {
+  return utils::path_normalize(path);
+}
+
 } // namespace pipy
 
 namespace pjs {
@@ -220,6 +271,9 @@ using namespace pipy;
 
 template<> void ClassDef<OS>::init() {
   ctor();
+
+  // os.path
+  variable("path", class_of<OS::Path>());
 
   // os.platform
   accessor("platform", [](Object *obj, Value &ret) {
@@ -399,6 +453,34 @@ template<> void ClassDef<OS::Stats>::init() {
   method("isFIFO",            [](Context&, Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->is_fifo()); });
   method("isSymbolicLink",    [](Context&, Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->is_symbolic_link()); });
   method("isSocket",          [](Context&, Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->is_socket()); });
+}
+
+template<> void ClassDef<OS::Path>::init() {
+  ctor();
+
+  // os.path.dirname
+  method("dirname", [](Context &ctx, Object *, Value &ret) {
+    Str *path;
+    if (!ctx.arguments(1, &path)) return;
+    ret.set(OS::Path::dirname(path->str()));
+  });
+
+  // os.path.join
+  method("join", [](Context &ctx, Object *, Value &ret) {
+    ret.set(OS::Path::join(ctx.argc(), ctx.argv()));
+  });
+
+  // os.path.resolve
+  method("resolve", [](Context &ctx, Object*, Value &ret) {
+    ret.set(OS::Path::resolve(ctx.argc(), ctx.argv()));
+  });
+
+  // os.path.normalize
+  method("normalize", [](Context &ctx, Object *, Value &ret) {
+    Str *path;
+    if (!ctx.arguments(1, &path)) return;
+    ret.set(OS::Path::normalize(path->str()));
+  });
 }
 
 } // namespace pjs

@@ -61,6 +61,14 @@ public:
     RmdirOptions(pjs::Object *options);
   };
 
+  class Path : public pjs::ObjectTemplate<Path> {
+  public:
+    static auto dirname(const std::string &path) -> std::string;
+    static auto join(int argc, const pjs::Value argv[]) -> std::string;
+    static auto resolve(int argc, const pjs::Value argv[]) -> std::string;
+    static auto normalize(const std::string &path) -> std::string;
+  };
+
   auto env() -> pjs::Object* { return m_env; }
 
   static auto platform() -> Platform;
