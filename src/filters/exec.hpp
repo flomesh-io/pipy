@@ -131,6 +131,7 @@ private:
   void check_ending();
   bool exec_argv(const std::list<std::string> &args);
   bool exec_line(const std::string &line);
+  void kill_process();
 
   //
   // Exec::ChildProcessMonitor

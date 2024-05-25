@@ -91,11 +91,7 @@ void Exec::reset() {
   Filter::reset();
   if (m_child_proc.pid > 0) {
     s_child_process_monitor.remove(this);
-#ifndef _WIN32
-    kill(m_child_proc.pid, SIGTERM);
-#else
-    TerminateProcess(m_child_proc.process, 0);
-#endif
+    kill_process();
     m_child_proc.pid = 0;
   }
   if (m_stdin) {
@@ -149,8 +145,12 @@ void Exec::process(Event *evt) {
     }
   }
 
-  if (m_child_proc.pid > 0 && m_stdin) {
-    m_stdin->input()->input(evt);
+  if (m_child_proc.pid > 0) {
+    if (evt->is<StreamEnd>()) {
+      kill_process();
+    } else if (m_stdin) {
+      m_stdin->input()->input(evt);
+    }
   }
 }
 
@@ -234,6 +234,10 @@ bool Exec::exec_line(const std::string &line) {
   return exec_argv(utils::split_argv(line));
 }
 
+void Exec::kill_process() {
+  kill(m_child_proc.pid, SIGTERM);
+}
+
 #else // _WIN32
 
 bool Exec::exec_argv(const std::list<std::string> &args) {
@@ -298,6 +302,10 @@ bool Exec::exec_line(const std::string &line) {
   );
 
   return true;
+}
+
+void Exec::kill_process() {
+  TerminateProcess(m_child_proc.process, 0);
 }
 
 //
