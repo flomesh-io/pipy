@@ -298,7 +298,7 @@ auto Agent::request(Message *req) -> pjs::Promise* {
 }
 
 auto Agent::request(pjs::Str *method, pjs::Str *path, pjs::Object *headers, Data *body) -> pjs::Promise* {
-  if (!headers || (!headers->ht_has(s_host) && headers->ht_has(s_Host))) {
+  if (!headers || (!headers->has(s_host) && !headers->has(s_Host))) {
     if (headers) {
       auto *new_headers = pjs::Object::make();
       pjs::Object::assign(new_headers, headers);
@@ -359,6 +359,13 @@ void Agent::Request::on_reply(Event *evt) {
     m_settler->resolve(msg);
     EventSource::close();
     msg->release();
+    delete this;
+  } else if (auto eos = evt->as<StreamEnd>()) {
+    auto h = ResponseHead::make();
+    auto s = ResponseHead::error_to_status(eos->error_code(), h->status);
+    h->statusText = s;
+    m_settler->reject(Message::make(h, nullptr));
+    EventSource::close();
     delete this;
   }
 }
