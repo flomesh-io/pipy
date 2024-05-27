@@ -3334,7 +3334,7 @@ auto Array::splice(int start, int delete_count, const Value *values, int count) 
   auto ret = Array::make(delete_count);
   for (int i = 0; i < delete_count; i++) {
     auto &v = old_values[start + i];
-    if (!v.is_empty()) ret->set(i, v);
+    if (!v.is_empty()) ret->set(i, std::move(v));
   }
 
   if (delete_count != count) {

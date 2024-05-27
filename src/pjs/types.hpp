@@ -3668,6 +3668,10 @@ public:
   }
 
   void set(int i, const Value &v) {
+    set(i, Value(v));
+  }
+
+  void set(int i, Value &&v) {
     if (i < 0) return;
     auto old_size = m_data->size();
     auto new_size = 1 << power(i + 1);
@@ -3680,7 +3684,7 @@ public:
       m_data->recycle();
       m_data = data;
     }
-    m_data->at(i) = v;
+    m_data->at(i) = std::move(v);
     m_size = std::max(m_size, i + 1);
   }
 
