@@ -42,6 +42,20 @@ no-gui:
 	  -DPIPY_LTO=OFF \
 	&& $(MAKE)
 
+debug:
+	mkdir -p build
+	cd build && $(CMAKE) .. \
+	  -DCMAKE_BUILD_TYPE=Debug \
+	  -DCMAKE_C_COMPILER=clang \
+	  -DCMAKE_CXX_COMPILER=clang++ \
+	  -DPIPY_GUI=OFF \
+	  -DPIPY_CODEBASES=OFF \
+	  -DPIPY_BPF=ON \
+	  -DPIPY_SOIL_FREED_SPACE=ON \
+	  -DPIPY_ASSERT_SAME_THREAD=ON \
+	  -DPIPY_LTO=OFF \
+	&& $(MAKE)
+
 install: $(PIPY_INSTALL)
 
 $(PIPY_INSTALL): $(PIPY_EXE)
