@@ -35,8 +35,10 @@
 #include <thread>
 #include <atomic>
 #include <condition_variable>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <functional>
 #include <vector>
 
@@ -69,6 +71,7 @@ public:
   void stats(stats::MetricData &metric_data, const std::function<void()> &cb);
   void stats(const std::function<void(stats::MetricData&)> &cb);
   void stats(const std::vector<std::string> &names, const std::function<void(stats::MetricData&)> &cb);
+  void dump_objects(const std::string &class_name, std::map<std::string, size_t> &counts, const std::function<void()> &cb);
   void recycle();
   void reload(const std::function<void(bool)> &cb);
   void reload_done(bool ok);
@@ -129,6 +132,7 @@ public:
   auto stats() -> stats::MetricDataSum&;
   bool stats(const std::function<void(stats::MetricDataSum&)> &cb);
   void stats(const std::function<void(stats::MetricDataSum&)> &cb, const std::vector<std::string> &names);
+  auto dump_objects(const std::string &class_name) -> std::map<std::string, size_t>;
   void recycle();
   void reload();
   bool admin(pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond);

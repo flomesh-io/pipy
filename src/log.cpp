@@ -176,7 +176,7 @@ auto Log::format_header(Level level, char *buf, size_t len) -> size_t {
   return i;
 }
 
-auto Log::format_location(char *buf, size_t len, const pjs::Context::Location &loc, const char *func_name) -> size_t {
+auto Log::format_location(char *buf, size_t len, const pjs::Location &loc, const char *func_name) -> size_t {
   auto source = loc.source;
   if (!source || source->filename.empty()) {
     return std::snprintf(

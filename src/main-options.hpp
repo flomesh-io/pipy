@@ -54,6 +54,7 @@ public:
   bool        no_graph = false;
   bool        no_status = false;
   bool        no_metrics = false;
+  bool        trace_objects = false;
   bool        force_start = false;
   bool        reuse_port = false;
   int         threads = 1;

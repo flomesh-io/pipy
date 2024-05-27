@@ -754,6 +754,28 @@ private:
 };
 
 //
+// Source
+//
+
+class Source {
+public:
+  std::string filename;
+  std::string content;
+};
+
+//
+// Location
+//
+
+struct Location {
+  Module* module = nullptr;
+  const Source* source = nullptr;
+  std::string name;
+  int line = 0;
+  int column = 0;
+};
+
+//
 // Str
 //
 
@@ -1035,6 +1057,8 @@ private:
 
 class Class : public RefCount<Class> {
 public:
+  static void set_tracing(bool b) { s_tracing = b; }
+
   static auto make(const std::string &name, Class *super, const std::list<Field*> &fields) -> Class* {
     return new Class(name, super, fields);
   }
@@ -1077,6 +1101,8 @@ public:
 
   auto init(Object *obj, Object *prototype = nullptr) -> Object*;
   void free(Object *obj);
+  void trace(Object *obj);
+  void iterate(const std::function<bool(Object *)> &cb);
 
   auto construct(Context &ctx) -> Object* { return m_ctor ? m_ctor(ctx) : nullptr; }
   auto construct() -> Object*;
@@ -1118,6 +1144,10 @@ private:
   std::unordered_map<Str*, int> m_field_map;
   size_t m_id;
   size_t m_object_count = 0;
+  Object* m_objects_head = nullptr;
+  Object* m_objects_tail = nullptr;
+
+  static bool s_tracing;
 
   friend class RefCount<Class>;
 };
@@ -1725,6 +1755,7 @@ public:
 
   auto type() const -> Class* { return m_class; }
   auto data() const -> Data* { return m_data; }
+  auto location() const -> const Location& { return m_location; }
 
   template<class T> auto as() -> T* { return static_cast<T*>(this); }
   template<class T> auto as() const -> const T* { return static_cast<const T*>(this); }
@@ -1812,6 +1843,10 @@ private:
   Class* m_class = nullptr;
   Data* m_data = nullptr;
   Ref<OrderedHash<Ref<Str>, Value>> m_hash;
+  Location m_location;
+  Object* m_class_prev = nullptr;
+  Object* m_class_next = nullptr;
+  bool m_traced = false;
 
 #ifdef PIPY_ASSERT_SAME_THREAD
   std::thread::id m_thread_id;
@@ -1989,12 +2024,19 @@ inline auto Class::init(Object *obj, Object *prototype) -> Object* {
   obj->m_class = this;
   obj->m_data = data;
   retain();
+  trace(obj);
   m_object_count++;
   return obj;
 }
 
 inline void Class::free(Object *obj) {
   obj->m_data->free();
+  if (obj->m_traced) {
+    auto p = obj->m_class_prev;
+    auto n = obj->m_class_next;
+    if (p) p->m_class_next = n; else m_objects_head = n;
+    if (n) n->m_class_prev = p; else m_objects_tail = p;
+  }
   m_object_count--;
   release();
 }
@@ -2201,29 +2243,11 @@ private:
 };
 
 //
-// Source
-//
-
-class Source {
-public:
-  std::string filename;
-  std::string content;
-};
-
-//
 // Context
 //
 
 class Context : public RefCount<Context> {
 public:
-  struct Location {
-    Module* module = nullptr;
-    const Source* source = nullptr;
-    std::string name;
-    int line = 0;
-    int column = 0;
-  };
-
   struct Error {
     Value value;
     std::string message;
@@ -2231,8 +2255,11 @@ public:
     auto where() const -> const Location*;
   };
 
+  static auto current() -> Context* { return s_current; }
+
   Context(Instance *instance, Ref<Object> *l = nullptr, Fiber *fiber = nullptr)
     : m_instance(instance)
+    , m_parent(nullptr)
     , m_root(this)
     , m_caller(nullptr)
     , m_g(instance ? instance->global() : nullptr)
@@ -2245,6 +2272,7 @@ public:
 
   Context(Context &ctx, int argc, Value *argv, Scope *scope)
     : m_instance(ctx.m_instance)
+    , m_parent(s_current)
     , m_root(ctx.m_root)
     , m_caller(&ctx)
     , m_g(ctx.m_g)
@@ -2253,7 +2281,9 @@ public:
     , m_level(ctx.m_level + 1)
     , m_argc(argc)
     , m_argv(argv)
-    , m_error(ctx.m_error) {}
+    , m_error(ctx.m_error) { s_current = this; }
+
+  ~Context() { if (s_current == this) s_current = m_parent; }
 
   auto instance() const -> Instance* { return m_instance; }
   auto root() const -> Context* { return m_root; }
@@ -2488,6 +2518,7 @@ protected:
 
 private:
   Instance* m_instance;
+  Context* m_parent;
   Context* m_root;
   Context* m_caller;
   Context* m_prev;
@@ -2501,6 +2532,8 @@ private:
   Location m_call_site;
   bool m_has_error = false;
   std::shared_ptr<Error> m_error;
+
+  thread_local static Context* s_current;
 
   template<typename T, typename... Rest>
   bool get_args(bool set_error, int n, int i, T a, Rest... rest) {
@@ -3583,7 +3616,7 @@ public:
   auto message() const -> Str* { return m_message; }
   auto cause() const -> Error* { return m_cause; }
   auto stack() const -> Str* { return m_stack; }
-  void backtrace(const std::vector<Context::Location> &bt);
+  void backtrace(const std::vector<Location> &bt);
 
 private:
   Error(Str *message = nullptr, Object *cause = nullptr)

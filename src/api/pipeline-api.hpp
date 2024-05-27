@@ -137,7 +137,7 @@ private:
   PipelineLayout* m_layout;
   Filter* m_current_filter = nullptr;
   Filter* m_current_joint_filter = nullptr;
-  pjs::Context::Location m_current_location;
+  pjs::Location m_current_location;
   bool m_has_on_start = false;
   bool m_has_on_end = false;
 

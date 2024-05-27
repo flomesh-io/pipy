@@ -420,6 +420,7 @@ int pipy_main(int argc, char *argv[]) {
     Log::init();
     logging::Logger::set_history_size(opts.log_history_limit);
     Listener::set_reuse_port(opts.reuse_port);
+    pjs::Class::set_tracing(opts.trace_objects);
     pjs::Math::init();
     crypto::Crypto::init(opts.openssl_engine);
     tls::TLSSession::init();

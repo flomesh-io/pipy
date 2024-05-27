@@ -132,6 +132,28 @@ void WorkerThread::stats(const std::function<void(stats::MetricData&)> &cb) {
   );
 }
 
+void WorkerThread::dump_objects(const std::string &class_name, std::map<std::string, size_t> &counts, const std::function<void()> &cb) {
+  m_net->post(
+    [&, cb]() {
+      if (auto c = pjs::Class::get(class_name)) {
+        c->iterate(
+          [&](pjs::Object *obj) {
+            auto &l = obj->location();
+            if (auto m = l.module) {
+              char str[100];
+              auto len = std::snprintf(str, sizeof(str), ":%d:%d", l.line, l.column);
+              auto key = m->name() + std::string(str, len);
+              counts[key]++;
+            }
+            return true;
+          }
+        );
+      }
+      cb();
+    }
+  );
+}
+
 void WorkerThread::recycle() {
   if (m_working && !m_recycling) {
     m_recycling = true;
@@ -715,6 +737,40 @@ void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb, 
       req->start();
     }
   );
+}
+
+auto WorkerManager::dump_objects(const std::string &class_name) -> std::map<std::string, size_t> {
+  std::map<std::string, size_t> all;
+
+  if (auto n = m_worker_threads.size()) {
+    std::mutex m;
+    std::condition_variable cv;
+    std::vector<std::map<std::string, size_t>> counts(n);
+
+    for (auto *wt : m_worker_threads) {
+      auto i = wt->index();
+      wt->dump_objects(
+        class_name,
+        counts[i],
+        [&]() {
+          std::lock_guard<std::mutex> lock(m);
+          n--;
+          cv.notify_one();
+        }
+      );
+    }
+
+    std::unique_lock<std::mutex> lock(m);
+    cv.wait(lock, [&]{ return n == 0; });
+
+    for (auto i = 0; i < m_worker_threads.size(); i++) {
+      for (const auto &p : counts[i]) {
+        all[p.first] += p.second;
+      }
+    }
+  }
+
+  return all;
 }
 
 void WorkerManager::recycle() {

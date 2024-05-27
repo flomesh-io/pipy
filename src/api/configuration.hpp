@@ -144,7 +144,7 @@ public:
 protected:
   struct PipelineConfig {
     int index;
-    pjs::Context::Location on_start_location;
+    pjs::Location on_start_location;
     pjs::Ref<pjs::Object> on_start;
     pjs::Ref<pjs::Function> on_end;
     std::list<std::unique_ptr<Filter>> filters;
@@ -170,7 +170,7 @@ private:
   PipelineConfig* m_config;
   Filter* m_current_filter = nullptr;
   Filter* m_current_joint_filter = nullptr;
-  pjs::Context::Location m_current_location;
+  pjs::Location m_current_location;
 
   friend class pjs::ObjectTemplate<FilterConfigurator>;
 };

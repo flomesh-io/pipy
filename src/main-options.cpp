@@ -74,7 +74,8 @@ void MainOptions::show_help() {
   std::cout << "  --no-graph                           Do not print pipeline graphs to the log" << std::endl;
   std::cout << "  --no-status                          Do not report current status to the repo" << std::endl;
   std::cout << "  --no-metrics                         Do not report metrics to the repo" << std::endl;
-  std::cout << "  --force-start                        Force to start even at failure of port listening" << std::endl;
+  std::cout << "  --trace-objects                      Enable tracing the locations of object construction" << std::endl;
+  std::cout << "  --force-start                        Force to start even at failure of address/port binding" << std::endl;
   std::cout << "  --init-repo=<dirname>                Populate the repo with codebases under the specified directory" << std::endl;
   std::cout << "  --init-code=<codebase>               Start running the specified codebase after repo initialization" << std::endl;
   std::cout << "  --instance-uuid=<uuid>               Specify a UUID for this worker process" << std::endl;
@@ -247,6 +248,8 @@ void MainOptions::parse(const std::list<std::string> &args) {
         no_status = true;
       } else if (k == "--no-metrics") {
         no_metrics = true;
+      } else if (k == "--trace-objects") {
+        trace_objects = true;
       } else if (k == "--force-start") {
         force_start = true;
       } else if (k == "--init-repo") {
@@ -374,6 +377,7 @@ auto MainOptions::to_string() -> std::string {
   if (no_graph) list.push_back("--no-graph");
   if (no_status) list.push_back("--no-status");
   if (no_metrics) list.push_back("--no-metrics");
+  if (trace_objects) list.push_back("--trace-objects");
   if (force_start) list.push_back("--force-start");
   if (!init_repo.empty()) list.push_back("--init-repo=" + init_repo);
   if (!init_code.empty()) list.push_back("--init-code=" + init_code);

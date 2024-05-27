@@ -583,29 +583,44 @@ Message* AdminService::dump_GET() {
 }
 
 Message* AdminService::dump_GET(const std::string &path) {
+  static std::string s_prefix_objects("objects/");
   Data buf;
   Data::Builder db(buf, &s_dp);
-  auto &status = WorkerManager::get().status();
-  auto items = utils::split(path, '+');
-  for (const auto &item : items) {
-    if (item == "pools") {
-      status.dump_pools(db);
-    } else if (item == "objects") {
-      status.dump_objects(db);
-    } else if (item == "chunks") {
-      status.dump_chunks(db);
-    } else if (item == "buffers") {
-      status.dump_buffers(db);
-    } else if (item == "pipelines") {
-      status.dump_pipelines(db);
-    } else if (item == "inbound") {
-      status.dump_inbound(db);
-    } else if (item == "outbound") {
-      status.dump_outbound(db);
-    } else {
-      db.push("Unknown dump item: ");
-      db.push(item);
-      db.push('\n');
+  if (utils::starts_with(path, s_prefix_objects)) {
+    auto class_name = path.substr(s_prefix_objects.length());
+    if (!class_name.empty()) {
+      auto counts = WorkerManager::get().dump_objects(class_name);
+      for (const auto &p : counts) {
+        char str[100];
+        auto len = std::snprintf(str, sizeof(str), "%llu ", (unsigned long long)p.second);
+        db.push(str, len);
+        db.push(p.first);
+        db.push('\n');
+      }
+    }
+  } else {
+    auto &status = WorkerManager::get().status();
+    auto items = utils::split(path, '+');
+    for (const auto &item : items) {
+      if (item == "pools") {
+        status.dump_pools(db);
+      } else if (item == "objects") {
+        status.dump_objects(db);
+      } else if (item == "chunks") {
+        status.dump_chunks(db);
+      } else if (item == "buffers") {
+        status.dump_buffers(db);
+      } else if (item == "pipelines") {
+        status.dump_pipelines(db);
+      } else if (item == "inbound") {
+        status.dump_inbound(db);
+      } else if (item == "outbound") {
+        status.dump_outbound(db);
+      } else {
+        db.push("Unknown dump item: ");
+        db.push(item);
+        db.push('\n');
+      }
     }
   }
   db.flush();

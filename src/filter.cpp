@@ -63,7 +63,7 @@ auto Filter::context() const -> Context* {
   }
 }
 
-void Filter::set_location(const pjs::Context::Location &loc) {
+void Filter::set_location(const pjs::Location &loc) {
   m_location = loc;
   if (auto src = loc.source) {
     std::string buffer_name("Filter in ");

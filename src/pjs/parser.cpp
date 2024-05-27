@@ -34,10 +34,10 @@
 namespace pjs {
 
 //
-// Location
+// Loc
 //
 
-struct Location {
+struct Loc {
   int position = 0;
   int line = 1;
   int column = 1;
@@ -169,7 +169,7 @@ public:
     return m_ptr >= m_script.length();
   }
 
-  auto read(Location &loc) -> Token {
+  auto read(Loc &loc) -> Token {
     peek(loc);
     m_has_peeked = false;
     m_has_eol = false;
@@ -177,7 +177,7 @@ public:
     return m_token;
   }
 
-  auto peek(Location &loc) -> Token {
+  auto peek(Loc &loc) -> Token {
     peek_token();
     loc = m_token_loc;
     return m_token;
@@ -230,8 +230,8 @@ private:
 
   std::string m_script;
   size_t m_ptr = 0;
-  Location m_loc;
-  Location m_token_loc;
+  Loc m_loc;
+  Loc m_token_loc;
   Token m_token;
   bool m_has_peeked = false;
   bool m_has_eol = false;
@@ -244,7 +244,7 @@ private:
     }
   }
 
-  auto parse(Location &loc) -> Token;
+  auto parse(Loc &loc) -> Token;
   bool parse_space();
 
   int get() const {
@@ -354,7 +354,7 @@ void Tokenizer::init_operator_map() {
   }
 }
 
-auto Tokenizer::parse(Location &loc) -> Token {
+auto Tokenizer::parse(Loc &loc) -> Token {
 
   // Skip the shebang line
   if (m_ptr == 0 &&
@@ -818,19 +818,19 @@ private:
 
   const Source* m_source;
   Tokenizer m_tokenizer;
-  Location m_location;
+  Loc m_location;
   std::string m_error;
 
   Token peek() { return m_tokenizer.peek(m_location); }
   Token read() { return m_tokenizer.read(m_location); }
-  Token read(Location &l) { return m_tokenizer.read(l); }
+  Token read(Loc &l) { return m_tokenizer.read(l); }
 
   Expr* locate(Expr *e) {
     locate(e, m_location);
     return e;
   }
 
-  Expr* locate(Expr *e, const Location &l) {
+  Expr* locate(Expr *e, const Loc &l) {
     e->locate(m_source, l.line, l.column);
     return e;
   }
@@ -840,7 +840,7 @@ private:
     return e;
   }
 
-  Stmt* locate(Stmt *s, const Location &l) {
+  Stmt* locate(Stmt *s, const Loc &l) {
     s->locate(m_source, l.line, l.column);
     return s;
   }
@@ -849,8 +849,8 @@ private:
   Stmt* statement();
   Expr* expression(bool no_comma = false, Expr *starting_operand = nullptr);
   Expr* operand();
-  Expr* block_function(Location &loc);
-  Expr* arrow_function(Location &loc, Expr *arguments);
+  Expr* block_function(Loc &loc);
+  Expr* arrow_function(Loc &loc, Expr *arguments);
 
   bool precedes(Token a, Token b) {
     auto i = s_precedence_table.find(a.id());
@@ -971,7 +971,7 @@ private:
     if (!t.is_string() || t.s()[0] == '"' || t.s()[0] == '\'') {
       return nullptr;
     }
-    Location l; read(l);
+    Loc l; read(l);
     auto i = new expr::Identifier(t.s());
     locate(i, l);
     return std::unique_ptr<expr::Identifier>(i);
@@ -1141,7 +1141,7 @@ Stmt* ScriptParser::statement_block() {
 }
 
 Stmt* ScriptParser::statement() {
-  Location l;
+  Loc l;
   auto t = peek();
   switch (t.id()) {
     case Token::ID(";"):
@@ -1234,7 +1234,7 @@ Stmt* ScriptParser::statement() {
           read();
           auto t = peek();
           if (t.id() == Token::ID("function")) {
-            Location func_loc;
+            Loc func_loc;
             read(func_loc);
             auto name = read_identifier();
             auto f = block_function(func_loc);
@@ -1459,7 +1459,7 @@ Stmt* ScriptParser::statement() {
 
 Expr* ScriptParser::expression(bool no_comma, Expr *starting_operand) {
   std::stack<Token> operators;
-  std::stack<Location> locations;
+  std::stack<Loc> locations;
   std::stack<std::unique_ptr<Expr>> operands;
 
   // Do at least once and repeat until stack is empty
@@ -1549,7 +1549,7 @@ Expr* ScriptParser::expression(bool no_comma, Expr *starting_operand) {
 
         // Parse unary operators
         for (;;) {
-          Location l;
+          Loc l;
           auto t = peek();
           if (t == Token::eof) return error(UnexpectedEOF);
           if (t == Token::err) return error(UnknownToken);
@@ -1750,7 +1750,7 @@ Expr* ScriptParser::expression(bool no_comma, Expr *starting_operand) {
 
       // Push the (potentially converted) operator in stack
       if (!is_end) {
-        Location l;
+        Loc l;
         read(l);
         operators.push(t);
         locations.push(l);
@@ -1771,7 +1771,7 @@ Expr* ScriptParser::expression(bool no_comma, Expr *starting_operand) {
 Expr* ScriptParser::operand() {
   auto t = peek();
   if (t.id() == Token::ID("(")) {
-    Location l;
+    Loc l;
     read(l);
     if (read(Token::ID(")"))) {
       if (auto f = arrow_function(l, nullptr)) return f;
@@ -1784,7 +1784,7 @@ Expr* ScriptParser::operand() {
     if (t == Token::eof) return error(UnexpectedEOF);
     if (t == Token::err) return error(UnknownToken);
     if (t.id() != Token::ID(")")) return error(UnexpectedToken);
-    Location loc;
+    Loc loc;
     read(loc);
 
     // Could it be an arrow function?
@@ -1803,7 +1803,7 @@ Expr* ScriptParser::operand() {
   }
 
   if (t.id() == Token::ID("`")) {
-    Location l;
+    Loc l;
     read(l);
     std::list<std::unique_ptr<Expr>> list;
     m_tokenizer.set_template_mode(true);
@@ -1827,7 +1827,7 @@ Expr* ScriptParser::operand() {
         read();
         m_tokenizer.set_template_mode(true);
       } else if (t.is_string()) {
-        Location l;
+        Loc l;
         read(l);
         std::string s(1, '`');
         s += t.s();
@@ -1847,7 +1847,7 @@ Expr* ScriptParser::operand() {
   }
 
   if (t.id() == Token::ID("function")) {
-    Location l;
+    Loc l;
     read(l);
     read_identifier();
     return block_function(l);
@@ -1866,7 +1866,7 @@ Expr* ScriptParser::operand() {
   }
 
   if (t.is_string()) {
-    Location l;
+    Loc l;
     read(l);
     auto start = t.s()[0];
     if (start == '"' || start == '\'') {
@@ -1888,7 +1888,7 @@ Expr* ScriptParser::operand() {
   }
 
   if (t.id() == Token::ID("{")) {
-    Location l;
+    Loc l;
     read(l);
     std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Expr>>> list;
     for (;;) {
@@ -1956,7 +1956,7 @@ Expr* ScriptParser::operand() {
   }
 
   if (t.id() == Token::ID("[")) {
-    Location l;
+    Loc l;
     read(l);
     std::list<std::unique_ptr<Expr>> list;
     for (;;) {
@@ -1983,7 +1983,7 @@ Expr* ScriptParser::operand() {
   return error(UnexpectedToken);
 }
 
-Expr* ScriptParser::block_function(Location &loc) {
+Expr* ScriptParser::block_function(Loc &loc) {
   std::unique_ptr<Expr> arguments;
   if (!read(Token::ID("("), TokenExpected)) return nullptr;
   if (!read(Token::ID(")"))) {
@@ -2000,7 +2000,7 @@ Expr* ScriptParser::block_function(Location &loc) {
   return locate(function(arguments.release(), body.release()), loc);
 }
 
-Expr* ScriptParser::arrow_function(Location &loc, Expr *arguments) {
+Expr* ScriptParser::arrow_function(Loc &loc, Expr *arguments) {
   bool eol = peek_eol();
   if (!read(Token::ID("=>"))) return nullptr;
   if (eol) return error(UnexpectedEOL);
@@ -2053,7 +2053,7 @@ auto Parser::tokenize(const std::string &script) -> std::list<std::string> {
   Token::clear();
   Tokenizer tokenizer(script);
   while (!tokenizer.eof()) {
-    Location loc;
+    Loc loc;
     auto t = tokenizer.read(loc);
     tokens.push_back(t.to_string());
     if (t == Token::err) break;

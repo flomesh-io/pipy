@@ -517,6 +517,8 @@ auto Fiber::data(int i) -> Data* {
 // Context
 //
 
+thread_local Context* Context::s_current = nullptr;
+
 auto Context::Error::where() const -> const Location* {
   for (const auto &loc : backtrace) {
     if (loc.line > 0 && loc.column > 0) {
@@ -649,6 +651,8 @@ void ClassMap::remove(Class *c) {
 // Class
 //
 
+bool Class::s_tracing = false;
+
 Class::Class(
   const std::string &name,
   Class *super,
@@ -693,6 +697,31 @@ Class::~Class() {
     p.first->release();
   }
   if (m_class_map) m_class_map->remove(this);
+}
+
+void Class::trace(Object *obj) {
+  if (s_tracing) {
+    obj->m_traced = true;
+    obj->m_class_prev = m_objects_tail;
+    if (m_objects_tail) {
+      m_objects_tail->m_class_next = obj;
+      m_objects_tail = obj;
+    } else {
+      m_objects_head = obj;
+      m_objects_tail = obj;
+    }
+    if (auto ctx = Context::current()) {
+      if (auto caller = ctx->caller()) {
+        obj->m_location = caller->call_site();
+      }
+    }
+  }
+}
+
+void Class::iterate(const std::function<bool(Object *)> &cb) {
+  for (auto obj = m_objects_head; obj; obj = obj->m_class_next) {
+    if (!cb(obj)) break;
+  }
 }
 
 void Class::assign(Object *obj, Object *src) {
@@ -2067,7 +2096,7 @@ auto Error::name() const -> Str* {
   return s_error;
 }
 
-void Error::backtrace(const std::vector<Context::Location> &bt) {
+void Error::backtrace(const std::vector<Location> &bt) {
   std::string s;
   for (const auto &l : bt) {
     s += "In ";

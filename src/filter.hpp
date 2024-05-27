@@ -85,10 +85,10 @@ public:
 
   auto module_legacy() const -> ModuleBase*;
   auto context() const -> Context*;
-  auto location() const -> const pjs::Context::Location& { return m_location; }
+  auto location() const -> const pjs::Location& { return m_location; }
   auto buffer_stats() const -> std::shared_ptr<BufferStats> { return m_buffer_stats; }
 
-  void set_location(const pjs::Context::Location &loc);
+  void set_location(const pjs::Location &loc);
   void add_sub_pipeline(PipelineLayout *layout);
   void add_sub_pipeline(pjs::Str *name);
   void add_sub_pipeline(int index);
@@ -147,7 +147,7 @@ private:
 
   PipelineLayout* m_pipeline_layout = nullptr;
   Pipeline* m_pipeline = nullptr;
-  pjs::Context::Location m_location;
+  pjs::Location m_location;
 
   virtual void on_event(Event *evt) override;
 
