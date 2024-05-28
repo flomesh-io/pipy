@@ -85,25 +85,27 @@ void Wait::process(Event *evt) {
   if (m_fulfilled) {
     output(evt);
 
-  } else {
+  } else if (!m_promise_callback) {
     pjs::Value ret;
     if (!callback(m_condition, 0, nullptr, ret)) return;
-    if (!ret.is_promise()) {
-      Filter::error("callback did not return a Promise");
-      return;
+    if (ret.is_promise()) {
+      auto cb = PromiseCallback::make(this);
+      ret.as<pjs::Promise>()->then(nullptr, cb->resolved(), cb->rejected());
+      m_promise_callback = cb;
+    } else if (ret.to_boolean()) {
+      fulfill();
+      Filter::output(evt);
     }
 
-    auto cb = PromiseCallback::make(this);
-    ret.as<pjs::Promise>()->then(nullptr, cb->resolved(), cb->rejected());
-    m_promise_callback = cb;
-
-    if (m_buffer.empty() && m_options.timeout > 0) {
-      m_timer.schedule(
-        m_options.timeout,
-        [=]() { fulfill(); }
-      );
+    if (!m_fulfilled) {
+      if (m_buffer.empty() && m_options.timeout > 0) {
+        m_timer.schedule(
+          m_options.timeout,
+          [=]() { fulfill(); }
+        );
+      }
+      m_buffer.push(evt);
     }
-    m_buffer.push(evt);
   }
 }
 
@@ -113,7 +115,7 @@ void Wait::fulfill() {
     m_fulfilled = true;
     m_buffer.flush(
       [this](Event *evt) {
-        output(evt);
+        Filter::output(evt);
       }
     );
   }
