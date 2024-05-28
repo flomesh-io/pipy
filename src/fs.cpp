@@ -33,7 +33,9 @@
 
 #else // !_WIN32
 
+#include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <limits.h>
 #include <dirent.h>
@@ -139,7 +141,11 @@ auto current_dir() -> std::string {
 }
 
 void change_dir(const std::string &filename) {
-  chdir(filename.c_str());
+  if (chdir(filename.c_str())) {
+    auto err = errno;
+    auto msg = std::string(strerror(err)) + ", errno = " + std::to_string(err);
+    throw std::runtime_error(msg);
+  }
 }
 
 bool remove_dir(const std::string &filename) {

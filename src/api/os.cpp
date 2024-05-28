@@ -290,6 +290,17 @@ template<> void ClassDef<OS>::init() {
     ret.set(OS::home());
   });
 
+  // os.chdir
+  method("chdir", [](Context &ctx, Object*, Value &ret) {
+    Str *pathname;
+    if (!ctx.arguments(1, &pathname)) return;
+    try {
+      fs::change_dir(pathname->str());
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // os.abspath
   method("abspath", [](Context &ctx, Object*, Value &ret) {
     Str *pathname;
