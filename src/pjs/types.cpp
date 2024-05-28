@@ -2496,6 +2496,18 @@ void Promise::Then::execute(Context *ctx, State state, const Value &result) {
     return;
   }
 
+  if (m_on_finally) {
+    Value val;
+    (*m_on_finally)(*ctx, 0, nullptr, val);
+    if (!ctx->ok()) {
+      m_promise->settle(REJECTED, ctx->error().value);
+      ctx->reset();
+      return;
+    } else if (val.is_promise() && val.as<Promise>()->is_rejected()) {
+      ret = val;
+    }
+  }
+
   if (ret.is<Promise>()) {
     auto promise = ret.as<Promise>();
     switch (promise->m_state) {

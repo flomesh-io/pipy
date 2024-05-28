@@ -3045,6 +3045,13 @@ public:
   static auto any(Array *promises) -> Promise*;
   static auto race(Array *promises) -> Promise*;
 
+  auto state() const -> State { return m_state; }
+  auto result() const -> const Value& { return m_result; }
+  bool is_resolved() const { return m_state == RESOLVED; }
+  bool is_rejected() const { return m_state == REJECTED; }
+  bool is_pending() const { return m_state == PENDING; }
+  bool is_settled() const { return m_state == RESOLVED || m_state == REJECTED; }
+
   auto then(
     Context *context,
     const Value &on_resolved,
