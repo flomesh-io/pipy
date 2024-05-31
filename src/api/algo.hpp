@@ -371,8 +371,8 @@ public:
   };
 
   void provision(pjs::Context &ctx, pjs::Array *targets);
-  auto schedule(int size, Cache *exclusive = nullptr) -> pjs::Array*;
-  auto allocate(pjs::Context &ctx, const pjs::Value &tag = pjs::Value::undefined, Cache *exclusive = nullptr) -> Resource*;
+  auto schedule(pjs::Context &ctx, int size, pjs::Function *validator = nullptr) -> pjs::Array*;
+  auto allocate(pjs::Context &ctx, const pjs::Value &tag = pjs::Value::undefined, pjs::Function *validator = nullptr) -> Resource*;
 
 private:
   LoadBalancer(const Options &options)
@@ -383,7 +383,7 @@ private:
   std::vector<pjs::Ref<Pool>> m_pools;
   List<Pool> m_queue;
 
-  auto next(Cache *exclusive) -> Pool*;
+  auto next(const std::function<bool(const pjs::Value &)> &validator) -> Pool*;
   void increase_load(Pool *pool);
   void decrease_load(Pool *pool);
   void sort_forward(List<Pool> &queue, Pool *pool);

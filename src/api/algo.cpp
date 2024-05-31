@@ -717,18 +717,27 @@ void LoadBalancer::provision(pjs::Context &ctx, pjs::Array *targets) {
   }
 }
 
-auto LoadBalancer::schedule(int size, Cache *exclusive) -> pjs::Array* {
+auto LoadBalancer::schedule(pjs::Context &ctx, int size, pjs::Function *validator) -> pjs::Array* {
   if (size < 0) return nullptr;
+  std::function<bool(const pjs::Value &)> f;
+  if (validator) {
+    f = [&](const pjs::Value &target) {
+      pjs::Value arg(target), ret;
+      (*validator)(ctx, 1, &arg, ret);
+      if (!ctx.ok()) return false;
+      return ret.to_boolean();
+    };
+  }
   auto a = pjs::Array::make(size);
   for (int i = 0; i < size; i++) {
-    if (auto p = next(exclusive)) {
+    if (auto p = next(f)) {
       a->set(i, p->target);
     }
   }
   return a;
 }
 
-auto LoadBalancer::allocate(pjs::Context &ctx, const pjs::Value &tag, Cache *exclusive) -> Resource* {
+auto LoadBalancer::allocate(pjs::Context &ctx, const pjs::Value &tag, pjs::Function *validator) -> Resource* {
   auto cached = !tag.is_undefined() && m_options.session_cache;
   if (cached) {
     pjs::Value val;
@@ -739,16 +748,25 @@ auto LoadBalancer::allocate(pjs::Context &ctx, const pjs::Value &tag, Cache *exc
       }
     }
   }
-  auto p = next(exclusive);
+  std::function<bool(const pjs::Value &)> f;
+  if (validator) {
+    f = [&](const pjs::Value &target) {
+      pjs::Value arg(target), ret;
+      (*validator)(ctx, 1, &arg, ret);
+      if (!ctx.ok()) return false;
+      return ret.to_boolean();
+    };
+  }
+  auto p = next(f);
   if (!p) return nullptr;
   if (cached) m_options.session_cache->set(tag, p->key);
   return p->allocate();
 }
 
-auto LoadBalancer::next(Cache *exclusive) -> Pool* {
+auto LoadBalancer::next(const std::function<bool(const pjs::Value &)> &validator) -> Pool* {
   pjs::Value val;
   for (auto p = m_queue.head(); p; p = p->next()) {
-    if (p->weight > 0 && (!exclusive || !exclusive->find(p->key, val))) {
+    if (p->weight > 0 && (!validator || validator(p->target))) {
       increase_load(p);
       return p;
     }
@@ -1590,16 +1608,16 @@ template<> void ClassDef<LoadBalancer>::init() {
 
   method("schedule", [](Context &ctx, Object *obj, Value &ret) {
     int size;
-    Cache *exclusive = nullptr;
-    if (!ctx.arguments(1, &size, &exclusive)) return;
-    ret.set(obj->as<LoadBalancer>()->schedule(size, exclusive));
+    Function *validator = nullptr;
+    if (!ctx.arguments(1, &size, &validator)) return;
+    ret.set(obj->as<LoadBalancer>()->schedule(ctx, size, validator));
   });
 
   method("allocate", [](Context &ctx, Object *obj, Value &ret) {
     Value tag;
-    Cache *exclusive = nullptr;
-    if (!ctx.arguments(0, &tag, &exclusive)) return;
-    ret.set(obj->as<LoadBalancer>()->allocate(ctx, tag, exclusive));
+    Function *validator = nullptr;
+    if (!ctx.arguments(0, &tag, &validator)) return;
+    ret.set(obj->as<LoadBalancer>()->allocate(ctx, tag, validator));
   });
 }
 
