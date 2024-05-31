@@ -60,6 +60,7 @@ public:
   void set(pjs::Context &ctx, const pjs::Value &key, const pjs::Value &value);
   bool get(const pjs::Value &key, pjs::Value &value);
   void set(const pjs::Value &key, const pjs::Value &value);
+  bool has(const pjs::Value &key);
   bool find(const pjs::Value &key, pjs::Value &value);
   bool remove(const pjs::Value &key);
   bool remove(pjs::Context &ctx, const pjs::Value &key);

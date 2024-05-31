@@ -108,6 +108,11 @@ void Cache::set(const pjs::Value &key, const pjs::Value &value) {
   set(key, value, nullptr);
 }
 
+bool Cache::has(const pjs::Value &key) {
+  pjs::Value value;
+  return find(key, value);
+}
+
 bool Cache::find(const pjs::Value &key, pjs::Value &value) {
   Entry entry;
   bool found = m_cache->use(key, entry);
@@ -1455,6 +1460,12 @@ template<> void ClassDef<Cache>::init() {
     Value key, val;
     if (!ctx.arguments(2, &key, &val)) return;
     obj->as<Cache>()->set(ctx, key, val);
+  });
+
+  method("has", [](Context &ctx, Object *obj, Value &ret) {
+    Value key;
+    if (!ctx.arguments(1, &key)) return;
+    ret.set(obj->as<Cache>()->has(key));
   });
 
   method("find", [](Context &ctx, Object *obj, Value &ret) {
