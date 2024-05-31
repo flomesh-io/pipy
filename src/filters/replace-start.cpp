@@ -51,7 +51,7 @@ auto ReplaceStart::clone() -> Filter* {
 }
 
 void ReplaceStart::reset() {
-  Filter::reset();
+  Replace::reset();
   m_started = false;
 }
 

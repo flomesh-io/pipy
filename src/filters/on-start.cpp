@@ -51,7 +51,7 @@ auto OnStart::clone() -> Filter* {
 }
 
 void OnStart::reset() {
-  Filter::reset();
+  Handle::reset();
   m_started = false;
 }
 

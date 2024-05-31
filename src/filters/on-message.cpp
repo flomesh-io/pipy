@@ -58,7 +58,7 @@ auto OnMessage::clone() -> Filter* {
 }
 
 void OnMessage::reset() {
-  Filter::reset();
+  Handle::reset();
   m_start = nullptr;
   m_body_buffer.clear();
 }
