@@ -648,9 +648,6 @@ LoadBalancer::Options::Options(pjs::Object *options) {
     .get(capacity)
     .get(capacity_f)
     .check_nullable();
-  Value(options, "sessionCache")
-    .get(session_cache)
-    .check_nullable();
 }
 
 void LoadBalancer::provision(pjs::Context &ctx, pjs::Array *targets) {
@@ -742,17 +739,7 @@ auto LoadBalancer::schedule(pjs::Context &ctx, int size, pjs::Function *validato
   return a;
 }
 
-auto LoadBalancer::allocate(pjs::Context &ctx, const pjs::Value &tag, pjs::Function *validator) -> Resource* {
-  auto cached = !tag.is_undefined() && m_options.session_cache;
-  if (cached) {
-    pjs::Value val;
-    if (m_options.session_cache->get(tag, val)) {
-      auto p = m_targets.find(val);
-      if (p != m_targets.end()) {
-        return p->second->allocate();
-      }
-    }
-  }
+auto LoadBalancer::allocate(pjs::Context &ctx, const pjs::Value &key, pjs::Function *validator) -> Resource* {
   std::function<bool(const pjs::Value &)> f;
   if (validator) {
     f = [&](const pjs::Value &target) {
@@ -762,9 +749,18 @@ auto LoadBalancer::allocate(pjs::Context &ctx, const pjs::Value &tag, pjs::Funct
       return ret.to_boolean();
     };
   }
+
+  if (!key.is_nullish()) {
+    auto p = m_targets.find(key);
+    if (p != m_targets.end()) {
+      if (!f || f(p->second->target)) {
+        return p->second->allocate();
+      }
+    }
+  }
+
   auto p = next(f);
   if (!p) return nullptr;
-  if (cached) m_options.session_cache->set(tag, p->key);
   return p->allocate();
 }
 
@@ -1796,9 +1792,9 @@ template<> void ClassDef<ResourcePool>::init() {
   });
 
   method("allocate", [](Context &ctx, Object *obj, Value &ret) {
-    Value tag;
-    if (!ctx.arguments(0, &tag)) return;
-    obj->as<ResourcePool>()->allocate(ctx, tag, ret);
+    Value target_key;
+    if (!ctx.arguments(0, &target_key)) return;
+    obj->as<ResourcePool>()->allocate(ctx, target_key, ret);
   });
 
   method("free", [](Context &ctx, Object *obj, Value &ret) {
