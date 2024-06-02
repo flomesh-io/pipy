@@ -133,6 +133,8 @@ private:
 template<class T>
 class RefCountMT {
 public:
+  int ref_count() const { return m_refs.load(); }
+
   auto retain() -> T* {
     m_refs.fetch_add(1, std::memory_order_relaxed);
     return static_cast<T*>(this);

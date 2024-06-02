@@ -146,6 +146,7 @@ public:
     );
     ~Counter();
 
+    Net& m_net;
     std::string m_key;
     std::atomic<double> m_initial_value;
     std::atomic<double> m_maximum_value;
@@ -159,6 +160,7 @@ public:
 
     void schedule_producing();
     void on_produce();
+    void finalize();
 
     static std::map<std::string, Counter*> m_counter_map;
     static std::mutex m_counter_map_mutex;

@@ -375,7 +375,8 @@ Quota::Counter::Counter(
   double produce_value,
   double produce_cycle
 )
-  : m_key(key)
+  : m_net(Net::current())
+  , m_key(key)
   , m_initial_value(initial_value)
   , m_maximum_value(maximum_value)
   , m_produce_value(produce_value)
@@ -402,8 +403,10 @@ auto Quota::Counter::get(
   auto i = m_counter_map.find(key);
   if (i != m_counter_map.end()) {
     auto p = i->second;
-    p->init(initial_value, maximum_value, produce_value, produce_cycle);
-    return p;
+    if (p->ref_count() > 0) {
+      p->init(initial_value, maximum_value, produce_value, produce_cycle);
+      return p;
+    }
   }
   return new Counter(key, initial_value, maximum_value, produce_value, produce_cycle);
 }
@@ -469,20 +472,26 @@ void Quota::Counter::schedule_producing() {
   bool expected_state = false;
   if (m_produce_cycle <= 0) return;
   if (!m_is_producing_scheduled.compare_exchange_strong(expected_state, true)) return;
-  m_timer.schedule(
-    m_produce_cycle, [this]() {
-      m_is_producing_scheduled.store(false);
-      auto old = m_current_value.load();
-      for (;;) {
-        if (0 < m_produce_value && m_produce_value < m_initial_value - old) {
-          if (!m_current_value.compare_exchange_weak(old, old + m_produce_value)) continue;
-          schedule_producing();
-        } else {
-          if (!m_current_value.compare_exchange_weak(old, m_initial_value)) continue;
+  retain();
+  m_net.post(
+    [this]() {
+      m_timer.schedule(
+        m_produce_cycle, [this]() {
+          m_is_producing_scheduled.store(false);
+          auto old = m_current_value.load();
+          for (;;) {
+            if (0 < m_produce_value && m_produce_value < m_initial_value - old) {
+              if (!m_current_value.compare_exchange_weak(old, old + m_produce_value)) continue;
+              schedule_producing();
+            } else {
+              if (!m_current_value.compare_exchange_weak(old, m_initial_value)) continue;
+            }
+            on_produce();
+            break;
+          }
         }
-        on_produce();
-        break;
-      }
+      );
+      release();
     }
   );
 }
@@ -490,6 +499,12 @@ void Quota::Counter::schedule_producing() {
 void Quota::Counter::on_produce() {
   std::lock_guard<std::mutex> lock(m_quotas_mutex);
   for (auto quota : m_quotas) quota->on_produce_async();
+}
+
+void Quota::Counter::finalize() {
+  m_net.post([this]() {
+    delete this;
+  });
 }
 
 //
