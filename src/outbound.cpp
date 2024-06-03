@@ -137,7 +137,8 @@ void Outbound::input(Event *evt) {
 
 void Outbound::error(StreamEnd::Error err) {
   m_error = err;
-  input(StreamEnd::make(err));
+  pjs::Ref<StreamEnd> eos(StreamEnd::make(err));
+  input(eos);
   state(State::closed);
 }
 
