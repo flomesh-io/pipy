@@ -52,6 +52,7 @@ void print(int argc, const pjs::Value argv[]) {
     auto len = std::get<1>(c);
     std::cout.write(ptr, len);
   }
+  std::cout.flush();
 }
 
 void println(int argc, const pjs::Value argv[]) {
@@ -65,6 +66,7 @@ void println(int argc, const pjs::Value argv[]) {
     auto len = std::get<1>(c);
     std::cout.write(ptr, len);
   }
+  std::cout.flush();
 }
 
 } // namespace pipy
