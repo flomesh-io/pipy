@@ -85,16 +85,18 @@ void Wait::process(Event *evt) {
   if (m_fulfilled) {
     output(evt);
 
-  } else if (!m_promise_callback) {
-    pjs::Value ret;
-    if (!callback(m_condition, 0, nullptr, ret)) return;
-    if (ret.is_promise()) {
-      auto cb = PromiseCallback::make(this);
-      ret.as<pjs::Promise>()->then(nullptr, cb->resolved(), cb->rejected());
-      m_promise_callback = cb;
-    } else if (ret.to_boolean()) {
-      fulfill();
-      Filter::output(evt);
+  } else {
+    if (!m_promise_callback) {
+      pjs::Value ret;
+      if (!callback(m_condition, 0, nullptr, ret)) return;
+      if (ret.is_promise()) {
+        auto cb = PromiseCallback::make(this);
+        ret.as<pjs::Promise>()->then(nullptr, cb->resolved(), cb->rejected());
+        m_promise_callback = cb;
+      } else if (ret.to_boolean()) {
+        fulfill();
+        Filter::output(evt);
+      }
     }
 
     if (!m_fulfilled) {
