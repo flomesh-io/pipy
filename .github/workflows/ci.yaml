@@ -7,6 +7,8 @@ on:
       - '*'
     branches:
       - main
+    paths-ignore:
+      - .github/workflows/ci.yaml
 
 env:
   IMAGE: flomesh/pipy
@@ -537,7 +539,7 @@ jobs:
       - aarch64-macos
       - android
       - create-release
-    if: ${{ always() && !contains(join(needs.*.result, ','), 'failure') && !contains(needs.x86-binary.result, 'skipped')}}
+    if: ${{ always() && !contains(join(needs.*.result, ','), 'failure') && !contains(needs.x86-binary.result, 'cancelled')}}
     steps:
       - name: Save log
         uses: peter-evans/repository-dispatch@v3
