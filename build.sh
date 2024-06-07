@@ -15,7 +15,7 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
   PHYS_DIR=$(pwd -P)
   RESULT=$PHYS_DIR/$TARGET_FILE
   PIPY_DIR=$(dirname $RESULT)
-  OS_NAME=darwin
+  OS_NAME=macos
 fi
 
 # Number of processors to build.
@@ -25,6 +25,7 @@ __NPROC=${NPROC:-$(getconf _NPROCESSORS_ONLN)}
 BUILD_CONTAINER=false
 BUILD_RPM=false
 BUILD_BINARY=true
+BUILD_ANDROID=false
 BUILD_TYPE=Release
 PACKAGE_OUTPUTS=false
 
@@ -36,16 +37,17 @@ PKG_NAME=${PKG_NAME:-pipy}
 PIPY_STATIC=OFF
 PIPY_GUI=${PIPY_GUI:-OFF}
 
-OS_ARCH=$(uname -m)
+OS_ARCH=$(uname -m | sed 's#arm64#aarch64#g')
 ##### End Default environment variables #########
 
-SHORT_OPTS="crsgt:nhpd"
+SHORT_OPTS="crsgt:nhpda"
 
 function usage() {
     echo "Usage: $0 [-h|-c|-r|-s|-g|-n|-t <version-revision>]" 1>&2
     echo "       -h                     Show this help message"
     echo "       -t <version-revision>  Specify the release version (should be one of the release tags, e.g. 0.2.0-15)"
     echo "       -c                     Build a container image"
+    echo "       -a                     Build a android binary"
     echo "       -r                     Build a CentOS/RHEL RPM package"
     echo "       -n                     Build a stand-alone executable (default: yes)"
     echo "       -d                     Build with debugging information (default: no)"
@@ -92,6 +94,10 @@ while true ; do
       ;;
     -d)
       BUILD_TYPE="Debug"
+      shift
+      ;;
+    -a)
+      BUILD_ANDROID=true
       shift
       ;;
     -h)
@@ -162,7 +168,11 @@ function __build_deps_check() {
   elif [ ! -z $(command -v cmake) ]; then
     export CMAKE=cmake
   fi
-  clang --version 2>&1 > /dev/null && clang++ --version 2>&1 > /dev/null && export __CLANG_EXIST=true
+
+  export CC=${CC:-clang}
+  export CXX=${CXX:-clang++}
+
+  $CC --version 2>&1 > /dev/null && $CXX --version 2>&1 > /dev/null && export __CLANG_EXIST=true
   if [ "x"$CMAKE = "x" ] || ! $__CLANG_EXIST ; then echo "Command \`cmake\` or \`clang\` not found." && exit -1; fi
   __NODE_VERSION=`node --version 2> /dev/null`
   version_compare "v12" "$__NODE_VERSION"
@@ -175,10 +185,7 @@ function __build_deps_check() {
 
 function build() {
   __build_deps_check
-  cd ${PIPY_DIR}
 
-  export CC=clang
-  export CXX=clang++
   cd ${PIPY_DIR}
   if [ $PIPY_GUI == "ON" ] ; then
     npm install
@@ -269,5 +276,64 @@ if $BUILD_CONTAINER; then
       exit -1
     fi
     docker save ${IMAGE}:$IMAGE_TAG | gzip > ${IMAGE##flomesh/}-${IMAGE_TAG}-alpine-${OS_ARCH}.tar.gz
+  fi
+fi
+
+if $BUILD_ANDROID; then
+  cd $PIPY_DIR
+
+  if [ -z "$NDK"  ] || [ ! -f "$NDK/build/cmake/android.toolchain.cmake" ]
+  then
+    echo "Can't find NDK, exists..."
+    exit 1
+  fi
+
+  export ANDROID_NDK_ROOT=$NDK
+
+  cd $PIPY_DIR/deps/openssl-3.2.0
+
+  mkdir -p android && cd android
+
+  ANDROID_TARGET_API=34
+  ANDROID_TARGET_ABI=arm64-v8a
+
+  OUTPUT=${PWD}/${ANDROID_TARGET_ABI}
+
+  PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+  ../config android-arm64 -D__ANDROID_API__=${ANDROID_TARGET_API} -static no-asm no-shared no-tests --prefix=${OUTPUT}
+
+  make
+  make install_sw
+
+  cd $PIPY_DIR
+  rm -rf build && mkdir build
+  cd $PIPY_DIR/build
+
+  cmake -DCMAKE_TOOLCHAIN_FILE=${NDK}/build/cmake/android.toolchain.cmake \
+    -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-34 -DCMAKE_ANDROID_STL_TYPE=c++_static \
+    -DANDROID_ALLOW_UNDEFINED_SYMBOLS=TRUE \
+    -DPIPY_OPENSSL=${PIPY_DIR}/deps/openssl-3.2.0/android/arm64-v8a  \
+    -DPIPY_USE_SYSTEM_ZLIB=ON \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_FLAGS_RELEASE=-g0 \
+    -DPIPY_LTO=OFF -DPIPY_GUI=OFF -DPIPY_CODEBASES=OFF \
+    -DZLIB_LIBRARY=/usr/lib/x86_64-linux-gnu/libz.a -DZLIB_INCLUDE_DIR=/usr/lib/x86_64-linux-gnu -GNinja ..
+
+  ninja || exit $?
+
+  if $PACKAGE_OUTPUTS; then
+    cd $PIPY_DIR
+
+    test -d usr/local/lib || mkdir -p usr/local/lib
+    test -d usr/local/bin || mkdir -p usr/local/bin
+
+    cp $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so usr/local/lib
+    cp bin/pipy usr/local/bin/pipy
+
+    tar zcvf \
+      ${PKG_NAME}-${RELEASE_VERSION}-android-${ANDROID_TARGET_ABI/-/_}.tar.gz \
+      usr/local/lib/libc++_shared.so \
+      usr/local/bin/pipy
   fi
 fi

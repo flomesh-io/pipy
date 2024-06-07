@@ -7,6 +7,8 @@ on:
       - '*'
     branches:
       - main
+    paths-ignore:
+      - .github/workflows/ci.yaml
 
 env:
   IMAGE: flomesh/pipy
@@ -16,16 +18,13 @@ env:
 defaults:
   run:
     shell: bash
-    working-directory: pipy
 
 jobs:
   set-release-version:
     name: set-release-version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          path: pipy
+      - uses: actions/checkout@v4
 
       - name: Set RELEASE_VERSION
         id: version
@@ -57,16 +56,10 @@ jobs:
     name: x86-binary
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v3
-        with:
-          path: pipy
+      - uses: actions/checkout@v4
 
       - name: Show envs
         run: export
-
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16
 
       - name: Build
         id: build
@@ -101,6 +94,12 @@ jobs:
             s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/binary/${{steps.build.outputs.artifact_name}}
           fi
 
+      - name: Upload artifact to workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{steps.build.outputs.artifact_name}}
+          path: ${{steps.build.outputs.artifact_name}}
+
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
       arch: ${{steps.build.outputs.arch}}
@@ -110,12 +109,10 @@ jobs:
     name: x86-alpine-docker
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          path: pipy
+      - uses: actions/checkout@v4
 
       - name: Setup buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Show envs
         run: export
@@ -162,16 +159,10 @@ jobs:
     name: aarch64-binary
     runs-on: [self-hosted, arm64]
     steps:
-      - uses: actions/checkout@v3
-        with:
-          path: pipy
+      - uses: actions/checkout@v4
 
       - name: Show envs
         run: export
-
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16
 
       - name: Build
         id: build
@@ -205,6 +196,12 @@ jobs:
             s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/binary/${{steps.build.outputs.artifact_name}}
           fi
 
+      - name: Upload artifact to workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{steps.build.outputs.artifact_name}}
+          path: ${{steps.build.outputs.artifact_name}}
+
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
       arch: ${{steps.build.outputs.arch}}
@@ -214,12 +211,10 @@ jobs:
     name: aarch64-alpine-docker
     runs-on: [self-hosted, arm64]
     steps:
-      - uses: actions/checkout@v3
-        with:
-          path: pipy
+      - uses: actions/checkout@v4
 
       - name: Setup buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Show envs
         run: export
@@ -266,9 +261,7 @@ jobs:
     name: x86-rpm
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          path: pipy
+      - uses: actions/checkout@v4
 
       - name: Show envs
         run: export
@@ -306,9 +299,231 @@ jobs:
             s3cmd put rpm/${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/rpm/${TARGET_FILE_NAME}
           fi
 
+      - name: Upload artifact to workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{steps.build.outputs.artifact_name}}
+          path: rpm/${{steps.build.outputs.artifact_name}}
+
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
       arch: ${{steps.build.outputs.arch}}
+
+  x86-macos:
+    needs: set-release-version
+    name: x86-macos
+    runs-on: macos-13
+    if: ${{ !contains(needs.set-release-version.outputs.release_version, 'nightly') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show envs
+        run: export
+
+      - name: Build
+        id: build
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+        run: |
+          set -x
+          export CC=$(brew --prefix llvm@15)/bin/clang
+          export CXX=$(brew --prefix llvm@15)/bin/clang++
+          ./build.sh -p -t ${RELEASE_VERSION}
+          ls -l
+          echo "artifact_name=$(ls *${RELEASE_VERSION}*.tar.gz)" >> $GITHUB_OUTPUT
+          echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
+
+      - name: Setup s3cmd
+        run: |
+          brew install s3cmd
+          cat > $HOME/.s3cfg << EOF
+          bucket_location = ${{ secrets.S3_REGION }}
+          host_base = ${{ secrets.S3_GLOBAL_ACC_HOST_BASE }}
+          host_bucket = %(bucket)s.${{ secrets.S3_GLOBAL_ACC_HOST_BASE}}
+          access_key = ${{ secrets.S3_ACCESS_KEY }}
+          secret_key = ${{ secrets.S3_SECRET_KEY }}
+          EOF
+
+      - name: Upload artifacts
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+        run: |
+          if [[ "$RELEASE_VERSION" == "nightly"* ]]
+          then
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}-nightly/$(uname -m)/binary/${{steps.build.outputs.artifact_name}}
+          else
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/binary/${{steps.build.outputs.artifact_name}}
+          fi
+
+      - name: Upload artifact to workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{steps.build.outputs.artifact_name}}
+          path: ${{steps.build.outputs.artifact_name}}
+
+    outputs:
+      artifact_name: ${{steps.build.outputs.artifact_name}}
+      arch: ${{steps.build.outputs.arch}}
+
+  aarch64-macos:
+    needs: set-release-version
+    name: aarch64-macos
+    runs-on: macos-latest
+    if: ${{ !contains(needs.set-release-version.outputs.release_version, 'nightly') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show envs
+        run: export
+
+      - name: Build
+        id: build
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+        run: |
+          set -x
+          export CC=$(brew --prefix llvm@15)/bin/clang
+          export CXX=$(brew --prefix llvm@15)/bin/clang++
+          ./build.sh -p -t ${RELEASE_VERSION}
+          ls -l
+          echo "artifact_name=$(ls *${RELEASE_VERSION}*.tar.gz)" >> $GITHUB_OUTPUT
+          echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
+
+      - name: Setup s3cmd
+        run: |
+          brew install s3cmd
+          cat > $HOME/.s3cfg << EOF
+          bucket_location = ${{ secrets.S3_REGION }}
+          host_base = ${{ secrets.S3_GLOBAL_ACC_HOST_BASE }}
+          host_bucket = %(bucket)s.${{ secrets.S3_GLOBAL_ACC_HOST_BASE}}
+          access_key = ${{ secrets.S3_ACCESS_KEY }}
+          secret_key = ${{ secrets.S3_SECRET_KEY }}
+          EOF
+
+      - name: Upload artifacts
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+        run: |
+          if [[ "$RELEASE_VERSION" == "nightly"* ]]
+          then
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}-nightly/aarch64/binary/${{steps.build.outputs.artifact_name}}
+          else
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/aarch64/binary/${{steps.build.outputs.artifact_name}}
+          fi
+
+      - name: Upload artifact to workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{steps.build.outputs.artifact_name}}
+          path: ${{steps.build.outputs.artifact_name}}
+
+    outputs:
+      artifact_name: ${{steps.build.outputs.artifact_name}}
+      arch: ${{steps.build.outputs.arch}}
+
+  android:
+    needs: set-release-version
+    name: android
+    runs-on: ubuntu-latest
+    if: ${{ !contains(needs.set-release-version.outputs.release_version, 'nightly') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r26c
+
+      - uses: seanmiddleditch/gha-setup-ninja@v4
+        id: setup-ninja
+        with:
+          version: 1.11.1
+
+      - name: Show envs
+        run: export
+
+      - name: Build
+        id: build
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+          NDK: "${{ steps.setup-ndk.outputs.ndk-path }}"
+        run: |
+          set -x
+          ./build.sh -nap
+          ls -al
+          echo "artifact_name=$(ls *${RELEASE_VERSION}*.tar.gz)" >> $GITHUB_OUTPUT
+          echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
+
+      - name: Setup s3cmd
+        run: |
+          sudo apt-get install -y s3cmd
+          cat > $HOME/.s3cfg << EOF
+          bucket_location = ${{ secrets.S3_REGION }}
+          host_base = ${{ secrets.S3_GLOBAL_ACC_HOST_BASE }}
+          host_bucket = %(bucket)s.${{ secrets.S3_GLOBAL_ACC_HOST_BASE}}
+          access_key = ${{ secrets.S3_ACCESS_KEY }}
+          secret_key = ${{ secrets.S3_SECRET_KEY }}
+          EOF
+
+      - name: Upload artifacts
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+        run: |
+          if [[ "$RELEASE_VERSION" == "nightly"* ]]
+          then
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}-nightly/arm64-v8a/binary/${{steps.build.outputs.artifact_name}}
+          else
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/arm64-v8a/binary/${{steps.build.outputs.artifact_name}}
+          fi
+
+      - name: Upload artifact to workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{steps.build.outputs.artifact_name}}
+          path: ${{steps.build.outputs.artifact_name}}
+
+    outputs:
+      artifact_name: ${{steps.build.outputs.artifact_name}}
+      arch: ${{steps.build.outputs.arch}}
+
+  create-release:
+    name: create release
+    runs-on: ubuntu-latest
+    if: ${{ !contains(needs.set-release-version.outputs.release_version, 'nightly') }}
+    needs:
+      - set-release-version
+      - x86-binary
+      - aarch64-binary
+      - x86-alpine-docker
+      - aarch64-alpine-docker
+      - x86-rpm
+      - x86-macos
+      - aarch64-macos
+      - android
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Check downloads
+        run: |
+          ls -alR
+
+      - name: Create draft release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            ${{ needs.x86-binary.outputs.artifact_name }}/${{ needs.x86-binary.outputs.artifact_name }}
+            ${{ needs.x86-rpm.outputs.artifact_name }}/${{ needs.x86-rpm.outputs.artifact_name }}
+            ${{ needs.x86-macos.outputs.artifact_name }}/${{ needs.x86-macos.outputs.artifact_name }}
+            ${{ needs.aarch64-binary.outputs.artifact_name }}/${{ needs.aarch64-binary.outputs.artifact_name }}
+            ${{ needs.aarch64-macos.outputs.artifact_name }}/${{ needs.aarch64-macos.outputs.artifact_name }}
+            ${{ needs.android.outputs.artifact_name }}/${{ needs.android.outputs.artifact_name }}
 
   save-log:
     name: save log
@@ -320,22 +535,30 @@ jobs:
       - x86-alpine-docker
       - aarch64-alpine-docker
       - x86-rpm
+      - x86-macos
+      - aarch64-macos
+      - android
+      - create-release
+    if: ${{ always() && !contains(join(needs.*.result, ','), 'failure') && !contains(needs.x86-binary.result, 'cancelled')}}
     steps:
       - name: Save log
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v3
         with:
           token:  ${{ secrets.REPO_DISPATCH_PAT }}
           repository: ${{ secrets.REPO_FOR_LOG }}
           event-type: save-log
           client-payload: |
             {
-                "github": ${{toJSON(github)}},
-                "release_version": "${{needs.set-release-version.outputs.release_version}}",
-                "artifacts": [
-                  { "type": "rpm", "arch": "${{needs.x86-rpm.outputs.arch}}", "name": "${{ needs.x86-rpm.outputs.artifact_name }}" },
-                  { "type": "binary", "arch": "${{needs.x86-binary.outputs.arch}}", "name": "${{ needs.x86-binary.outputs.artifact_name }}" },
-                  { "type": "binary", "arch": "${{needs.aarch64-binary.outputs.arch}}", "name": "${{ needs.aarch64-binary.outputs.artifact_name }}" },
-                  { "type": "image", "arch": "${{needs.x86-alpine-docker.outputs.arch}}", "name": "${{ needs.x86-alpine-docker.outputs.artifact_name }}" },
-                  { "type": "image", "arch": "${{needs.aarch64-alpine-docker.outputs.arch}}", "name": "${{ needs.aarch64-alpine-docker.outputs.artifact_name }}" }
-                ]
-             }
+               "github": ${{toJSON(github)}},
+               "release_version": "${{needs.set-release-version.outputs.release_version}}",
+               "artifacts": [
+                 { "type": "rpm", "arch": "${{needs.x86-rpm.outputs.arch}}", "name": "${{ needs.x86-rpm.outputs.artifact_name }}" },
+                 { "type": "binary", "arch": "${{needs.x86-binary.outputs.arch}}", "name": "${{ needs.x86-binary.outputs.artifact_name }}" },
+                 { "type": "binary", "arch": "${{needs.aarch64-binary.outputs.arch}}", "name": "${{ needs.aarch64-binary.outputs.artifact_name }}" },
+                 { "type": "binary", "arch": "${{needs.x86-macos.outputs.arch}}", "name": "${{ needs.x86-macos.outputs.artifact_name }}" },
+                 { "type": "binary", "arch": "${{needs.aarch64-macos.outputs.arch}}", "name": "${{ needs.aarch64-macos.outputs.artifact_name }}" },
+                 { "type": "binary", "arch": "${{needs.android.outputs.arch}}", "name": "${{ needs.android.outputs.artifact_name }}" },
+                 { "type": "image", "arch": "${{needs.x86-alpine-docker.outputs.arch}}", "name": "${{ needs.x86-alpine-docker.outputs.artifact_name }}" },
+                 { "type": "image", "arch": "${{needs.aarch64-alpine-docker.outputs.arch}}", "name": "${{ needs.aarch64-alpine-docker.outputs.artifact_name }}" }
+               ]
+            }

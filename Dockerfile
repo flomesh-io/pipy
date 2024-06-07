@@ -42,7 +42,7 @@ RUN rm -fr pipy/build \
     && export CI_COMMIT_SHA \
     && export CI_COMMIT_TAG=${VERSION}-${REVISION} \
     && export CI_COMMIT_DATE \
-    && cmake -DPIPY_GUI=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DPIPY_SAMPLES=${PIPY_GUI} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} .. \
+    && cmake -DPIPY_GUI=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DPIPY_CODEBASES=${PIPY_GUI} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} .. \
     && make -j$(getconf _NPROCESSORS_ONLN) \
     && mkdir ${pkg_confdir} \
     && cp /pipy/bin/pipy ${pkg_bindir} \
