@@ -326,26 +326,7 @@ private:
 
     switch (sig) {
       case SIGNAL_STOP: {
-        if (!m_admin_closed) {
-          if (s_admin_link) s_admin_link->close();
-          if (s_admin) s_admin->close();
-          m_admin_closed = true;
-        }
-
-        if (WorkerManager::get().started()) {
-          if (s_has_shutdown) {
-            Log::info("[shutdown] Forcing to shut down...");
-            WorkerManager::get().stop(true);
-            stop_all();
-          } else {
-            Log::info("[shutdown] Shutting down...");
-            wait_workers();
-          }
-        } else {
-          stop_all();
-        }
-
-        s_has_shutdown = true;
+        exit_process(false);
         break;
       }
       case SIGNAL_RELOAD:
@@ -372,6 +353,30 @@ private:
     s_code_updater.stop();
     s_status_reporter.stop();
     stop();
+  }
+
+public:
+  void exit_process(bool force) {
+    if (!m_admin_closed) {
+      if (s_admin_link) s_admin_link->close();
+      if (s_admin) s_admin->close();
+      m_admin_closed = true;
+    }
+
+    if (WorkerManager::get().started()) {
+      if (force || s_has_shutdown) {
+        Log::info("[shutdown] Forcing to shut down...");
+        WorkerManager::get().stop(true);
+        stop_all();
+      } else {
+        Log::info("[shutdown] Shutting down...");
+        wait_workers();
+      }
+    } else {
+      stop_all();
+    }
+
+    s_has_shutdown = true;
   }
 };
 
@@ -684,10 +689,17 @@ int pipy_main(int argc, char *argv[]) {
   return exit_code;
 }
 
-#ifndef PIPY_SHARED
+#ifdef PIPY_SHARED
+
+extern "C" PIPY_API
+void pipy_exit(int force) {
+  s_signal_handler.exit_process(force);
+}
+
+#else // !PIPY_SHARED
 
 int main(int argc, char *argv[]) {
   return pipy_main(argc, argv);
 }
 
-#endif // !PIPY_SHARED
+#endif // PIPY_SHARED
