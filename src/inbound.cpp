@@ -139,6 +139,11 @@ void Inbound::start() {
   }
 }
 
+void Inbound::restart() {
+  m_listener->accept();
+  m_listener = nullptr;
+}
+
 void Inbound::end() {
   if (m_listener) m_listener->close(this);
   m_pipeline = nullptr;
@@ -262,7 +267,7 @@ void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
       } else if (!m_canceled) {
         if (ec) {
           log_error("error accepting connection", ec);
-          dangle();
+          restart();
 
         } else if (m_listener && m_listener->pipeline_layout()) {
           log_debug("connection accepted");

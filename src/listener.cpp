@@ -55,6 +55,12 @@ bool Port::set_max_connections(int n) {
   return n < 0 || m_num_connections.load() < n;
 }
 
+bool Port::has_room() {
+  auto max = m_max_connections.load();
+  auto num = m_num_connections.load();
+  return max < 0 || num < max;
+}
+
 bool Port::increase_num_connections() {
   auto max = m_max_connections.load();
   return m_num_connections.fetch_add(1) + 1 < max || max < 0;
@@ -298,12 +304,10 @@ bool Listener::start_accepting() {
   describe(desc, sizeof(desc));
 
   try {
-    if (m_options.max_connections < 0 || m_inbounds.size() < m_options.max_connections) {
-      m_acceptor->accept();
-      m_paused = false;
+    if (m_port->has_room()) {
+      accept();
     } else {
-      m_acceptor->cancel();
-      m_paused = true;
+      pause();
     }
 
     Log::info("[listener] Listening on %s", desc);
@@ -348,17 +352,24 @@ void Listener::stop() {
   }
 }
 
-void Listener::open(Inbound *inbound) {
-  m_inbounds.push(inbound);
+void Listener::accept() {
   auto n = m_inbounds.size();
-  bool port_has_room = m_port->increase_num_connections();
   auto max = m_options.max_connections;
-  if ((max > 0 && n >= max) || !port_has_room) {
+  if ((max > 0 && n >= max)) {
     pause();
   } else {
     m_acceptor->accept();
   }
-  m_peak_connections = std::max(m_peak_connections, int(n));
+}
+
+void Listener::open(Inbound *inbound) {
+  m_inbounds.push(inbound);
+  if (m_port->increase_num_connections()) {
+    accept();
+  } else {
+    pause();
+  }
+  m_peak_connections = std::max(m_peak_connections, int(m_inbounds.size()));
   if (Log::is_enabled(Log::LISTENER)) print_state("accept");
 }
 

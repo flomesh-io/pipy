@@ -64,6 +64,7 @@ public:
   auto num_connections() const -> int { return m_num_connections.load(); }
   auto max_connections() const -> int { return m_max_connections.load(); }
   bool set_max_connections(int n);
+  bool has_room();
 
 private:
   Port(Protocol protocol, int port_num, const std::string &ip)
@@ -222,6 +223,7 @@ private:
   void pause();
   void resume();
   void stop();
+  void accept();
   void open(Inbound *inbound);
   void close(Inbound *inbound);
   void wake_up();

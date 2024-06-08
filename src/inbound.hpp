@@ -99,6 +99,7 @@ protected:
   pjs::Ref<EventTarget::Input> m_input;
 
   void start();
+  void restart();
   void end();
   void collect();
   void address();
