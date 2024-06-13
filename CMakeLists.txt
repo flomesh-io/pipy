@@ -48,6 +48,11 @@ option(LEVELDB_BUILD_BENCHMARKS "Build LevelDB's benchmarks" OFF)
 option(LEVELDB_INSTALL "Install LevelDB's header and library" OFF)
 add_subdirectory(deps/leveldb-1.23)
 
+if(PIPY_SHARED AND UNIX AND NOT APPLE)
+  # Ensure position-independent code for static leveldb
+  set_target_properties(leveldb PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
+
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
@@ -116,6 +121,11 @@ else()
     add_subdirectory(deps/zlib-1.3.1)
     set(ZLIB_INC_DIR "${CMAKE_SOURCE_DIR}/deps/zlib-1.3.1" "${CMAKE_BINARY_DIR}/deps/zlib-1.3.1")
     set(ZLIB_LIB zlibstatic)
+
+    if(PIPY_SHARED AND UNIX AND NOT APPLE)
+      # Ensure position-independent code for static zlib
+      set_target_properties(zlibstatic PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    endif()
   endif(PIPY_USE_SYSTEM_ZLIB)
 endif()
 
