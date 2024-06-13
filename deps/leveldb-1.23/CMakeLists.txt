@@ -40,7 +40,9 @@ check_include_file("unistd.h" HAVE_UNISTD_H)
 include(CheckLibraryExists)
 check_library_exists(crc32c crc32c_value "" HAVE_CRC32C)
 check_library_exists(snappy snappy_compress "" HAVE_SNAPPY)
-check_library_exists(tcmalloc malloc "" HAVE_TCMALLOC)
+# This tcmalloc caused a crash while dynamic-linking to rust
+# So we disabled it for the time being
+# check_library_exists(tcmalloc malloc "" HAVE_TCMALLOC)
 
 include(CheckCXXSymbolExists)
 # Using check_cxx_symbol_exists() instead of check_c_symbol_exists() because
