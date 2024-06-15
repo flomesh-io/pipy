@@ -568,6 +568,8 @@ bool WorkerManager::start(int concurrency, bool force) {
 
   m_concurrency = concurrency;
   m_loading_pipeline_lb = PipelineLoadBalancer::make();
+  m_stopping = false;
+  m_stopped = false;
 
   for (int i = 0; i < concurrency; i++) {
     auto wt = new WorkerThread(this, i);

@@ -633,9 +633,11 @@ int pipy_main(int argc, char *argv[]) {
       };
 
       exit = [&]() {
-        s_pool_cleaner.stop();
-        s_code_updater.stop();
-        s_signal_handler.stop();
+        if (!is_remote) {
+          s_pool_cleaner.stop();
+          s_code_updater.stop();
+          s_signal_handler.stop();
+        }
         exit_code = 0;
       };
 
