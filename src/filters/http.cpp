@@ -59,6 +59,7 @@ thread_local static const pjs::ConstStr s_http_1_0("HTTP/1.0");
 thread_local static const pjs::ConstStr s_http_1_1("HTTP/1.1");
 thread_local static const pjs::ConstStr s_connection("connection");
 thread_local static const pjs::ConstStr s_keep_alive("keep-alive");
+thread_local static const pjs::ConstStr s_cookie("cookie");
 thread_local static const pjs::ConstStr s_set_cookie("set-cookie");
 thread_local static const pjs::ConstStr s_close("close");
 thread_local static const pjs::ConstStr s_transfer_encoding("transfer-encoding");
@@ -531,7 +532,7 @@ void Decoder::on_event(Event *evt) {
           pjs::Ref<pjs::Str> val(read_str(dr, '\r', s_strmap_header_values, buf_lower));
           if (!key || !val) { error(); break; }
           auto headers = m_head->headers.get();
-          if (key == s_set_cookie) {
+          if (key == s_cookie || key == s_set_cookie) {
             pjs::Value old;
             headers->get(key, old);
             if (old.is_array()) {
@@ -871,7 +872,7 @@ void Encoder::output_head() {
             s->release();
           }
         }
-        if (k == s_set_cookie && v.is_array()) {
+        if ((k == s_cookie || k == s_set_cookie) && v.is_array()) {
           v.as<pjs::Array>()->iterate_all(
             [&](pjs::Value &v, int) {
               auto s = v.to_string();
