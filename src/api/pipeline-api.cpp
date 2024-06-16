@@ -82,9 +82,13 @@ auto PipelineDesigner::make_pipeline_layout(pjs::Context &ctx, pjs::Function *bu
   auto worker = static_cast<Worker*>(ctx.instance());
   auto pl = PipelineLayout::make(worker);
   auto pd = PipelineDesigner::make(pl);
-  pjs::Value arg(pd), ret;
-  (*builder)(ctx, 1, &arg, ret);
-  pd->close();
+  try {
+    pjs::Value arg(pd), ret;
+    (*builder)(ctx, 1, &arg, ret);
+    pd->close();
+  } catch (std::runtime_error &err) {
+    ctx.error(err);
+  }
   if (ctx.ok()) return pl;
   pl->retain();
   pl->release();
@@ -131,6 +135,7 @@ void PipelineDesigner::to(PipelineLayout *layout) {
 }
 
 void PipelineDesigner::close() {
+  check_integrity();
   m_current_filter = nullptr;
   m_current_joint_filter = nullptr;
   m_layout = nullptr;
