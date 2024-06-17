@@ -35,6 +35,7 @@
 #include <cstring>
 #include <functional>
 #include <atomic>
+#include <mutex>
 
 namespace pipy {
 
@@ -74,16 +75,18 @@ public:
     static auto unknown() -> Producer*;
 
     static void for_each(const std::function<void(Producer*)> &cb) {
+      std::lock_guard<std::mutex> lock(s_all_producers_mutex);
       for (auto p = s_all_producers.head(); p; p = p->next()) {
         cb(p);
       }
     }
 
-    Producer(const std::string &name) : m_name(pjs::Str::make(name)), m_count(0) {
+    Producer(const std::string &name) : m_name(name), m_count(0) {
+      std::lock_guard<std::mutex> lock(s_all_producers_mutex);
       s_all_producers.push(this);
     }
 
-    auto name() const -> pjs::Str::CharData* { return m_name->data(); }
+    auto name() const -> const std::string& { return m_name; }
     auto count() const -> size_t { return m_count.load(std::memory_order_relaxed); }
 
     Data* make(int size) { return Data::make(size, this); }
@@ -103,13 +106,14 @@ public:
     void pack(Data *data, const Data *appendant, double vacancy = 0.5) { data->pack(*appendant, this, vacancy); }
 
   private:
-    pjs::Ref<pjs::Str> m_name;
+    std::string m_name;
     std::atomic<size_t> m_count;
 
     void increase() { m_count.fetch_add(1, std::memory_order_relaxed); }
     void decrease() { m_count.fetch_sub(1, std::memory_order_relaxed); }
 
     static List<Producer> s_all_producers;
+    static std::mutex s_all_producers_mutex;
 
     friend struct Chunk;
   };

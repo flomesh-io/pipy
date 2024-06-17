@@ -351,7 +351,7 @@ void Status::update_local() {
   if (WorkerThread::current()->index() == 0) {
     Data::Producer::for_each([&](Data::Producer *producer) {
       chunks.insert({
-        producer->name()->str(),
+        producer->name(),
         producer->count(),
       });
     });

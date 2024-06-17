@@ -30,6 +30,7 @@
 namespace pipy {
 
 List<Data::Producer> Data::Producer::s_all_producers;
+std::mutex Data::Producer::s_all_producers_mutex;
 Data::Producer Data::s_unknown_producer("Unknown");
 
 auto Data::Producer::unknown() -> Producer* {
