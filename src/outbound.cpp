@@ -376,8 +376,6 @@ void OutboundTCP::resolve() {
     return;
   }
 
-  state(Outbound::State::resolving);
-
   const auto &host = (m_host == s_localhost ? s_localhost_ip : m_host);
 
   m_resolver.async_resolve(
@@ -416,6 +414,8 @@ void OutboundTCP::resolve() {
 
   log_debug("resolving hostname...");
   retain();
+
+  state(Outbound::State::resolving);
 }
 
 void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
@@ -424,8 +424,6 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
     describe(desc, sizeof(desc));
     Log::debug(Log::OUTBOUND, "%s connecting...", desc);
   }
-
-  state(Outbound::State::connecting);
 
   socket().async_connect(
     target,
@@ -462,9 +460,9 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
             Log::debug(Log::OUTBOUND, "%s connected in %g ms", desc, conn_time);
           }
 
-          state(Outbound::State::connected);
           retain();
           SocketTCP::open();
+          state(Outbound::State::connected);
         }
       }
 
@@ -473,6 +471,8 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
   );
 
   retain();
+
+  state(Outbound::State::connecting);
 }
 
 void OutboundTCP::connect_error(StreamEnd::Error err) {
@@ -633,8 +633,6 @@ void OutboundUDP::resolve() {
     return;
   }
 
-  state(State::resolving);
-
   const auto &host = (m_host == s_localhost ? s_localhost_ip : m_host);
 
   m_resolver.async_resolve(
@@ -673,6 +671,8 @@ void OutboundUDP::resolve() {
 
   log_debug("resolving hostname...");
   retain();
+
+  state(State::resolving);
 }
 
 void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
@@ -681,8 +681,6 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
     describe(desc, sizeof(desc));
     Log::debug(Log::OUTBOUND, "%s connecting...", desc);
   }
-
-  state(State::connecting);
 
   socket().async_connect(
     target,
@@ -719,9 +717,9 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
             Log::debug(Log::OUTBOUND, "%s connected in %g ms", desc, conn_time);
           }
 
-          state(State::connected);
           retain();
           SocketUDP::open();
+          state(State::connected);
         }
       }
 
@@ -730,6 +728,8 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
   );
 
   retain();
+
+  state(State::connecting);
 }
 
 void OutboundUDP::connect_error(StreamEnd::Error err) {
@@ -806,9 +806,9 @@ void OutboundNetlink::connect(const std::string &address) {
   m_metric_traffic_out = Outbound::s_metric_traffic_out->with_labels(keys, 2);
   m_metric_traffic_in = Outbound::s_metric_traffic_in->with_labels(keys, 2);
 
-  state(State::connected);
   retain();
   SocketNetlink::open();
+  state(State::connected);
 }
 
 void OutboundNetlink::send(Event *evt) {
