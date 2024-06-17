@@ -16,6 +16,7 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
   RESULT=$PHYS_DIR/$TARGET_FILE
   PIPY_DIR=$(dirname $RESULT)
   OS_NAME=macos
+  export SDKROOT=$(xcrun --show-sdk-path)
 fi
 
 # Number of processors to build.
