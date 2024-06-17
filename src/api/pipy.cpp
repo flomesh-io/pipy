@@ -36,6 +36,7 @@
 #include "listener.hpp"
 #include "outbound.hpp"
 #include "file.hpp"
+#include "fs.hpp"
 #include "fstream.hpp"
 #include "api/pipeline-api.hpp"
 #include "os-platform.hpp"
@@ -655,11 +656,11 @@ template<> void ClassDef<Pipy>::init() {
     ret.set(Thread::current());
   });
 
-  method("now", [](Context &ctx, Object *obj, Value &ret) {
+  method("now", [](Context &ctx, Object*, Value &ret) {
     ret.set(utils::now_since(Status::LocalInstance::since));
   });
 
-  method("fork", [](Context &ctx, Object *obj, Value &ret) {
+  method("fork", [](Context &ctx, Object*, Value &ret) {
     Function *func;
     if (!ctx.arguments(1, &func)) return;
     auto root = static_cast<pipy::Context*>(ctx.root());
@@ -667,6 +668,18 @@ template<> void ClassDef<Pipy>::init() {
     pjs::Ref<pipy::Context> context = worker->new_context(root);
     (*func)(*context, 0, nullptr, ret);
     if (!context->ok()) ctx.error(*context);
+  });
+
+  method("mount", [](Context &ctx, Object*, Value &ret) {
+    std::string path;
+    std::string dirname;
+    if (!ctx.arguments(2, &path, &dirname)) return;
+    if (!fs::is_dir(dirname)) return ctx.error("not a directory");
+    try {
+      Codebase::current()->mount(path, Codebase::from_fs(dirname));
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
   });
 
   method("load", [](Context &ctx, Object*, Value &ret) {
@@ -688,7 +701,7 @@ template<> void ClassDef<Pipy>::init() {
       for (const auto &name : codebase->list(path)) {
         if (name.back() == '/') {
           auto sub = name.substr(0, name.length() - 1);
-          auto str = path + '/' + sub;
+          auto str = utils::path_join(path, sub);
           list_dir(str, base + sub + '/');
         } else {
           a->push(Str::make(base + name));

@@ -48,6 +48,115 @@ static const pjs::Ref<pjs::Str> s_date(pjs::Str::make("last-modified"));
 Codebase* Codebase::s_current = nullptr;
 
 //
+// CodebaseFromRoot
+//
+
+class CodebaseFromRoot : public Codebase {
+public:
+  CodebaseFromRoot(Codebase *root);
+  ~CodebaseFromRoot();
+
+
+  virtual auto version() const -> const std::string& override { return m_root->version(); }
+  virtual bool writable() const override { return m_root->writable(); }
+  virtual auto entry() const -> const std::string& override { return m_root->entry(); }
+  virtual void entry(const std::string &path) override { m_root->entry(path); }
+  virtual void mount(const std::string &path, Codebase *codebase) override;
+  virtual auto list(const std::string &path) -> std::list<std::string> override;
+  virtual auto get(const std::string &path) -> SharedData* override;
+  virtual void set(const std::string &path, SharedData *data) override;
+  virtual auto watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* override;
+  virtual void sync(bool force, const std::function<void(bool)> &on_update) override { m_root->sync(force, on_update); }
+
+private:
+  Codebase* m_root;
+  std::map<std::string, Codebase*> m_mounts;
+  std::mutex m_mutex;
+
+  auto find_mount(const std::string &path, std::string &local_path) -> Codebase*;
+};
+
+CodebaseFromRoot::CodebaseFromRoot(Codebase *root)
+  : m_root(root)
+{
+}
+
+CodebaseFromRoot::~CodebaseFromRoot() {
+  for (const auto &p : m_mounts) delete p.second;
+  delete m_root;
+}
+
+void CodebaseFromRoot::mount(const std::string &name, Codebase *codebase) {
+  if (name.find('/') != std::string::npos) throw std::runtime_error("invalid mount name");
+  if (get(name)) throw std::runtime_error("mount path already exists");
+  if (list(name).size() > 0) throw std::runtime_error("mount path already exists");
+  std::lock_guard<std::mutex> lock(m_mutex);
+  for (const auto &p : m_mounts) {
+    if (p.first == name) {
+      throw std::runtime_error("mount path already exists");
+    }
+  }
+  m_mounts[name] = codebase;
+}
+
+auto CodebaseFromRoot::list(const std::string &path) -> std::list<std::string> {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  std::string local_path;
+  if (auto codebase = find_mount(path, local_path)) {
+    return codebase->list(local_path);
+  }
+  auto list = m_root->list(path);
+  if (path == "/") for (const auto &p : m_mounts) list.push_back(p.first + '/');
+  return list;
+}
+
+auto CodebaseFromRoot::get(const std::string &path) -> SharedData* {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  std::string local_path;
+  if (auto codebase = find_mount(path, local_path)) {
+    return codebase->get(local_path);
+  }
+  return m_root->get(path);
+}
+
+void CodebaseFromRoot::set(const std::string &path, SharedData *data) {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  std::string local_path;
+  if (auto codebase = find_mount(path, local_path)) {
+    return codebase->set(local_path, data);
+  }
+  return m_root->set(path, data);
+}
+
+auto CodebaseFromRoot::watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  std::string local_path;
+  if (auto codebase = find_mount(path, local_path)) {
+    return codebase->watch(local_path, on_update);
+  }
+  return m_root->watch(path, on_update);
+}
+
+auto CodebaseFromRoot::find_mount(const std::string &path, std::string &local_path) -> Codebase* {
+  std::string dirname = path;
+  if (dirname.front() != '/') dirname = '/' + dirname;
+  if (dirname.back() != '/') dirname += '/';
+  for (auto &p : m_mounts) {
+    auto &name = p.first;
+    auto n = name.length();
+    if (dirname.length() >= n + 2) {
+      if (dirname[n + 1] == '/') {
+        if (!std::strncmp(dirname.c_str() + 1, name.c_str(), n)) {
+          local_path = dirname.substr(n + 2);
+          return p.second;
+        }
+      }
+    }
+  }
+  return nullptr;
+}
+
+//
 // CodebaseFromFS
 //
 
@@ -60,6 +169,7 @@ public:
   virtual bool writable() const override { return true; }
   virtual auto entry() const -> const std::string& override { return m_entry; }
   virtual void entry(const std::string &path) override { m_entry = path; }
+  virtual void mount(const std::string &path, Codebase *codebase) override;
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override;
@@ -105,6 +215,10 @@ CodebaseFromFS::CodebaseFromFS(const std::string &path, const std::string &scrip
     std::string msg("file or directory does not exist: ");
     throw std::runtime_error(msg + m_base);
   }
+}
+
+void CodebaseFromFS::mount(const std::string &, Codebase *) {
+  throw std::runtime_error("mounting unsupported");
 }
 
 auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
@@ -217,6 +331,7 @@ public:
   virtual bool writable() const override { return false; }
   virtual auto entry() const -> const std::string& override { return m_entry; }
   virtual void entry(const std::string &path) override {}
+  virtual void mount(const std::string &path, Codebase *codebase) override;
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override {}
@@ -253,14 +368,17 @@ CodebaseFromStore::CodebaseFromStore(CodebaseStore *store, const std::string &na
   }
 }
 
+void CodebaseFromStore::mount(const std::string &, Codebase *) {
+  throw std::runtime_error("mounting unsupported");
+}
+
 auto CodebaseFromStore::list(const std::string &path) -> std::list<std::string> {
   std::lock_guard<std::mutex> lock(m_mutex);
   std::set<std::string> names;
   auto n = path.length();
   for (const auto &i : m_files) {
     const auto &name = i.first;
-    if (name.length() > path.length() &&
-        name[n] == '/' && !std::strncmp(name.c_str(), path.c_str(), n)) {
+    if (name.length() > n && name[n] == '/' && utils::starts_with(name, path)) {
       auto i = name.find('/', n + 1);
       if (i == std::string::npos) {
         names.insert(name.substr(n + 1));
@@ -306,6 +424,7 @@ private:
   virtual bool writable() const override { return false; }
   virtual auto entry() const -> const std::string& override { return m_entry; }
   virtual void entry(const std::string &path) override {}
+  virtual void mount(const std::string &path, Codebase *codebase) override;
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override {}
@@ -359,14 +478,17 @@ CodebaseFromHTTP::CodebaseFromHTTP(const std::string &url, const Fetch::Options 
   m_request_header_post_status = headers;
 }
 
+void CodebaseFromHTTP::mount(const std::string &, Codebase *) {
+  throw std::runtime_error("mounting unsupported");
+}
+
 auto CodebaseFromHTTP::list(const std::string &path) -> std::list<std::string> {
   std::lock_guard<std::mutex> lock(m_mutex);
   std::set<std::string> names;
   auto n = path.length();
   for (const auto &i : m_files) {
     const auto &name = i.first;
-    if (name.length() > path.length() &&
-        name[n] == '/' && !std::strncmp(name.c_str(), path.c_str(), n)) {
+    if (name.length() > n && name[n] == '/' && utils::starts_with(name, path)) {
       auto i = name.find('/', n + 1);
       if (i == std::string::npos) {
         names.insert(name.substr(n + 1));
@@ -646,6 +768,10 @@ void CodebaseFromHTTP::response_error(const char *method, const char *path, http
 //
 // Codebase
 //
+
+Codebase* Codebase::from_root(Codebase *root) {
+  return new CodebaseFromRoot(root);
+}
 
 Codebase* Codebase::from_fs(const std::string &path) {
   return new CodebaseFromFS(path);

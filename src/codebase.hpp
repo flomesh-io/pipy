@@ -87,6 +87,7 @@ public:
 
   static auto current() -> Codebase* { return s_current; }
 
+  static Codebase* from_root(Codebase *root);
   static Codebase* from_fs(const std::string &path);
   static Codebase* from_fs(const std::string &path, const std::string &script);
   static Codebase* from_store(CodebaseStore *store, const std::string &name);
@@ -104,6 +105,7 @@ public:
   virtual bool writable() const = 0;
   virtual auto entry() const -> const std::string& = 0;
   virtual void entry(const std::string &path) = 0;
+  virtual void mount(const std::string &path, Codebase *codebase) = 0;
   virtual auto list(const std::string &path) -> std::list<std::string> = 0;
   virtual auto get(const std::string &path) -> SharedData* = 0;
   virtual void set(const std::string &path, SharedData *data) = 0;

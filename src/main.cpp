@@ -571,6 +571,7 @@ int pipy_main(int argc, char *argv[]) {
         );
       }
 
+      codebase = Codebase::from_root(codebase);
       codebase->set_current();
 
       bool started = false, start_error = false;
