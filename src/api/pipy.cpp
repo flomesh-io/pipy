@@ -691,6 +691,20 @@ template<> void ClassDef<Pipy>::init() {
     if (data) data->release();
   });
 
+  method("patch", [](Context &ctx, Object*, Value &ret) {
+    Str *filename;
+    Str *content_str = nullptr;
+    pipy::Data *content_data = nullptr;
+    if (!ctx.check(0, filename)) return;
+    if (!ctx.get(1, content_data) && !ctx.get(1, content_str)) return ctx.error_argument_type(1, "a string or a Data");
+    if (content_data) {
+      Codebase::current()->patch(filename->str(), SharedData::make(*content_data));
+    } else {
+      Ref<pipy::Data> data(pipy::Data::make(content_str->str(), pipy::Data::Producer::unknown()));
+      Codebase::current()->patch(filename->str(), SharedData::make(*data));
+    }
+  });
+
   method("list", [](Context &ctx, Object*, Value &ret) {
     std::string pathname;
     if (!ctx.arguments(1, &pathname)) return;

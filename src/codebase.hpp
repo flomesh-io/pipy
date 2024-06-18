@@ -109,6 +109,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> = 0;
   virtual auto get(const std::string &path) -> SharedData* = 0;
   virtual void set(const std::string &path, SharedData *data) = 0;
+  virtual void patch(const std::string &path, SharedData *data) = 0;
   virtual auto watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* = 0;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) = 0;
 
@@ -118,6 +119,8 @@ protected:
 
   void notify(Watch *w) { w->notify(); }
   void cancel(Watch *w) { w->cancel(); }
+
+  auto normalize_path(const std::string &path) -> std::string;
 
 private:
   static Codebase* s_current;

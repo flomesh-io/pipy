@@ -65,6 +65,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override;
+  virtual void patch(const std::string &path, SharedData *data) override;
   virtual auto watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* override;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override { m_root->sync(force, on_update); }
 
@@ -128,6 +129,15 @@ void CodebaseFromRoot::set(const std::string &path, SharedData *data) {
   return m_root->set(path, data);
 }
 
+void CodebaseFromRoot::patch(const std::string &path, SharedData *data) {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  std::string local_path;
+  if (auto codebase = find_mount(path, local_path)) {
+    return codebase->patch(local_path, data);
+  }
+  return m_root->patch(path, data);
+}
+
 auto CodebaseFromRoot::watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* {
   std::lock_guard<std::mutex> lock(m_mutex);
   std::string local_path;
@@ -157,10 +167,38 @@ auto CodebaseFromRoot::find_mount(const std::string &path, std::string &local_pa
 }
 
 //
+// CodebasePatchable
+//
+
+class CodebasePatchable : public Codebase {
+protected:
+  virtual auto get(const std::string &path) -> SharedData* override;
+  virtual void patch(const std::string &path, SharedData *data) override;
+
+private:
+  std::mutex m_mutex;
+  std::map<std::string, pjs::Ref<SharedData>> m_files;
+};
+
+auto CodebasePatchable::get(const std::string &path) -> SharedData* {
+  std::string k = normalize_path(path);
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto i = m_files.find(k);
+  if (i == m_files.end()) return nullptr;
+  return i->second;
+}
+
+void CodebasePatchable::patch(const std::string &path, SharedData *data) {
+  std::string k = normalize_path(path);
+  std::lock_guard<std::mutex> lock(m_mutex);
+  m_files[k] = data;
+}
+
+//
 // CodebaseFromFS
 //
 
-class CodebaseFromFS : public Codebase {
+class CodebaseFromFS : public CodebasePatchable {
 public:
   CodebaseFromFS(const std::string &path);
   CodebaseFromFS(const std::string &path, const std::string &script);
@@ -230,6 +268,7 @@ auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
 }
 
 auto CodebaseFromFS::get(const std::string &path) -> SharedData* {
+  if (auto data = CodebasePatchable::get(path)) return data;
   std::lock_guard<std::mutex> lock(m_mutex);
   if (path.empty() && !m_script.empty()) {
     Data buf(m_script, &s_dp);
@@ -323,7 +362,7 @@ void CodebaseFromFS::sync(bool force, const std::function<void(bool)> &on_update
 // CodebaseFromStore
 //
 
-class CodebaseFromStore : public Codebase {
+class CodebaseFromStore : public CodebasePatchable {
 public:
   CodebaseFromStore(CodebaseStore *store, const std::string &name);
 
@@ -393,9 +432,9 @@ auto CodebaseFromStore::list(const std::string &path) -> std::list<std::string> 
 }
 
 auto CodebaseFromStore::get(const std::string &path) -> SharedData* {
+  if (auto data = CodebasePatchable::get(path)) return data;
+  std::string k = normalize_path(path);
   std::lock_guard<std::mutex> lock(m_mutex);
-  auto k = path;
-  if (k.front() != '/') k.insert(k.begin(), '/');
   auto i = m_files.find(k);
   if (i == m_files.end()) return nullptr;
   return i->second->retain();
@@ -415,7 +454,7 @@ void CodebaseFromStore::sync(bool force, const std::function<void(bool)> &on_upd
 // CodebaseFromHTTP
 //
 
-class CodebaseFromHTTP : public Codebase {
+class CodebaseFromHTTP : public CodebasePatchable {
 public:
   CodebaseFromHTTP(const std::string &url, const Fetch::Options &options);
 
@@ -503,9 +542,9 @@ auto CodebaseFromHTTP::list(const std::string &path) -> std::list<std::string> {
 }
 
 auto CodebaseFromHTTP::get(const std::string &path) -> SharedData* {
+  if (auto data = CodebasePatchable::get(path)) return data;
+  std::string k = normalize_path(path);
   std::lock_guard<std::mutex> lock(m_mutex);
-  auto k = path;
-  if (k.front() != '/') k.insert(k.begin(), '/');
   auto i = m_files.find(k);
   if (i == m_files.end()) return nullptr;
   return i->second->retain();
@@ -787,6 +826,15 @@ Codebase* Codebase::from_store(CodebaseStore *store, const std::string &name) {
 
 Codebase* Codebase::from_http(const std::string &url, const Fetch::Options &options) {
   return new CodebaseFromHTTP(url, options);
+}
+
+auto Codebase::normalize_path(const std::string &path) -> std::string {
+  std::string k = path;
+  if (k.front() != '/') {
+    return utils::path_normalize('/' + k);
+  } else {
+    return utils::path_normalize(k);
+  }
 }
 
 } // namespace pipy
