@@ -58,6 +58,7 @@ public:
 
   enum class State {
     idle,
+    open,
     resolving,
     connecting,
     connected,

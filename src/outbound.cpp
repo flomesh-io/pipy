@@ -260,6 +260,7 @@ OutboundTCP::OutboundTCP(EventTarget::Input *output, const Outbound::Options &op
   , SocketTCP(false, Outbound::m_options)
   , m_resolver(Net::context())
 {
+  state(Outbound::State::open);
 }
 
 OutboundTCP::~OutboundTCP() {
@@ -513,6 +514,7 @@ OutboundUDP::OutboundUDP(EventTarget::Input *output, const Outbound::Options &op
   , SocketUDP(false, Outbound::m_options)
   , m_resolver(Net::context())
 {
+  state(Outbound::State::open);
 }
 
 OutboundUDP::~OutboundUDP() {
@@ -866,6 +868,7 @@ template<> void EnumDef<Outbound::Protocol>::init() {
 
 template<> void EnumDef<Outbound::State>::init() {
   define(Outbound::State::idle, "idle");
+  define(Outbound::State::open, "open");
   define(Outbound::State::resolving, "resolving");
   define(Outbound::State::connecting, "connecting");
   define(Outbound::State::connected, "connected");
