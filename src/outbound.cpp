@@ -112,6 +112,10 @@ auto Outbound::address() -> pjs::Str* {
   return m_address;
 }
 
+void Outbound::open() {
+  state(Outbound::State::open);
+}
+
 void Outbound::close(StreamEnd *eos) {
   InputContext ic;
   retain();
@@ -260,7 +264,6 @@ OutboundTCP::OutboundTCP(EventTarget::Input *output, const Outbound::Options &op
   , SocketTCP(false, Outbound::m_options)
   , m_resolver(Net::context())
 {
-  state(Outbound::State::open);
 }
 
 OutboundTCP::~OutboundTCP() {
@@ -514,7 +517,6 @@ OutboundUDP::OutboundUDP(EventTarget::Input *output, const Outbound::Options &op
   , SocketUDP(false, Outbound::m_options)
   , m_resolver(Net::context())
 {
-  state(Outbound::State::open);
 }
 
 OutboundUDP::~OutboundUDP() {

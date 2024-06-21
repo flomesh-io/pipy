@@ -114,6 +114,7 @@ public:
   virtual auto get_traffic_in() ->size_t = 0;
   virtual auto get_traffic_out() ->size_t = 0;
 
+  void open();
   void close(StreamEnd *eos);
 
 protected:

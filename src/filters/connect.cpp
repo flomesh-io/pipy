@@ -209,6 +209,7 @@ void Connect::process(Event *evt) {
     }
 
     try {
+      m_outbound->open();
       if (bind) {
         m_outbound->bind(bind->str());
       } else if (options.protocol == Outbound::Protocol::NETLINK) {
