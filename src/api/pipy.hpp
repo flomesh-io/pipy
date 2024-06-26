@@ -70,7 +70,7 @@ public:
   public:
     FileReader(Worker *worker, pjs::Str *pathname, PipelineLayout *pt);
 
-    auto start() -> pjs::Promise*;
+    auto start(const pjs::Value &args) -> pjs::Promise*;
 
   private:
     pjs::Ref<Worker> m_worker;
@@ -80,6 +80,7 @@ public:
     pjs::Ref<File> m_file;
     pjs::Ref<pjs::Promise> m_promise;
     pjs::Ref<pjs::Promise::Settler> m_settler;
+    pjs::Value m_start_arg;
 
     void on_open(FileStream *fs);
 

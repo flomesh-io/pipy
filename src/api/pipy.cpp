@@ -385,7 +385,7 @@ void Pipy::listen(pjs::Context &ctx) {
   pjs::Str *protocol = nullptr;
   pjs::Object *options = nullptr;
   pjs::Function *builder = nullptr;
-  PipelineLayoutWrapper *plw = nullptr;
+  PipelineLayoutWrapper *ptw = nullptr;
 
   if (ctx.get(i, address) || ctx.get(i, port)) i++;
   else {
@@ -395,9 +395,9 @@ void Pipy::listen(pjs::Context &ctx) {
 
   if (ctx.get(i, protocol)) i++;
 
-  if (!ctx.get(i, builder) && !ctx.get(i, plw)) {
+  if (!ctx.get(i, builder) && !ctx.get(i, ptw)) {
     if (!ctx.check(i++, options)) return;
-    if (!ctx.check(i, builder) && !ctx.check(i, plw)) return;
+    if (!ctx.get(i, builder) && !ctx.get(i, ptw)) return ctx.error_argument_type(i, "a function or a pipeline template");
   }
 
   auto proto = Port::Protocol::TCP;
@@ -442,8 +442,8 @@ void Pipy::listen(pjs::Context &ctx) {
   }
 
   PipelineLayout *pl = nullptr;
-  if (plw) {
-    pl = plw->get();
+  if (ptw) {
+    pl = ptw->get();
   } else if (builder) {
     pl = PipelineDesigner::make_pipeline_layout(ctx, builder);
     if (!pl) return;
@@ -540,20 +540,22 @@ Pipy::FileReader::FileReader(Worker *worker, pjs::Str *pathname, PipelineLayout 
 {
 }
 
-auto Pipy::FileReader::start() -> pjs::Promise* {
+auto Pipy::FileReader::start(const pjs::Value &arg) -> pjs::Promise* {
   auto promise = pjs::Promise::make();
   m_settler = pjs::Promise::Settler::make(promise);
+  m_start_arg = arg;
   m_file->open_read([this](FileStream *fs) { on_open(fs); });
   retain();
   return promise;
 }
 
 void Pipy::FileReader::on_open(FileStream *fs) {
+  InputContext ic;
   if (fs) {
     m_pipeline = Pipeline::make(m_pt, m_worker->new_context());
     m_pipeline->on_end(this);
     m_pipeline->chain(EventTarget::input());
-    m_pipeline->start();
+    m_pipeline->start(1, &m_start_arg);
     fs->chain(m_pipeline->input());
   } else {
     std::string msg = "cannot open file: " + m_pathname->str();
@@ -816,11 +818,15 @@ template<> void ClassDef<Pipy>::init() {
     auto worker = instance ? static_cast<Worker*>(instance) : nullptr;
     Str *pathname;
     Function *builder = nullptr;
-    if (!ctx.arguments(2, &pathname, &builder)) return;
-    auto pt = PipelineDesigner::make_pipeline_layout(ctx, builder);
+    PipelineLayoutWrapper *ptw = nullptr;
+    Value start_arg;
+    if (!ctx.check(0, pathname)) return;
+    if (!ctx.get(1, builder) && !ctx.get(1, ptw)) return ctx.error_argument_type(1, "a function or a pipeline template");
+    ctx.get(2, start_arg);
+    auto pt = ptw ? ptw->get() : PipelineDesigner::make_pipeline_layout(ctx, builder);
     if (!pt) return;
     auto fr = new Pipy::FileReader(worker, pathname, pt);
-    ret.set(fr->start());
+    ret.set(fr->start(start_arg));
   });
 
   method("listen", [](Context &ctx, Object*, Value &ret) {
