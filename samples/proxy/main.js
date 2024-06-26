@@ -1,15 +1,35 @@
 #!/usr/bin/env pipy
 
-import genCert from './gen-cert.js'
-
 var config = YAML.decode(pipy.load('config.yaml'))
+var whiteList = config.proxy.whitelist || []
+var blackList = config.proxy.blacklist || []
+var useWhiteList = whiteList.length > 0
+var useBlackList = blackList.length > 0
+var useFakeCA = toBool(config.proxy.useFakeCA)
+var enableLog = toBool(config.proxy.enableLog)
+
+var genCert = null
+if (useFakeCA === 'true' || useFakeCA === 'yes') {
+  genCert = pipy.import('./gen-cert.js').default
+}
+
+var whiteFullnames = {}
+var whitePostfixes = []
+var blackFullnames = {}
+var blackPostfixes = []
+
+initNameLUT(whiteList, whiteFullnames, whitePostfixes)
+initNameLUT(blackList, blackFullnames, blackPostfixes)
+
+var log = enableLog ? console.log : () => {}
 
 var $proto
+var $sni
 var $target
 
 var proxy = pipeline($=>$
   .detectProtocol(proto => $proto = proto)
-  .pipe(() => ($proto === 'TLS' ? proxyTLS : proxyTCP))
+  .pipe(() => (genCert && $proto === 'TLS' ? proxyTLS : proxyTCP))
 )
 
 var observe = pipeline($=>$
@@ -18,24 +38,33 @@ var observe = pipeline($=>$
     .handleMessageStart(
       function (msg) {
         var head = msg.head
-        println('HTTP', head.method, head.path, head.headers.host)
+        log('HTTP', head.method, head.path, head.headers.host)
       }
     )
   )
 )
 
+var connectTarget = pipeline($=>$
+  .pipe(
+    () => isTargetAllowed($target) ? 'pass' : 'deny', {
+      'pass': $=>$.connect(() => $target),
+      'deny': $=>$.replaceStreamStart(new StreamEnd)
+    }
+  )
+)
+
 var proxyTCP = pipeline($=>$
   .pipe(observe)
-  .connect(() => $target)
+  .pipe(connectTarget)
 )
 
 var proxyTLS = pipeline($=>$
   .acceptTLS({
-    certificate: sni => sni ? genCert(sni) : undefined
+    certificate: sni => $sni = sni ? genCert(sni) : undefined
   }).to($=>$
     .pipe(observe)
-    .connectTLS().to($=>$
-      .connect(() => $target)
+    .connectTLS({ sni: () => $sni }).to($=>$
+      .pipe(connectTarget)
     )
   )
 )
@@ -47,7 +76,7 @@ if (config.proxy.socks) {
     .acceptSOCKS(
       function (req) {
         $target = `${req.domain || req.ip}:${req.port}`
-        println('SOCKS', $target)
+        log('SOCKS', $target)
         return true
       }
     ).to(proxy)
@@ -70,7 +99,7 @@ if (config.proxy.http) {
             } else {
               var url = new URL(head.path)
               $host = `${url.hostname}:${url.port}`
-              println('HTTP', head.method, head.path)
+              log('HTTP', head.method, head.path)
               return 'forward'
             }
           }
@@ -85,4 +114,46 @@ if (config.proxy.http) {
       )
     )
   )
+}
+
+function toBool(v) {
+  if (!v) return false
+  switch (v.toString().toLowerCase()) {
+    case 'true':
+    case 'yes':
+    case 'on':
+      return true
+    default:
+      return false
+  }
+}
+
+function initNameLUT(list, fullnames, postfixes) {
+  list.forEach(name => {
+    if (name.startsWith('*')) {
+      postfixes.push(name.substring(1))
+    } else {
+      fullnames[name] = true
+    }
+  })
+}
+
+function checkNameLUT(name, fullnames, postfixes) {
+  if (name in fullnames) return true
+  return postfixes.some(p => name.endsWith(p))
+}
+
+function toSet(a) {
+  a = a || []
+  return Object.fromEntries(a.map(k => [k, true]))
+}
+
+function isTargetAllowed(t) {
+  if (useWhiteList || useBlackList) {
+    var i = t.indexOf(':')
+    var h = i > 0 ? t.substring(0, i) : t
+    if (useWhiteList) return  checkNameLUT(h, whiteFullnames, whitePostfixes)
+    if (useBlackList) return !checkNameLUT(h, blackFullnames, blackPostfixes)
+  }
+  return true
 }

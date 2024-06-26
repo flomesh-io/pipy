@@ -3,3 +3,7 @@ proxy:
     listen: 0.0.0.0:1080
   http:
     listen: 0.0.0.0:8080
+  useFakeCA: false
+  enableLog: true
+  whitelist: []
+  blacklist: []
