@@ -821,7 +821,7 @@ template<> void ClassDef<Pipy>::init() {
     PipelineLayoutWrapper *ptw = nullptr;
     Value start_arg;
     if (!ctx.check(0, pathname)) return;
-    if (!ctx.get(1, builder) && !ctx.get(1, ptw)) return ctx.error_argument_type(1, "a function or a pipeline template");
+    if ((!ctx.get(1, builder) && !ctx.get(1, ptw)) || (!builder && !ptw)) return ctx.error_argument_type(1, "a function or a pipeline template");
     ctx.get(2, start_arg);
     auto pt = ptw ? ptw->get() : PipelineDesigner::make_pipeline_layout(ctx, builder);
     if (!pt) return;
