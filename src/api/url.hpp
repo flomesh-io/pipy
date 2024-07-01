@@ -38,6 +38,11 @@ class URLSearchParams;
 
 class URL : public pjs::ObjectTemplate<URL> {
 public:
+  static auto encode(const std::string &str) -> std::string;
+  static auto decode(const std::string &str) -> std::string;
+  static auto encode_component(const std::string &str) -> std::string;
+  static auto decode_component(const std::string &str) -> std::string;
+
   auto auth() const -> pjs::Str* { return m_auth; }
   auto hash() const -> pjs::Str* { return m_hash; }
   auto host() const -> pjs::Str* { return m_host; }

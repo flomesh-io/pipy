@@ -34,6 +34,116 @@ namespace pipy {
 // URL
 //
 
+class CharacterSet {
+public:
+  CharacterSet(const char *chars) {
+    std::memset(m_chars, 0, sizeof(m_chars));
+    for (const char *p = chars; *p; p++) {
+      int i = (unsigned char)*p;
+      m_chars[i] = true;
+    }
+  }
+
+  bool has(char c) const { return m_chars[(unsigned char)c]; }
+
+private:
+  bool m_chars[256];
+};
+
+static const CharacterSet s_url_general_chars("-_.!~*'()");
+static const CharacterSet s_url_special_chars(";/?:@&=+$,#");
+static const std::string s_error_malformed_url("malformed URL");
+
+static void append_hex_char(std::string &s, char c) {
+  char str[10];
+  std::snprintf(str, sizeof(str), "%%%02X", (unsigned char)c);
+  s += str;
+}
+
+auto URL::encode(const std::string &str) -> std::string {
+  std::string out;
+  for (const char c : str) {
+    if (std::isalnum(c) || s_url_general_chars.has(c) || s_url_special_chars.has(c)) {
+      out += c;
+    } else {
+      append_hex_char(out, c);
+    }
+  }
+  return out;
+}
+
+auto URL::decode(const std::string &str) -> std::string {
+  std::string out;
+  int hex_digit = 0;
+  int hex_value = 0;
+  for (const char c : str) {
+    if (hex_digit > 0) {
+      hex_value <<= 4;
+      if ('0' <= c && c <= '9') hex_value += c - '0'; else
+      if ('A' <= c && c <= 'F') hex_value += c - 'A' + 10; else
+      if ('a' <= c && c <= 'f') hex_value += c - 'a' + 10; else
+      throw std::runtime_error(s_error_malformed_url);
+      if (!--hex_digit) {
+        auto c = (char)hex_value;
+        if (std::isalnum(c) || s_url_general_chars.has(c) || s_url_special_chars.has(c)) {
+          append_hex_char(out, c);
+        } else {
+          out += (char)hex_value;
+        }
+      }
+    } else if (c == '%') {
+      hex_digit = 2;
+      hex_value = 0;
+    } else {
+      out += c;
+    }
+  }
+  if (hex_digit > 0) throw std::runtime_error(s_error_malformed_url);
+  return out;
+}
+
+auto URL::encode_component(const std::string &str) -> std::string {
+  std::string out;
+  for (const char c : str) {
+    if (std::isalnum(c) || s_url_general_chars.has(c)) {
+      out += c;
+    } else {
+      append_hex_char(out, c);
+    }
+  }
+  return out;
+}
+
+auto URL::decode_component(const std::string &str) -> std::string {
+  std::string out;
+  int hex_digit = 0;
+  int hex_value = 0;
+  for (const char c : str) {
+    if (hex_digit > 0) {
+      hex_value <<= 4;
+      if ('0' <= c && c <= '9') hex_value += c - '0'; else
+      if ('A' <= c && c <= 'F') hex_value += c - 'A' + 10; else
+      if ('a' <= c && c <= 'f') hex_value += c - 'a' + 10; else
+      throw std::runtime_error(s_error_malformed_url);
+      if (!--hex_digit) {
+        auto c = (char)hex_value;
+        if (std::isalnum(c) || s_url_general_chars.has(c)) {
+          append_hex_char(out, c);
+        } else {
+          out += (char)hex_value;
+        }
+      }
+    } else if (c == '%') {
+      hex_digit = 2;
+      hex_value = 0;
+    } else {
+      out += c;
+    }
+  }
+  if (hex_digit > 0) throw std::runtime_error(s_error_malformed_url);
+  return out;
+}
+
 URL::URL(pjs::Str *url) : URL(url->str())
 {
 }
@@ -375,6 +485,46 @@ template<> void ClassDef<URL>::init() {
 template<> void ClassDef<Constructor<URL>>::init() {
   super<Function>();
   ctor();
+
+  method("encode", [](Context &ctx, Object *, Value &ret) {
+    Str* s;
+    if (!ctx.arguments(1, &s)) return;
+    try {
+      ret.set(URL::encode(s->str()));
+    } catch (const std::runtime_error &e) {
+      ctx.error(e);
+    }
+  });
+
+  method("decode", [](Context &ctx, Object *, Value &ret) {
+    Str* s;
+    if (!ctx.arguments(1, &s)) return;
+    try {
+      ret.set(URL::decode(s->str()));
+    } catch (const std::runtime_error &e) {
+      ctx.error(e);
+    }
+  });
+
+  method("encodeComponent", [](Context &ctx, Object *, Value &ret) {
+    Str* s;
+    if (!ctx.arguments(1, &s)) return;
+    try {
+      ret.set(URL::encode_component(s->str()));
+    } catch (const std::runtime_error &e) {
+      ctx.error(e);
+    }
+  });
+
+  method("decodeComponent", [](Context &ctx, Object *, Value &ret) {
+    Str* s;
+    if (!ctx.arguments(1, &s)) return;
+    try {
+      ret.set(URL::decode_component(s->str()));
+    } catch (const std::runtime_error &e) {
+      ctx.error(e);
+    }
+  });
 }
 
 //
