@@ -1822,10 +1822,12 @@ void TunnelServer::process(Event *evt) {
     pjs::Ref<RequestHead> req_head = pjs::coerce<RequestHead>(req->head());
     pjs::Ref<ResponseHead> res_head = pjs::coerce<ResponseHead>(res->head());
     if (res_head->is_tunnel_ok(req_head->tunnel_type())) {
-      m_pipeline = sub_pipeline(0, true, Filter::output())->start();
+      m_pipeline = sub_pipeline(0, true, Filter::output());
     }
 
     res->write(Filter::output());
+
+    if (m_pipeline) m_pipeline->start();
   }
 }
 
