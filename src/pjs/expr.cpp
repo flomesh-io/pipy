@@ -560,12 +560,12 @@ void FunctionLiteral::resolve(Module *module, Context &ctx, int l, LegacyImports
       if (!scope) return;
       Stmt::Result res;
       m_output->execute(ctx, res);
-      if (res.is_return()) {
-        result = res.value;
-      } else if (res.is_throw()) {
-        ctx.error(res.value);
-      } else {
-        result = Value::undefined;
+      if (ctx.ok()) {
+        if (res.is_return()) {
+          result = res.value;
+        } else {
+          result = Value::undefined;
+        }
       }
       scope->clear();
     }

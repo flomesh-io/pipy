@@ -45,7 +45,7 @@ public:
   //
 
   struct Result {
-    enum Type { DONE, RETURN, BREAK, CONTINUE, THROW };
+    enum Type { DONE, RETURN, BREAK, CONTINUE };
     Type type = DONE;
     Str* label = nullptr;
     Value value;
@@ -54,13 +54,11 @@ public:
     bool is_return() const { return type == RETURN; }
     bool is_break() const { return type == BREAK; }
     bool is_continue() const { return type == CONTINUE; }
-    bool is_throw() const { return type == THROW; }
 
     void set_done() { type = DONE; label = nullptr; }
     void set_return() { type = RETURN; label = nullptr; }
     void set_break(Str *l = nullptr) { type = BREAK; label = l; }
     void set_continue(Str *l = nullptr) { type = CONTINUE; label = l; }
-    void set_throw() { type = THROW; label = nullptr; }
   };
 
   //
@@ -77,7 +75,7 @@ public:
   // Statement execution
   //
 
-  bool execute(Context &ctx, Value &result);
+  void execute(Context &ctx, Value &result);
 };
 
 //

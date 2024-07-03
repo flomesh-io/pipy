@@ -42,11 +42,10 @@ Stmt::~Stmt()
 {
 }
 
-bool Stmt::execute(Context &ctx, Value &result) {
+void Stmt::execute(Context &ctx, Value &result) {
   Result res;
   execute(ctx, res);
   result = res.value;
-  return !res.is_throw();
 }
 
 namespace stmt {
@@ -142,9 +141,6 @@ void Evaluate::execute(Context &ctx, Result &result) {
       auto obj = m_module->exports_object();
       obj->type()->set(obj, m_export->id, result.value);
     }
-  } else {
-    result.value = ctx.error().value;
-    result.set_throw();
   }
 }
 
@@ -189,9 +185,6 @@ void Var::execute(Context &ctx, Result &result) {
     Value val;
     if (m_expr->eval(ctx, val) && m_identifier->assign(ctx, val)) {
       result.set_done();
-    } else {
-      result.value = ctx.error().value;
-      result.set_throw();
     }
   }
 }
@@ -265,9 +258,6 @@ void Function::execute(Context &ctx, Result &result) {
     Value val;
     if (m_expr->eval(ctx, val) && m_identifier->assign(ctx, val)) {
       result.set_done();
-    } else {
-      result.value = ctx.error().value;
-      result.set_throw();
     }
   }
 }
@@ -312,11 +302,7 @@ void If::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *impor
 
 void If::execute(Context &ctx, Result &result) {
   Value val;
-  if (!m_cond->eval(ctx, val)) {
-    result.value = ctx.error().value;
-    result.set_throw();
-    return;
-  }
+  if (!m_cond->eval(ctx, val)) return;
 
   if (val.to_boolean()) {
     m_then->execute(ctx, result);
@@ -361,22 +347,14 @@ void Switch::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *i
 
 void Switch::execute(Context &ctx, Result &result) {
   Value cond_val;
-  if (!m_cond->eval(ctx, cond_val)) {
-    result.value = ctx.error().value;
-    result.set_throw();
-    return;
-  }
+  if (!m_cond->eval(ctx, cond_val)) return;
 
   auto def = m_cases.end();
   auto p = m_cases.begin();
   while (p != m_cases.end()) {
     if (auto e = p->first.get()) {
       Value val;
-      if (!e->eval(ctx, val)) {
-        result.value = ctx.error().value;
-        result.set_throw();
-        return;
-      }
+      if (!e->eval(ctx, val)) return;
       if (Value::is_equal(cond_val, val)) break;
     } else {
       def = p;
@@ -468,9 +446,6 @@ void Return::execute(Context &ctx, Result &result) {
   if (m_expr) {
     if (m_expr->eval(ctx, result.value)) {
       result.set_return();
-    } else {
-      result.value = ctx.error().value;
-      result.set_throw();
     }
   } else {
     result.value = Value::undefined;
@@ -499,15 +474,11 @@ void Throw::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *im
 void Throw::execute(Context &ctx, Result &result) {
   if (m_expr) {
     if (m_expr->eval(ctx, result.value)) {
+      ctx.error(result.value);
       ctx.backtrace(source(), line(), column());
-      result.set_throw();
-    } else {
-      result.value = ctx.error().value;
-      result.set_throw();
     }
   } else {
-    result.value = Value::undefined;
-    result.set_throw();
+    ctx.error(Value::undefined);
   }
 }
 
@@ -561,25 +532,20 @@ void Try::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *impo
 
 void Try::execute(Context &ctx, Result &result) {
   m_try->execute(ctx, result);
-  if (result.is_throw() && m_catch) {
-    if (result.value.is<pjs::Error>()) {
-      result.value.as<pjs::Error>()->backtrace(ctx.error().backtrace);
-    }
+  if (!ctx.ok() && m_catch) {
+    auto exception = ctx.error().to_exception();
     ctx.reset();
-    Context cctx(ctx, 1, &result.value, ctx.scope());
+    Context cctx(ctx, 1, &exception, ctx.scope());
     if (auto scope = m_catch_scope.instantiate(cctx)) {
       m_catch->execute(cctx, result);
       scope->clear();
-    } else {
-      result.value = ctx.error().value;
-      result.set_throw();
     }
   }
   if (m_finally) {
-    if (result.is_throw()) {
-      Result res;
-      m_finally->execute(ctx, res);
-      if (res.is_throw()) result.value = res.value;
+    if (!ctx.ok()) {
+      ctx.reset();
+      m_finally->execute(ctx, result);
+      ctx.error(true);
     } else {
       m_finally->execute(ctx, result);
     }

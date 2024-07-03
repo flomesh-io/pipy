@@ -669,7 +669,7 @@ template<> void ClassDef<Pipy>::init() {
     auto worker = static_cast<Worker*>(ctx.instance());
     pjs::Ref<pipy::Context> context = worker->new_context(root);
     (*func)(*context, 0, nullptr, ret);
-    if (!context->ok()) ctx.error(*context);
+    if (!context->ok()) ctx.error(context->error());
   });
 
   method("mount", [](Context &ctx, Object*, Value &ret) {

@@ -528,24 +528,25 @@ auto Context::Error::where() const -> const Location* {
   return nullptr;
 }
 
-void Context::reset() {
-  for (auto *c = this; c; c = c->m_caller) c->m_has_error = false;
-  m_error->value = Value::undefined;
+auto Context::Error::to_exception() -> Value {
+  if (thrown.is_empty()) return pjs::Error::make(*this);
+  return thrown;
+}
+
+void Context::error(bool flag) {
+  for (auto *c = this; c; c = c->m_caller) c->m_has_error = flag;
+}
+
+void Context::error(const Error &err) {
+  error(true);
+  *m_error = err;
+}
+
+void Context::error(const Value &thrown) {
+  error(true);
+  m_error->thrown = thrown;
   m_error->message.clear();
   m_error->backtrace.clear();
-}
-
-void Context::error(const Context &ctx) {
-  for (auto *c = this; c; c = c->m_caller) c->m_has_error = true;
-  *m_error = *ctx.m_error;
-}
-
-void Context::error(const Value &value) {
-  for (auto *c = this; c; c = c->m_caller) c->m_has_error = true;
-  auto s = value.to_string();
-  m_error->message = s->str();
-  m_error->value = value;
-  s->release();
 }
 
 void Context::error(const char *msg) {
@@ -553,9 +554,10 @@ void Context::error(const char *msg) {
 }
 
 void Context::error(const std::string &msg) {
-  for (auto *c = this; c; c = c->m_caller) c->m_has_error = true;
+  error(true);
+  m_error->thrown = Value::empty;
   m_error->message = msg;
-  m_error->value = pjs::Error::make(*m_error);
+  m_error->backtrace.clear();
 }
 
 void Context::error(const std::runtime_error &err) {
@@ -2096,21 +2098,6 @@ auto Error::name() const -> Str* {
   return s_error;
 }
 
-void Error::backtrace(const std::vector<Location> &bt) {
-  std::string s;
-  for (const auto &l : bt) {
-    s += "In ";
-    s += l.name;
-    if (l.line && l.column) {
-      char buf[100];
-      std::sprintf(buf, " at line %d column %d in %s", l.line, l.column, l.source->filename.c_str());
-      s += buf;
-    }
-    s += '\n';
-  }
-  m_stack = Str::make(std::move(s));
-}
-
 auto Error::to_string() const -> std::string {
   return m_message->str();
 }
@@ -2491,7 +2478,7 @@ void Promise::Then::execute(Context *ctx, State state, const Value &result) {
   }
 
   if (!ctx->ok()) {
-    m_promise->settle(REJECTED, ctx->error().value);
+    m_promise->settle(REJECTED, ctx->error().to_exception());
     ctx->reset();
     return;
   }
@@ -2500,7 +2487,7 @@ void Promise::Then::execute(Context *ctx, State state, const Value &result) {
     Value val;
     (*m_on_finally)(*ctx, 0, nullptr, val);
     if (!ctx->ok()) {
-      m_promise->settle(REJECTED, ctx->error().value);
+      m_promise->settle(REJECTED, ctx->error().to_exception());
       ctx->reset();
       return;
     } else if (val.is_promise() && val.as<Promise>()->is_rejected()) {

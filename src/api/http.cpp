@@ -198,7 +198,7 @@ auto Match::exec(const std::string &path) -> pjs::Object* {
   auto size = path.length();
   if (size > 0 && path.back() == '/') size--;
   while (i < m_sections.size() && p < size) {
-    if (path[p++] != '/') break;
+    if (path[p] == '/') p++; else break;
     auto q = p;
     while (q < size) {
       auto c = path[q];
@@ -224,7 +224,11 @@ auto Match::exec(const std::string &path) -> pjs::Object* {
     p += n;
     i += 1;
   }
-  if (i < m_sections.size() || p < size) {
+  if (i < m_sections.size() || (
+    p < size &&
+    path[p] != '#' &&
+    path[p] != '?'
+  )) {
     args->retain();
     args->release();
     return nullptr;

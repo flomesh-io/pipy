@@ -2251,10 +2251,11 @@ private:
 class Context : public RefCount<Context> {
 public:
   struct Error {
-    Value value;
+    Value thrown = Value::empty;
     std::string message;
     std::vector<Location> backtrace;
     auto where() const -> const Location*;
+    auto to_exception() -> Value;
   };
 
   static auto current() -> Context* { return s_current; }
@@ -2301,11 +2302,12 @@ public:
   auto arg(int i) const -> Value& { return m_argv[i]; }
   auto call_site() const -> const Location& { return m_call_site; }
 
-  void reset();
+  void reset() { error(false); }
   bool ok() const { return !m_has_error; }
   auto error() const -> Error& { return *m_error; }
-  void error(const Context &ctx);
-  void error(const Value &value);
+  void error(bool flag);
+  void error(const Error &err);
+  void error(const Value &thrown);
   void error(const char *msg);
   void error(const std::string &msg);
   void error(const std::runtime_error &err);
@@ -3625,7 +3627,6 @@ public:
   auto message() const -> Str* { return m_message; }
   auto cause() const -> Error* { return m_cause; }
   auto stack() const -> Str* { return m_stack; }
-  void backtrace(const std::vector<Location> &bt);
 
 private:
   Error(Str *message = nullptr, Object *cause = nullptr)
