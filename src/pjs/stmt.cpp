@@ -84,7 +84,7 @@ void Block::execute(Context &ctx, Result &result) {
   }
   for (const auto &p : m_stmts) {
     p->execute(ctx, result);
-    if (!result.is_done()) return;
+    if (!result.is_done() || !ctx.ok()) return;
   }
   result.set_done();
 }
@@ -367,6 +367,7 @@ void Switch::execute(Context &ctx, Result &result) {
   while (p != m_cases.end()) {
     if (auto s = p->second.get()) {
       s->execute(ctx, result);
+      if (!ctx.ok()) return;
       if (result.is_break()) break;
       if (!result.is_done()) return;
     }
