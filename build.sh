@@ -234,6 +234,10 @@ if $BUILD_RPM; then
   cat $__CHANGELOG >> pipy.spec
   rm -f $__CHANGELOG
 
+  if [[ "$RELEASE_VERSION" != "nightly"* ]]; then
+    REVISION=1
+  fi
+
   sudo docker build -t pipy-rpmbuild:$RELEASE_VERSION \
     --build-arg VERSION=$VERSION \
     --build-arg REVISION=$REVISION \

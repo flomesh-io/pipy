@@ -5,7 +5,7 @@ ARG VERSION
 ENV VERSION=${VERSION:-latest}
 
 ARG REVISION
-ENV REVISION=${REVISION:-0}
+ENV REVISION=${REVISION:-1}
 
 ARG COMMIT_ID
 ENV CI_COMMIT_SHA=${COMMIT_ID}
@@ -30,10 +30,12 @@ COPY rpmmacros /rpmmacros
 COPY pipy.tar.gz /pipy.tar.gz
 COPY pipy.spec /pipy.spec
 
-RUN yum install -y -q unzip rpm-build rpmdevtools \
+RUN sed -i -e 's@^mirrorlist@#mirrorlist@g' -e 's@^# *baseurl=http://mirror@baseurl=http://vault@g' /etc/yum.repos.d/*.repo \
+    && yum install -y -q unzip rpm-build rpmdevtools \
     && rpmdev-setuptree \
     && mv /rpmmacros ~/.rpmmacros \
     && yum install -y centos-release-scl epel-release yum-utils \
+    && sed -i -e 's@^mirrorlist@#mirrorlist@g' -e 's@^# *baseurl=http://mirror@baseurl=http://vault@g' /etc/yum.repos.d/*.repo \
     && yum-builddep --define "_with_gui 1" -y /pipy.spec
 
 RUN mv /pipy.tar.gz ~/rpmbuild/SOURCES \
