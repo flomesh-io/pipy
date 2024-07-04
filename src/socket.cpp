@@ -857,7 +857,7 @@ auto Socket::set_raw_option(int level, int option, Data *data) -> int {
   if (!m_fd) throw std::runtime_error("socket is gone");
   pjs::vl_array<char, 1000> buf(data->size());
   data->to_bytes((uint8_t *)buf.data());
-  auto ret = setsockopt(m_fd, level, option, buf.data(), buf.size());
+  auto ret = setsockopt(m_fd, level, option, buf.data(), 4 * buf.size());
   if (!ret) return ret;
   return errno;
 }
