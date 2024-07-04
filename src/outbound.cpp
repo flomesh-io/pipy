@@ -112,10 +112,6 @@ auto Outbound::address() -> pjs::Str* {
   return m_address;
 }
 
-void Outbound::open() {
-  state(Outbound::State::open);
-}
-
 void Outbound::close(StreamEnd *eos) {
   InputContext ic;
   retain();
@@ -277,6 +273,7 @@ void OutboundTCP::bind(const std::string &address) {
   auto &s = SocketTCP::socket();
   tcp::endpoint ep(asio::ip::make_address(ip), port);
   s.open(ep.protocol());
+  state(Outbound::State::open);
   s.bind(ep);
   const auto &local = s.local_endpoint();
   m_local_addr = local.address().to_string();
@@ -429,7 +426,13 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
     Log::debug(Log::OUTBOUND, "%s connecting...", desc);
   }
 
-  socket().async_connect(
+  auto &s = socket();
+  if (!s.is_open()) {
+    s.open(target.protocol());
+    state(Outbound::State::open);
+  }
+
+  s.async_connect(
     target,
     [=](const std::error_code &ec) {
       InputContext ic;
@@ -530,6 +533,7 @@ void OutboundUDP::bind(const std::string &address) {
   auto &s = SocketUDP::socket();
   udp::endpoint ep(asio::ip::make_address(ip), port);
   s.open(ep.protocol());
+  state(Outbound::State::open);
   s.bind(ep);
   const auto &local = s.local_endpoint();
   m_local_addr = local.address().to_string();
@@ -686,7 +690,13 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
     Log::debug(Log::OUTBOUND, "%s connecting...", desc);
   }
 
-  socket().async_connect(
+  auto &s = socket();
+  if (!s.is_open()) {
+    s.open(target.protocol());
+    state(Outbound::State::open);
+  }
+
+  s.async_connect(
     target,
     [=](const std::error_code &ec) {
       InputContext ic;
