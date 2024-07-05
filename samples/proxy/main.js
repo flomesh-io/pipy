@@ -98,9 +98,13 @@ if (config.proxy.http) {
               return 'tunnel'
             } else {
               var url = new URL(head.path)
-              $host = `${url.hostname}:${url.port}`
-              log('HTTP', head.method, head.path)
-              return 'forward'
+              if (isTargetAllowed(url.hostname)) {
+                $host = `${url.hostname}:${url.port}`
+                log('HTTP', head.method, head.path)
+                return 'forward'
+              } else {
+                return 'forbidden'
+              }
             }
           }
         }, {
@@ -109,7 +113,10 @@ if (config.proxy.http) {
           ),
           'forward': ($=>$
             .muxHTTP(() => $host).to($=>$.connect(() => $host))
-          )
+          ),
+          'forbidden': ($=>$
+            .replaceMessage(new Message({ status: 403 }))
+          ),
         }
       )
     )
