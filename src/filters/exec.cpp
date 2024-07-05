@@ -33,9 +33,20 @@
 #include <string.h>
 
 #ifndef _WIN32
+
 #include <unistd.h>
 #include <sys/wait.h>
+
+#if defined(__linux__)
+#include <pty.h>
+#elif defined(__APPLE__)
+#include <util.h>
+#elif defined(__FreeBSD__)
+#include <libutil.h>
+#include <termios.h>
 #endif
+
+#endif // _WIN32
 
 namespace pipy {
 
@@ -48,6 +59,9 @@ static Data::Producer s_dp("exec()");
 Exec::Options::Options(pjs::Object *options) {
   Value(options, "stderr")
     .get(std_err)
+    .check_nullable();
+  Value(options, "pty")
+    .get(pty)
     .check_nullable();
   Value(options, "onExit")
     .get(on_exit_f)
@@ -189,25 +203,70 @@ bool Exec::exec_argv(const std::list<std::string> &args) {
   for (const auto &arg : args) argv[i++] = strdup(arg.c_str());
   argv[argc] = nullptr;
 
-  int in[2], out[2], err[2];
-  pipe(in);
-  pipe(out);
-  pipe(err);
+  int pid = 0;
 
-  m_stdin = FileStream::make(false, in[1], &s_dp);
-  m_stdout = FileStream::make(true, out[0], &s_dp);
-  m_stderr = FileStream::make(true, err[0], &s_dp);
-  m_stdout->chain(m_stdout_reader.input());
-  m_stderr->chain(m_stderr_reader.input());
+  if (m_options.pty) {
+    int master_fd;
+    struct termios term;
 
-  auto pid = fork();
+    term.c_iflag = ICRNL | IXON | IXANY | IMAXBEL | BRKINT | IUTF8;
+    term.c_oflag = OPOST | ONLCR;
+    term.c_cflag = CREAD | CS8 | HUPCL;
+    term.c_lflag = ICANON | ISIG | IEXTEN | ECHOE | ECHOK | ECHOKE | ECHOCTL;
+    term.c_cc[VEOF] = 4;
+    term.c_cc[VEOL] = -1;
+    term.c_cc[VEOL2] = -1;
+    term.c_cc[VERASE] = 0x7f;
+    term.c_cc[VWERASE] = 23;
+    term.c_cc[VKILL] = 21;
+    term.c_cc[VREPRINT] = 18;
+    term.c_cc[VINTR] = 3;
+    term.c_cc[VQUIT] = 0x1c;
+    term.c_cc[VSUSP] = 26;
+    term.c_cc[VSTART] = 17;
+    term.c_cc[VSTOP] = 19;
+    term.c_cc[VLNEXT] = 22;
+    term.c_cc[VDISCARD] = 15;
+    term.c_cc[VMIN] = 1;
+    term.c_cc[VTIME] = 0;
 
-  if (pid == 0) {
-    dup2(in[0], 0);
-    dup2(out[1], 1);
-    dup2(err[1], 2);
-    execvp(argv[0], argv);
-    std::terminate();
+    pid = forkpty(&master_fd, nullptr, &term, nullptr);
+
+    if (pid == 0) {
+      execvp(argv[0], argv);
+      std::terminate();
+    }
+
+    fcntl(master_fd, F_SETFL, fcntl(master_fd, F_GETFL, 0) | O_NONBLOCK);
+
+    m_stdout = m_stdin = FileStream::make(true, master_fd, &s_dp);
+    m_stdout->chain(m_stdout_reader.input());
+
+  } else {
+    int in[2], out[2], err[2];
+    pipe(in);
+    pipe(out);
+    pipe(err);
+
+    m_stdin = FileStream::make(false, in[1], &s_dp);
+    m_stdout = FileStream::make(true, out[0], &s_dp);
+    m_stderr = FileStream::make(true, err[0], &s_dp);
+    m_stdout->chain(m_stdout_reader.input());
+    m_stderr->chain(m_stderr_reader.input());
+
+    pid = fork();
+
+    if (pid == 0) {
+      dup2(in[0], 0);
+      dup2(out[1], 1);
+      dup2(err[1], 2);
+      execvp(argv[0], argv);
+      std::terminate();
+    }
+
+    ::close(in[0]);
+    ::close(out[1]);
+    ::close(err[1]);
   }
 
   for (i = 0; i < argc; i++) free(argv[i]);
@@ -217,9 +276,6 @@ bool Exec::exec_argv(const std::list<std::string> &args) {
     return false;
   }
 
-  ::close(in[0]);
-  ::close(out[1]);
-  ::close(err[1]);
   m_child_proc.pid = pid;
 
   Log::debug(Log::SUBPROC,

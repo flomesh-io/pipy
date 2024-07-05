@@ -47,6 +47,7 @@ class Exec : public Filter {
 public:
   struct Options : public pipy::Options {
     bool std_err = false;
+    bool pty = false;
     pjs::Ref<pjs::Function> on_exit_f;
     Options() {}
     Options(pjs::Object *options);
