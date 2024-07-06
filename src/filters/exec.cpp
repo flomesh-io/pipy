@@ -175,7 +175,7 @@ void Exec::on_process_exit(int exit_code) {
 }
 
 void Exec::check_ending() {
-  if (m_child_proc_exited && m_stdout_reader.ended() && m_stderr_reader.ended()) {
+  if (m_child_proc_exited) {
     if (auto f = m_options.on_exit_f.get()) {
       pjs::Value args[2], ret;
       args[0].set(m_child_proc_exit_code);
@@ -183,9 +183,16 @@ void Exec::check_ending() {
       if (!m_options.std_err) {
         args[argc++].set(Data::make(std::move(m_stderr_reader.buffer())));
       }
-      Filter::callback(f, argc, args, ret);
+      if (Filter::callback(f, argc, args, ret)) {
+        if (!ret.is_undefined()) {
+          if (!ret.is_object() || !Filter::output(ret.o())) {
+            Filter::error("onExit didn't return an event or Message or an array of those");
+          }
+        }
+      }
+    } else if (m_stdout_reader.ended() && m_stderr_reader.ended()) {
+      Filter::output(StreamEnd::make());
     }
-    Filter::output(StreamEnd::make());
   }
 }
 
