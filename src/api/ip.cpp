@@ -514,6 +514,20 @@ template<> void ClassDef<IP>::init() {
 template<> void ClassDef<Constructor<IP>>::init() {
   super<Function>();
   ctor();
+
+  method("isV4", [](Context &ctx, Object *obj, Value &ret) {
+    Str *str;
+    if (!ctx.arguments(1, &str)) return;
+    uint8_t ip[4];
+    ret.set(utils::get_ip_v4(str->str(), ip));
+  });
+
+  method("isV6", [](Context &ctx, Object *obj, Value &ret) {
+    Str *str;
+    if (!ctx.arguments(1, &str)) return;
+    uint16_t ip[8];
+    ret.set(utils::get_ip_v6(str->str(), ip));
+  });
 }
 
 //
