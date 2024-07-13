@@ -164,12 +164,16 @@ static void toggle_admin_port() {
 class PeriodicJob {
 public:
   void start() { run(); }
-  void stop() { m_timer.cancel(); }
+  void stop() { if (m_timer) m_timer->cancel(); }
 protected:
   virtual void run() = 0;
-  void next() { m_timer.schedule(5, [this]() { run(); }); }
+  void next() {
+    if (!m_timer) m_timer = std::unique_ptr<Timer>(new Timer);
+    m_timer->schedule(5, [this]() { run(); });
+  }
+
 private:
-  Timer m_timer;
+  std::unique_ptr<Timer> m_timer;
 };
 
 //
@@ -305,7 +309,7 @@ public:
 private:
   asio::signal_set m_signals;
   bool m_admin_closed = false;
-  Timer m_timer;
+  std::unique_ptr<Timer> m_timer;
 
   void wait() {
     m_signals.async_wait(
@@ -343,7 +347,8 @@ private:
       stop_all();
     } else {
       Log::info("[shutdown] Waiting for workers to drain...");
-      m_timer.schedule(1, [this]() { wait_workers(); });
+      if (!m_timer) m_timer = std::unique_ptr<Timer>(new Timer);
+      m_timer->schedule(1, [this]() { wait_workers(); });
     }
   }
 
