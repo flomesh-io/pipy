@@ -149,6 +149,7 @@ PublicKey::PublicKey(EVP_PKEY *pkey) : m_pkey(pkey) {
 }
 
 PublicKey::PublicKey(Data *data) {
+  if (!data->size()) throw std::runtime_error("Data size is zero");
   if (s_openssl_engine) {
     m_pkey = load_by_engine(data->to_string());
   } else {
@@ -158,6 +159,7 @@ PublicKey::PublicKey(Data *data) {
 }
 
 PublicKey::PublicKey(pjs::Str *data) {
+  if (!data->size()) throw std::runtime_error("Data size is zero");
   if (s_openssl_engine) {
     m_pkey = load_by_engine(data->str());
   } else {
@@ -215,6 +217,7 @@ PrivateKey::GenerateOptions::GenerateOptions(pjs::Object *options) {
 }
 
 PrivateKey::PrivateKey(Data *data) {
+  if (!data->size()) throw std::runtime_error("Data size is zero");
   if (s_openssl_engine) {
     m_pkey = load_by_engine(data->to_string());
   } else {
@@ -224,6 +227,7 @@ PrivateKey::PrivateKey(Data *data) {
 }
 
 PrivateKey::PrivateKey(pjs::Str *data) {
+  if (!data->size()) throw std::runtime_error("Data size is zero");
   if (s_openssl_engine) {
     m_pkey = load_by_engine(data->str());
   } else {
@@ -338,11 +342,13 @@ Certificate::Certificate(X509 *x509) {
 }
 
 Certificate::Certificate(Data *data) {
+  if (!data->size()) throw std::runtime_error("Data size is zero");
   auto buf = data->to_bytes();
   m_x509 = read_pem(&buf[0], buf.size());
 }
 
 Certificate::Certificate(pjs::Str *data) {
+  if (!data->size()) throw std::runtime_error("Data size is zero");
   m_x509 = read_pem(data->c_str(), data->size());
 }
 
