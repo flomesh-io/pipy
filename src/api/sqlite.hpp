@@ -43,6 +43,7 @@ class Database : public pjs::ObjectTemplate<Database> {
 public:
   auto sql(pjs::Str *sql) -> Statement*;
   auto exec(pjs::Str *sql) -> pjs::Array*;
+  void close();
 
 private:
   Database(pjs::Str *filename, int flags = 0);

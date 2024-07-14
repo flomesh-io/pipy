@@ -131,10 +131,13 @@ Database::Database(pjs::Str *filename, int flags) {
 }
 
 Database::~Database() {
-  sqlite3_close(m_db);
+  if (m_db) {
+    sqlite3_close_v2(m_db);
+  }
 }
 
 auto Database::sql(pjs::Str *sql) -> Statement* {
+  if (!m_db) throw std::runtime_error("Database is closed");
   sqlite3_stmt *stmt = nullptr;
   if (SQLITE_OK != sqlite3_prepare_v2(m_db, sql->c_str(), sql->size(), &stmt, nullptr)) {
     throw_error(m_db);
@@ -143,6 +146,7 @@ auto Database::sql(pjs::Str *sql) -> Statement* {
 }
 
 auto Database::exec(pjs::Str *sql) -> pjs::Array* {
+  if (!m_db) throw std::runtime_error("Database is closed");
   char *err = nullptr;
   auto rows = pjs::Array::make();
   sqlite3_exec(m_db, sql->c_str(), append_exec_row, rows, &err);
@@ -154,6 +158,13 @@ auto Database::exec(pjs::Str *sql) -> pjs::Array* {
     throw std::runtime_error(msg);
   }
   return rows;
+}
+
+void Database::close() {
+  if (m_db) {
+    sqlite3_close_v2(m_db);
+    m_db = nullptr;
+  }
 }
 
 //
@@ -281,6 +292,10 @@ template<> void ClassDef<Database>::init() {
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
+  });
+
+  method("close", [](Context &ctx, Object *obj, Value &ret) {
+    static_cast<Database*>(obj)->close();
   });
 }
 
