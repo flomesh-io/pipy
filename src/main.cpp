@@ -593,7 +593,7 @@ int pipy_main(int argc, char *argv[]) {
             wm.argv(opts.arguments);
             wm.enable_graph(!opts.no_graph);
 
-            if (is_repo || is_remote) {
+            if ((is_repo || is_remote) && !opts.no_reload) {
               wm.on_ended(exit);
             } else {
               wm.on_done(exit);
@@ -617,7 +617,9 @@ int pipy_main(int argc, char *argv[]) {
               toggle_admin_port();
             }
 
-            s_code_updater.start();
+            if (!opts.no_reload) {
+              s_code_updater.start();
+            }
 
             if (is_remote) {
               AdminLink::TLSSettings tls_settings;
@@ -639,7 +641,7 @@ int pipy_main(int argc, char *argv[]) {
       };
 
       exit = [&]() {
-        if (!is_remote) {
+        if (!is_remote || opts.no_reload) {
           s_pool_cleaner.stop();
           s_code_updater.stop();
           s_signal_handler.stop();
@@ -648,7 +650,7 @@ int pipy_main(int argc, char *argv[]) {
       };
 
       fail = [&]() {
-        if (is_remote) {
+        if (is_remote && !opts.no_reload) {
           retry_timer.schedule(5, load);
         } else {
           if (start_error) {

@@ -51,6 +51,7 @@ public:
   bool        help = false;
   bool        file = false;
   bool        eval = false;
+  bool        no_reload = false;
   bool        no_graph = false;
   bool        no_status = false;
   bool        no_metrics = false;
