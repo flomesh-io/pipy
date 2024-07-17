@@ -63,6 +63,9 @@ Exec::Options::Options(pjs::Object *options) {
   Value(options, "pty")
     .get(pty)
     .check_nullable();
+  Value(options, "onStart")
+    .get(on_start_f)
+    .check_nullable();
   Value(options, "onExit")
     .get(on_exit_f)
     .check_nullable();
@@ -156,6 +159,10 @@ void Exec::process(Event *evt) {
 
     if (m_child_proc.pid > 0) {
       s_child_process_monitor.add(this);
+      if (auto f = m_options.on_start_f.get()) {
+        pjs::Value arg(m_child_proc.pid), ret;
+        Filter::callback(f, 1, &arg, ret);
+      }
     }
   }
 
