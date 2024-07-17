@@ -266,6 +266,10 @@ auto process_id() -> int {
   return GetCurrentProcessId();
 }
 
+void kill(int pid, int sig) {
+  // TODO
+}
+
 auto FileHandle::std_input() -> FileHandle {
   if (!s_stdin_server) {
     s_stdin_server = new StdioServer(
@@ -449,6 +453,11 @@ void cleanup()
 
 auto process_id() -> int {
   return getpid();
+}
+
+void kill(int pid, int sig) {
+  if (!sig) sig = SIGTERM;
+  ::kill(pid, sig);
 }
 
 auto FileHandle::std_input() -> FileHandle {

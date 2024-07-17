@@ -24,6 +24,7 @@
  */
 
 #include "os.hpp"
+#include "os-platform.hpp"
 #include "fs.hpp"
 #include "data.hpp"
 #include "log.hpp"
@@ -190,6 +191,10 @@ bool OS::rm(const std::string &pathname, const RmdirOptions &options) {
     throw std::runtime_error("cannot delete file: " + fullpath);
   }
   return true;
+}
+
+void OS::kill(int pid, int sig) {
+  os::kill(pid, sig);
 }
 
 //
@@ -440,6 +445,13 @@ template<> void ClassDef<OS>::init() {
     } catch (std::runtime_error &err) {
       Log::error("%s", err.what());
     }
+  });
+
+  // os.kill
+  method("kill", [](Context &ctx, Object*, Value &ret) {
+    int pid, sig = 0;
+    if (!ctx.arguments(1, &pid, &sig)) return;
+    OS::kill(pid, sig);
   });
 }
 

@@ -34,6 +34,7 @@ namespace os {
 void init();
 void cleanup();
 auto process_id() -> int;
+void kill(int pid, int sig = 0);
 
 } // namespace os
 } // namespace pipy

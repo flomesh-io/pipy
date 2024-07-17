@@ -83,6 +83,7 @@ public:
   static void mkdir(const std::string &pathname, const MkdirOptions &options = MkdirOptions());
   static bool rmdir(const std::string &pathname, const RmdirOptions &options = RmdirOptions());
   static bool rm(const std::string &pathname, const RmdirOptions &options = RmdirOptions());
+  static void kill(int pid, int sig = 0);
 
 private:
   OS();
