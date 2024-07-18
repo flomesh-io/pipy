@@ -149,6 +149,7 @@ auto CodebaseFromRoot::watch(const std::string &path, const std::function<void(b
 
 auto CodebaseFromRoot::find_mount(const std::string &path, std::string &local_path) -> Codebase* {
   std::string dirname = path;
+  if (dirname.empty()) return nullptr;
   if (dirname.front() != '/') dirname = '/' + dirname;
   if (dirname.back() != '/') dirname += '/';
   for (auto &p : m_mounts) {
