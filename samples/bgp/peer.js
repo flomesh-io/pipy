@@ -243,38 +243,41 @@ export default function (config, address) {
 
     // Routes for IPv6 unicast
     if (hasIPv6) {
+      var pathAttributes = [...commonPathAttrs]
+      if (config.ipv6.reachable.length > 0) {
+        pathAttributes.push({
+          // MP_REACH_NLRI
+          code: 14,
+          value: new Data([
+            // IPv6 unicast
+            0, 2, 1,
+            // Next Hop
+            16, ...ipv6(IPV6_NEXT_HOP).data,
+            // No SNPAs
+            0,
+            // NLRI
+            ...config.ipv6.reachable.flatMap(a => ipv6Prefix(a)),
+          ]),
+          optional: true,
+        })
+      }
+      if (config.ipv6.unreachable.length > 0) {
+        pathAttributes.push({
+          // MP_UNREACH_NLRI
+          code: 15,
+          value: new Data([
+            // IPv6 unicast
+            0, 2, 1,
+            // NLRI
+            ...config.ipv6.unreachable.flatMap(a => ipv6Prefix(a)),
+          ]),
+          optional: true,
+        })
+      }
       messages.push(new Message(null, {
         type: 'UPDATE',
         body: {
-          pathAttributes: [
-            ...commonPathAttrs,
-            {
-              // MP_REACH_NLRI
-              code: 14,
-              value: new Data([
-                // IPv6 unicast
-                0, 2, 1,
-                // Next Hop
-                16, ...ipv6(IPV6_NEXT_HOP).data,
-                // No SNPAs
-                0,
-                // NLRI
-                ...config.ipv6.reachable.flatMap(a => ipv6Prefix(a)),
-              ]),
-              optional: true,
-            },
-            {
-              // MP_UNREACH_NLRI
-              code: 15,
-              value: new Data([
-                // IPv6 unicast
-                0, 2, 1,
-                // NLRI
-                ...config.ipv6.unreachable.flatMap(a => ipv6Prefix(a)),
-              ]),
-              optional: true,
-            }
-          ],
+          pathAttributes,
           withdrawnRoutes: [],
           destinations: [],
         }
