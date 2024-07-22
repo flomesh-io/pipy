@@ -509,7 +509,13 @@ private:
 
   pjs::Ref<pjs::Function> m_handler;
   pjs::Ref<Pipeline> m_pipeline;
+  pjs::Ref<RequestHead> m_request_head;
+  pjs::Ref<pjs::Promise::Callback> m_promise_callback;
+  EventBuffer m_buffer;
   MessageReader m_message_reader;
+
+  void on_resolve(pjs::Promise::State state, const pjs::Value &value);
+  void start_tunnel(Message *response);
 };
 
 //

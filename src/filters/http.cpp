@@ -1797,6 +1797,9 @@ auto TunnelServer::clone() -> Filter* {
 void TunnelServer::reset() {
   Filter::reset();
   m_pipeline = nullptr;
+  m_request_head = nullptr;
+  m_promise_callback = nullptr;
+  m_buffer.clear();
   m_message_reader.reset();
 }
 
@@ -1804,7 +1807,12 @@ void TunnelServer::process(Event *evt) {
   if (m_pipeline) {
     m_pipeline->input()->input(evt);
 
+  } else if (m_promise_callback) {
+    m_buffer.push(evt);
+
   } else if (auto req = m_message_reader.read(evt)) {
+    m_request_head = pjs::coerce<RequestHead>(req->head());
+
     pjs::Value arg(req), ret;
     req->release();
     if (!callback(m_handler, 1, &arg, ret)) return;
@@ -1814,20 +1822,45 @@ void TunnelServer::process(Event *evt) {
       res = Message::make();
     } else if (ret.is_instance_of<Message>()) {
       res = ret.as<Message>();
+    } else if (ret.is_promise()) {
+      m_promise_callback = pjs::Promise::Callback::make(
+        [this](pjs::Promise::State state, const pjs::Value &v) {
+          on_resolve(state, v);
+        }
+      );
+      ret.as<pjs::Promise>()->then(Filter::context(), m_promise_callback->resolved());
+      return;
     } else {
       Filter::error("handler did not return a Message");
       return;
     }
 
-    pjs::Ref<RequestHead> req_head = pjs::coerce<RequestHead>(req->head());
-    pjs::Ref<ResponseHead> res_head = pjs::coerce<ResponseHead>(res->head());
-    if (res_head->is_tunnel_ok(req_head->tunnel_type())) {
-      m_pipeline = sub_pipeline(0, true, Filter::output());
-    }
+    start_tunnel(res);
+  }
+}
 
-    res->write(Filter::output());
+void TunnelServer::on_resolve(pjs::Promise::State state, const pjs::Value &value) {
+  pjs::Ref<Message> res;
+  if (value.is_nullish()) {
+    start_tunnel(Message::make());
+  } else if (value.is_instance_of<Message>()) {
+    start_tunnel(value.as<Message>());
+  } else {
+    Filter::error("Promise did not resolve to a Message");
+  }
+}
 
-    if (m_pipeline) m_pipeline->start();
+void TunnelServer::start_tunnel(Message *response) {
+  pjs::Ref<ResponseHead> response_head = pjs::coerce<ResponseHead>(response->head());
+  if (response_head->is_tunnel_ok(m_request_head->tunnel_type())) {
+    m_pipeline = sub_pipeline(0, true, Filter::output());
+  }
+
+  response->write(Filter::output());
+
+  if (m_pipeline) {
+    m_pipeline->start();
+    m_buffer.flush(m_pipeline->input());
   }
 }
 
