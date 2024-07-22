@@ -467,6 +467,8 @@ target_link_libraries(
 
 if(WIN32)
   target_link_libraries(pipy crypt32 userenv)
+elseif(ANDROID)
+  target_link_libraries(pipy -pthread -ldl)
 else()
   target_link_libraries(pipy -pthread -ldl -lutil)
 endif()
