@@ -233,11 +233,11 @@ auto abs_path(const std::string &filename) -> std::string {
   auto len = GetFullPathNameW(inp.c_str(), sizeof(buf) / sizeof(buf[0]), buf, NULL);
   if (len <= sizeof(buf) / sizeof(buf[0])) {
     std::wstring ws(buf, len);
-    return os::windows::w2a(ws);
+    return os::windows::convert_slash(os::windows::w2a(ws));
   }
   pjs::vl_array<wchar_t, 1000> wca(len);
   GetFullPathNameW(inp.c_str(), len, wca.data(), NULL);
-  return os::windows::w2a(std::wstring(wca, len));
+  return os::windows::convert_slash(os::windows::w2a(std::wstring(wca, len)));
 }
 
 bool stat(const std::string &filename, Stat &s) {
@@ -263,11 +263,13 @@ bool exists(const std::string &filename) {
 bool is_dir(const std::string &filename) {
   auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
   auto attrs = GetFileAttributesW(wpath.c_str());
-  return (attrs & FILE_ATTRIBUTE_DIRECTORY);
+  return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
 bool is_file(const std::string &filename) {
-  return !is_dir(filename);
+  auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
+  auto attrs = GetFileAttributesW(wpath.c_str());
+  return (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
 auto get_file_time(const std::string &filename) -> double {
