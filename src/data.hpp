@@ -75,14 +75,14 @@ public:
     static auto unknown() -> Producer*;
 
     static void for_each(const std::function<void(Producer*)> &cb) {
-      std::lock_guard<std::mutex> lock(s_all_producers_mutex);
+      std::lock_guard<std::mutex> lock(producer_list_mutex());
       for (auto p = s_all_producers.head(); p; p = p->next()) {
         cb(p);
       }
     }
 
     Producer(const std::string &name) : m_name(name), m_count(0) {
-      std::lock_guard<std::mutex> lock(s_all_producers_mutex);
+      std::lock_guard<std::mutex> lock(producer_list_mutex());
       s_all_producers.push(this);
     }
 
@@ -109,11 +109,12 @@ public:
     std::string m_name;
     std::atomic<size_t> m_count;
 
+    static auto producer_list_mutex() -> std::mutex&;
+
     void increase() { m_count.fetch_add(1, std::memory_order_relaxed); }
     void decrease() { m_count.fetch_sub(1, std::memory_order_relaxed); }
 
     static List<Producer> s_all_producers;
-    static std::mutex s_all_producers_mutex;
 
     friend struct Chunk;
   };

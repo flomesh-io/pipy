@@ -30,11 +30,15 @@
 namespace pipy {
 
 List<Data::Producer> Data::Producer::s_all_producers;
-std::mutex Data::Producer::s_all_producers_mutex;
 Data::Producer Data::s_unknown_producer("Unknown");
 
 auto Data::Producer::unknown() -> Producer* {
   return &s_unknown_producer;
+}
+
+auto Data::Producer::producer_list_mutex() -> std::mutex& {
+  static std::mutex s_mutex;
+  return s_mutex;
 }
 
 void Data::pack(const Data &data, Producer *producer, double vacancy) {
