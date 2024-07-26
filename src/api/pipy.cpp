@@ -684,6 +684,16 @@ template<> void ClassDef<Pipy>::init() {
     }
   });
 
+  method("unmount", [](Context &ctx, Object*, Value &ret) {
+    std::string path;
+    if (!ctx.arguments(1, &path)) return;
+    try {
+      Codebase::current()->mount(path, nullptr);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   method("load", [](Context &ctx, Object*, Value &ret) {
     std::string filename;
     if (!ctx.arguments(1, &filename)) return;

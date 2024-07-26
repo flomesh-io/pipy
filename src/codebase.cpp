@@ -89,15 +89,22 @@ CodebaseFromRoot::~CodebaseFromRoot() {
 
 void CodebaseFromRoot::mount(const std::string &name, Codebase *codebase) {
   if (name.find('/') != std::string::npos) throw std::runtime_error("invalid mount name");
-  if (get(name)) throw std::runtime_error("mount path already exists");
-  if (list(name).size() > 0) throw std::runtime_error("mount path already exists");
-  std::lock_guard<std::mutex> lock(m_mutex);
-  for (const auto &p : m_mounts) {
-    if (p.first == name) {
+  if (codebase) {
+    if (get(name)) throw std::runtime_error("mount path already exists");
+    if (list(name).size() > 0) throw std::runtime_error("mount path already exists");
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_mounts.find(name) != m_mounts.end()) {
       throw std::runtime_error("mount path already exists");
     }
+    m_mounts[name] = codebase;
+  } else {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto i = m_mounts.find(name);
+    if (i != m_mounts.end()) {
+      delete i->second;
+      m_mounts.erase(i);
+    }
   }
-  m_mounts[name] = codebase;
 }
 
 auto CodebaseFromRoot::list(const std::string &path) -> std::list<std::string> {
