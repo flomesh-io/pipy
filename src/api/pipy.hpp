@@ -34,6 +34,7 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <mutex>
 
 namespace pipy {
 
@@ -121,6 +122,20 @@ public:
   static bool start_exiting(pjs::Context &ctx, const std::function<void()> &on_done);
 
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
+
+  //
+  // Pipy::TTY
+  //
+
+  class TTY : public pjs::ObjectTemplate<TTY> {
+  public:
+    static void set_raw(bool b);
+    static bool get_raw() { return m_raw; }
+
+  private:
+    static std::mutex m_mutex;
+    static bool m_raw;
+  };
 
   //
   // Pipy::Inbound

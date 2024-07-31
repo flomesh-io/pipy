@@ -53,6 +53,15 @@
 #include <sys/wait.h>
 #endif
 
+#if defined(__linux__)
+#include <pty.h>
+#elif defined(__APPLE__)
+#include <util.h>
+#elif defined(__FreeBSD__)
+#include <libutil.h>
+#include <termios.h>
+#endif
+
 namespace pipy {
 
 thread_local static pjs::Ref<pjs::Array> s_argv;
@@ -607,6 +616,37 @@ void Pipy::FileWatcher::on_file_changed(bool changed) {
   }
 }
 
+//
+// Pipy::TTY
+//
+
+#ifndef _WIN32
+
+struct InitialTTYState {
+  struct termios term;
+  InitialTTYState() { tcgetattr(0, &term); }
+};
+
+static InitialTTYState s_initial_tty_state;
+
+#endif // !_WIN32
+
+std::mutex Pipy::TTY::m_mutex;
+bool Pipy::TTY::m_raw = false;
+
+void Pipy::TTY::set_raw(bool b) {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  if (b != m_raw) {
+#ifndef _WIN32
+    struct termios term = s_initial_tty_state.term;
+    if (b) cfmakeraw(&term);
+    term.c_oflag = s_initial_tty_state.term.c_oflag;
+    tcsetattr(0, TCSANOW, &term);
+#endif // !_WIN32
+    m_raw = b;
+  }
+}
+
 } // namespace pipy
 
 namespace pjs {
@@ -617,6 +657,7 @@ template<> void ClassDef<Pipy>::init() {
   super<Function>();
   ctor();
 
+  variable("tty", class_of<Pipy::TTY>());
   variable("inbound", class_of<Pipy::Inbound>());
   variable("outbound", class_of<Pipy::Outbound>());
 
@@ -842,6 +883,15 @@ template<> void ClassDef<Pipy>::init() {
   method("listen", [](Context &ctx, Object*, Value &ret) {
     Pipy::listen(ctx);
   });
+}
+
+template<> void ClassDef<Pipy::TTY>::init() {
+  ctor();
+
+  accessor("raw",
+    [](Object *, Value &ret) { ret.set(Pipy::TTY::get_raw()); },
+    [](Object *, const Value &ret) { Pipy::TTY::set_raw(ret.to_boolean()); }
+  );
 }
 
 template<> void ClassDef<Pipy::Inbound>::init() {
