@@ -374,6 +374,7 @@ protected:
   class StreamBase;
 
   virtual void on_output(Event *evt) = 0;
+  virtual void on_ping(const Data &data) {};
   virtual auto on_new_stream(int id) -> StreamBase* = 0;
   virtual void on_delete_stream(StreamBase *stream) = 0;
   virtual void on_endpoint_close(StreamEnd *eos) {}
@@ -385,6 +386,7 @@ protected:
   void stream_close(int id);
   void stream_error(int id, ErrorCode err);
   void connection_error(ErrorCode err);
+  void ping(const Data &data);
   void shutdown();
 
 private:

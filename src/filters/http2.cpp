@@ -1370,6 +1370,23 @@ void Endpoint::connection_error(ErrorCode err) {
   on_endpoint_close(eos);
 }
 
+void Endpoint::ping(const Data &data) {
+  Frame frm;
+  frm.stream_id = 0;
+  frm.type = Frame::PING;
+  frm.flags = 0;
+  if (data.size() >= 8) {
+    frm.payload.push(data);
+    frm.payload.pop(data.size() - 8);
+  } else {
+    uint8_t buf[8];
+    std::memset(buf, 0, sizeof(buf));
+    data.to_bytes(buf, sizeof(buf));
+    frm.payload.push(buf, sizeof(buf), &s_dp);
+  }
+  frame(frm);
+}
+
 void Endpoint::shutdown() {
   m_has_shutdown = true;
 }
@@ -1471,6 +1488,8 @@ void Endpoint::on_deframe(Frame &frm) {
         } else if (!frm.is_ACK()) {
           frm.flags |= Frame::BIT_ACK;
           frame(frm);
+        } else {
+          on_ping(frm.payload);
         }
         break;
       case Frame::GOAWAY:

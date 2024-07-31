@@ -345,6 +345,7 @@ public:
     int version = 1;
     pjs::Ref<pjs::Str> version_s;
     pjs::Ref<pjs::Function> version_f;
+    pjs::Ref<pjs::Function> ping_f;
     Options() {}
     Options(pjs::Object *options);
   };
@@ -398,6 +399,7 @@ public:
     virtual bool on_decode_tunnel(TunnelType tt) override;
     virtual void on_decode_final() override;
     virtual void on_decode_error() override;
+    virtual void on_ping(const Data &data) override;
     virtual void on_queue_end(StreamEnd *eos) override;
     virtual void on_endpoint_close(StreamEnd *eos) override;
     virtual void on_auto_release() override { delete this; }
@@ -405,11 +407,14 @@ public:
     const Mux::Options& m_options;
     int m_version_selected = 0;
     pjs::Ref<VersionSelector> m_version_selector;
+    pjs::Ref<Context> m_ping_context;
+    pjs::Ref<pjs::Promise::Callback> m_ping_promise_cb;
     RequestQueue m_request_queue;
     bool m_http2 = false;
 
     bool select_protocol(Mux *muxer);
     bool select_protocol(Mux *muxer, const pjs::Value &version);
+    void schedule_ping(Data *ack = nullptr);
   };
 
 private:

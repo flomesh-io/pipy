@@ -1437,6 +1437,9 @@ Mux::Options::Options(pjs::Object *options)
     .get(version_s)
     .get(version_f)
     .check_nullable();
+  Value(options, "ping")
+    .get(ping_f)
+    .check_nullable();
 }
 
 //
@@ -1537,6 +1540,9 @@ Mux::Session::~Session() {
   if (m_version_selector) {
     m_version_selector->close();
   }
+  if (m_ping_promise_cb) {
+    m_ping_promise_cb->discard();
+  }
 }
 
 void Mux::Session::mux_session_open(MuxSource *source) {
@@ -1565,6 +1571,11 @@ void Mux::Session::mux_session_close_stream(EventFunction *stream) {
 
 void Mux::Session::mux_session_close() {
   if (m_http2) {
+    if (m_ping_promise_cb) {
+      m_ping_promise_cb->discard();
+      m_ping_promise_cb = nullptr;
+      m_ping_context = nullptr;
+    }
     http2::Client::shutdown();
   } else {
     MuxQueue::reset();
@@ -1598,6 +1609,13 @@ void Mux::Session::on_decode_final() {
 
 void Mux::Session::on_decode_error()
 {
+}
+
+void Mux::Session::on_ping(const Data &data) {
+  if (m_options.ping_f) {
+    pjs::Ref<Data> d(Data::make(data));
+    schedule_ping(d);
+  }
 }
 
 void Mux::Session::on_queue_end(StreamEnd *eos) {
@@ -1652,12 +1670,34 @@ bool Mux::Session::select_protocol(Mux *mux, const pjs::Value &version) {
     http2::Client::chain(MuxSession::input());
     MuxSession::chain(http2::Client::reply());
     MuxSession::set_pending(false);
+    if (m_options.ping_f) {
+      m_ping_context = mux->context();
+      schedule_ping();
+    }
     return true;
   default:
     break;
   }
 
   return false;
+}
+
+void Mux::Session::schedule_ping(Data *ack) {
+  pjs::Value arg(ack), ret;
+  (*m_options.ping_f)(*m_ping_context, 1, &arg, ret);
+  if (!m_ping_context->ok()) return;
+  if (ret.is_nullish()) return;
+  if (ret.is<Data>()) return http2::Client::ping(*ret.as<Data>());
+  if (ret.is_promise()) {
+    m_ping_promise_cb = pjs::Promise::Callback::make(
+      [this](pjs::Promise::State, const pjs::Value &value) {
+        if (value.is<Data>()) {
+          http2::Client::ping(*value.as<Data>());
+        }
+      }
+    );
+    ret.as<pjs::Promise>()->then(m_ping_context, m_ping_promise_cb->resolved());
+  }
 }
 
 //
