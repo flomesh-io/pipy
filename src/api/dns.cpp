@@ -765,6 +765,7 @@ static int write_record(pjs::Object *dns, Data::Builder &db) {
     if (!utils::get_ip_v4(rdata, ip)) {
       throw std::runtime_error("invalid IPv4 notation");
     }
+    skip += push_int16(db, sizeof(ip));
     db.push(ip, sizeof(ip));
     skip += sizeof(ip);
   } else if (type == int(RecordType::TYPE_AAAA)) {
@@ -776,6 +777,7 @@ static int write_record(pjs::Object *dns, Data::Builder &db) {
     if (!utils::get_ip_v6(*rdata, ip)) {
       throw std::runtime_error("invalid IPv6 notation");
     }
+    skip += push_int16(db, sizeof(ip));
     db.push(ip, sizeof(ip));
     skip += sizeof(ip);
   } else if (type == int(RecordType::TYPE_SOA)) {
