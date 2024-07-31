@@ -23,10 +23,12 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <cstring>
-
-#include "dns.hpp"
+#include "api/dns.hpp"
+#include "api/ip.hpp"
+#include "utils.hpp"
 #include "net.hpp"
+
+#include <cstring>
 
 namespace pipy {
 
@@ -407,15 +409,20 @@ static int read_record(const uint8_t *buf, const uint8_t *buf_end, uint8_t *plac
     if (rdlength != 4) {
       throw std::runtime_error("dns decode # A rdata error");
     }
-    char ips[20];
-    sprintf(ips, "%d.%d.%d.%d", *ptr, *(ptr + 1), *(ptr + 2), *(ptr + 3));
-    record->set(STR_rdata, pjs::Str::make(ips));
+    IPAddressData ip(ptr);
+    char str[100];
+    auto len = ip.to_string(str, sizeof(str));
+    record->set(STR_rdata, pjs::Str::make(str, len));
   } else if (type == int(RecordType::TYPE_AAAA)) {
     if (rdlength != 16) {
       throw std::runtime_error("dns decode # AAAA rdata error");
     }
-    Data data(ptr, rdlength, &s_dp);
-    record->set(STR_rdata, pjs::Str::make(data.to_string(Data::Encoding::hex)));
+    uint16_t data[8];
+    for (int i = 0; i < 8; i++) data[i] = ((uint16_t)ptr[i*2] << 8) | ptr[i*2+1];
+    IPAddressData ip(data);
+    char str[100];
+    auto len = ip.to_string(str, sizeof(str));
+    record->set(STR_rdata, pjs::Str::make(str, len));
   } else if (type == int(RecordType::TYPE_SOA)) {
     auto soa = pjs::Ref<pjs::Object>(pjs::Object::make());
     int num = read_soa(buf, buf_end, ptr, soa);
@@ -750,23 +757,27 @@ static int write_record(pjs::Object *dns, Data::Builder &db) {
   skip += push_int32(db, ttl);
 
   if (type == int(RecordType::TYPE_A)) {
-    uint16_t a = 0, b = 0, c = 0, d = 0;
     const char *rdata = get_c_string(dns);
     if (!rdata) {
       throw std::runtime_error("dns encode # A rdata error");
     }
-    sscanf((char *)rdata, "%hu.%hu.%hu.%hu", &a, &b, &c, &d);
-    skip += push_int16(db, 4);
-    skip += push_int8(db, a);
-    skip += push_int8(db, b);
-    skip += push_int8(db, c);
-    skip += push_int8(db, d);
+    uint8_t ip[4];
+    if (!utils::get_ip_v4(rdata, ip)) {
+      throw std::runtime_error("invalid IPv4 notation");
+    }
+    db.push(ip, sizeof(ip));
+    skip += sizeof(ip);
   } else if (type == int(RecordType::TYPE_AAAA)) {
     const std::string *rdata = get_string(dns);
-    if (!rdata || rdata->length() != 32) {
+    if (!rdata) {
       throw std::runtime_error("dns encode # AAAA rdata error");
     }
-    skip += push_hex_string(db, rdata);
+    uint8_t ip[16];
+    if (!utils::get_ip_v6(*rdata, ip)) {
+      throw std::runtime_error("invalid IPv6 notation");
+    }
+    db.push(ip, sizeof(ip));
+    skip += sizeof(ip);
   } else if (type == int(RecordType::TYPE_SOA)) {
     int num = push_r_data(db, get_object(dns), write_soa);
     if (num < 1) {
