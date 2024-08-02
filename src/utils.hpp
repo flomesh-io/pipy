@@ -87,6 +87,7 @@ auto decode_base64url(void *out, const char *inp, int len) -> int;
 auto path_join(const std::string &base, const std::string &path) -> std::string;
 auto path_normalize(const std::string &path) -> std::string;
 auto path_dirname(const std::string &path) -> std::string;
+auto path_basename(const std::string &path) -> std::string;
 
 //
 // HexEncoder

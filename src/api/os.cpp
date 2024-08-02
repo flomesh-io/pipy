@@ -221,6 +221,16 @@ OS::RmdirOptions::RmdirOptions(pjs::Object *options) : MkdirOptions(options) {
 // OS::Path
 //
 
+auto OS::Path::basename(const std::string &path) -> std::string {
+  return utils::path_basename(path);
+}
+
+auto OS::Path::basename(const std::string &path, const std::string &suffix) -> std::string {
+  auto name = basename(path);
+  if (utils::ends_with(name, suffix)) name.resize(path.length() - suffix.length());
+  return name;
+}
+
 auto OS::Path::dirname(const std::string &path) -> std::string {
   return utils::path_dirname(path);
 }
@@ -480,6 +490,17 @@ template<> void ClassDef<OS::Stats>::init() {
 
 template<> void ClassDef<OS::Path>::init() {
   ctor();
+
+  // os.path.basename
+  method("basename", [](Context &ctx, Object *, Value &ret) {
+    Str *path;
+    Str *suffix = nullptr;
+    if (!ctx.arguments(1, &path, &suffix)) return;
+    ret.set(suffix
+      ? OS::Path::basename(path->str(), suffix->str())
+      : OS::Path::basename(path->str())
+    );
+  });
 
   // os.path.dirname
   method("dirname", [](Context &ctx, Object *, Value &ret) {

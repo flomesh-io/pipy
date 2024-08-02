@@ -751,6 +751,12 @@ auto path_dirname(const std::string &path) -> std::string {
   return path.substr(0, i);
 }
 
+auto path_basename(const std::string &path) -> std::string {
+  auto i = path.rfind('/');
+  if (i == std::string::npos) return path;
+  return path.substr(i + 1);
+}
+
 //
 // HexEncoder
 //

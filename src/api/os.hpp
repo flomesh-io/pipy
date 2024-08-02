@@ -63,6 +63,8 @@ public:
 
   class Path : public pjs::ObjectTemplate<Path> {
   public:
+    static auto basename(const std::string &path) -> std::string;
+    static auto basename(const std::string &path, const std::string &suffix) -> std::string;
     static auto dirname(const std::string &path) -> std::string;
     static auto join(int argc, const pjs::Value argv[]) -> std::string;
     static auto resolve(int argc, const pjs::Value argv[]) -> std::string;
