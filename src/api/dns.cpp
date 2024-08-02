@@ -27,6 +27,7 @@
 #include "api/ip.hpp"
 #include "utils.hpp"
 #include "net.hpp"
+#include "input.hpp"
 
 #include <cstring>
 
@@ -1034,6 +1035,7 @@ template <> void ClassDef<DNS>::init() {
     DNS::resolve(
       hostname->str(),
       [=](Array *results) {
+        InputContext ic;
         settler->resolve(results);
         settler->release();
       }
