@@ -8,6 +8,7 @@ if (caKeyFile && caCertFile) {
   var caKey = new crypto.PrivateKey({ type: 'rsa', bits: 2048 })
   var caCert = new crypto.Certificate({
     subject: { CN: 'pipy.flomesh.io' },
+    extensions: { basicConstraints: 'CA:TRUE' },
     privateKey: caKey,
     publicKey: new crypto.PublicKey(caKey),
   })

@@ -9,7 +9,7 @@ var useFakeCA = toBool(config.proxy.useFakeCA)
 var enableLog = toBool(config.proxy.enableLog)
 
 var genCert = null
-if (useFakeCA === 'true' || useFakeCA === 'yes') {
+if (useFakeCA) {
   genCert = pipy.import('./gen-cert.js').default
 }
 
@@ -60,7 +60,7 @@ var proxyTCP = pipeline($=>$
 
 var proxyTLS = pipeline($=>$
   .acceptTLS({
-    certificate: sni => $sni = sni ? genCert(sni) : undefined
+    certificate: sni => ($sni = sni) ? genCert(sni) : undefined
   }).to($=>$
     .pipe(observe)
     .connectTLS({ sni: () => $sni }).to($=>$
