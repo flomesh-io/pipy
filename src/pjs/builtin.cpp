@@ -814,7 +814,7 @@ template<> void ClassDef<Map>::init() {
   method("get", [](Context &ctx, Object *obj, Value &ret) {
     Value key;
     if (!ctx.arguments(1, &key)) return;
-    obj->as<Map>()->get(key, ret);
+    if (!obj->as<Map>()->get(key, ret)) ret = Value::undefined;
   });
 
   method("set", [](Context &ctx, Object *obj, Value &ret) {

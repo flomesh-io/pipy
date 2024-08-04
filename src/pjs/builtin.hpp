@@ -146,7 +146,7 @@ public:
   auto size() -> size_t { return m_ht->size(); }
   void clear() { m_ht->clear(); }
   bool erase(const Value &key) { return m_ht->erase(key); }
-  void get(const Value &key, Value &value) { m_ht->get(key, value); }
+  bool get(const Value &key, Value &value) { return m_ht->get(key, value); }
   void set(const Value &key, const Value &value) { m_ht->set(key, value); }
   bool has(const Value &key) { return m_ht->has(key); }
 
