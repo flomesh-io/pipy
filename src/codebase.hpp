@@ -31,6 +31,7 @@
 
 #include <mutex>
 #include <functional>
+#include <list>
 
 namespace pipy {
 
@@ -50,7 +51,7 @@ public:
 
   class Watch : public pjs::RefCount<Watch> {
   public:
-    Watch(const std::function<void(const std::string &)> &on_update)
+    Watch(const std::function<void(const std::list<std::string> &)> &on_update)
       : m_on_update(on_update) {}
 
     bool closed() {
@@ -67,19 +68,19 @@ public:
     }
 
   private:
-    void notify(const std::string &filename) {
+    void notify(const std::list<std::string> &filenames) {
       m_mutex.lock();
-      if (m_on_update) m_on_update(filename);
+      if (m_on_update) m_on_update(filenames);
       m_mutex.unlock();
     }
 
     void cancel() {
       m_mutex.lock();
-      if (m_on_update) m_on_update(std::string());
+      if (m_on_update) m_on_update(std::list<std::string>());
       m_mutex.unlock();
     }
 
-    std::function<void(const std::string &)> m_on_update;
+    std::function<void(const std::list<std::string> &)> m_on_update;
     std::mutex m_mutex;
 
     friend class Codebase;
@@ -110,14 +111,14 @@ public:
   virtual auto get(const std::string &path) -> SharedData* = 0;
   virtual void set(const std::string &path, SharedData *data) = 0;
   virtual void patch(const std::string &path, SharedData *data) = 0;
-  virtual auto watch(const std::string &path, const std::function<void(const std::string &)> &on_update) -> Watch* = 0;
+  virtual auto watch(const std::string &path, const std::function<void(const std::list<std::string> &)> &on_update) -> Watch* = 0;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) = 0;
 
 protected:
   virtual void activate() {};
   virtual void deactivate() {};
 
-  void notify(Watch *w, const std::string &filename) { w->notify(filename); }
+  void notify(Watch *w, const std::list<std::string> &filenames) { w->notify(filenames); }
   void cancel(Watch *w) { w->cancel(); }
 
   auto normalize_path(const std::string &path) -> std::string;

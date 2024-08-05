@@ -47,8 +47,8 @@ bool Watch::active() const {
 void Watch::start() {
   m_watch = Codebase::current()->watch(
     m_filename->str(),
-    [this](const std::string &filename) {
-      on_update(filename);
+    [this](const std::list<std::string> &filenames) {
+      on_update(filenames);
     }
   );
 }
@@ -57,8 +57,8 @@ void Watch::end() {
   delete this;
 }
 
-void Watch::on_update(const std::string &filename) {
-  if (filename.length() > 0) {
+void Watch::on_update(const std::list<std::string> &filenames) {
+  if (filenames.size() > 0) {
     m_net.post(
       [this]() {
         InputContext ic;

@@ -61,7 +61,7 @@ private:
   pjs::Ref<Pipeline> m_pipeline;
   Net& m_net;
 
-  void on_update(const std::string &filename);
+  void on_update(const std::list<std::string> &filename);
 
   virtual void on_event(Event *evt) override;
 };
