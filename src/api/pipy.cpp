@@ -599,17 +599,19 @@ auto Pipy::FileWatcher::start() -> pjs::Promise* {
   m_settler = pjs::Promise::Settler::make(promise);
   m_codebase_watch = Codebase::current()->watch(
     m_pathname->str(),
-    [this](bool changed) { on_file_changed(changed); }
+    [this](const std::string &filename) {
+      on_file_changed(filename);
+    }
   );
   retain();
   return promise;
 }
 
-void Pipy::FileWatcher::on_file_changed(bool changed) {
-  if (changed) {
-    m_net.post([this]() {
+void Pipy::FileWatcher::on_file_changed(const std::string &filename) {
+  if (filename.length() > 0) {
+    m_net.post([=]() {
       InputContext ic;
-      m_settler->resolve(pjs::Value::undefined);
+      m_settler->resolve(pjs::Str::make(filename));
       m_codebase_watch->close();
       release();
     });

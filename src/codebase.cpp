@@ -66,7 +66,7 @@ public:
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override;
   virtual void patch(const std::string &path, SharedData *data) override;
-  virtual auto watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* override;
+  virtual auto watch(const std::string &path, const std::function<void(const std::string &)> &on_update) -> Watch* override;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override { m_root->sync(force, on_update); }
 
 private:
@@ -145,7 +145,7 @@ void CodebaseFromRoot::patch(const std::string &path, SharedData *data) {
   return m_root->patch(path, data);
 }
 
-auto CodebaseFromRoot::watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* {
+auto CodebaseFromRoot::watch(const std::string &path, const std::function<void(const std::string &)> &on_update) -> Watch* {
   std::lock_guard<std::mutex> lock(m_mutex);
   std::string local_path;
   if (auto codebase = find_mount(path, local_path)) {
@@ -219,12 +219,17 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override;
-  virtual auto watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* override;
+  virtual auto watch(const std::string &path, const std::function<void(const std::string &)> &on_update) -> Watch* override;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
 private:
   struct WatchedFile {
     double time;
+    std::set<pjs::Ref<Watch>> watches;
+  };
+
+  struct WatchedDir {
+    std::map<std::string, double> times;
     std::set<pjs::Ref<Watch>> watches;
   };
 
@@ -234,6 +239,9 @@ private:
   std::string m_entry;
   std::string m_script;
   std::map<std::string, WatchedFile> m_watched_files;
+  std::map<std::string, WatchedDir> m_watched_dirs;
+
+  void list_file_times(const std::string &path, std::map<std::string, double> &times);
 };
 
 CodebaseFromFS::CodebaseFromFS(const std::string &path) {
@@ -319,14 +327,32 @@ void CodebaseFromFS::set(const std::string &path, SharedData *data) {
   }
 }
 
-auto CodebaseFromFS::watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* {
+auto CodebaseFromFS::watch(const std::string &path, const std::function<void(const std::string &)> &on_update) -> Watch* {
   std::lock_guard<std::mutex> lock(m_mutex);
   auto w = new Watch(on_update);
-  auto &wf = m_watched_files[path];
-  auto norm_path = utils::path_normalize(path);
-  auto full_path = utils::path_join(m_base, norm_path);
-  wf.time = fs::get_file_time(full_path);
-  wf.watches.insert(w);
+  if (path.empty() || path.back() == '/') {
+    std::map<std::string, double> times;
+    std::string norm_path = utils::path_normalize(path);
+    auto i = m_watched_dirs.find(norm_path);
+    if (i == m_watched_dirs.end()) {
+      auto &wd = m_watched_dirs[norm_path];
+      list_file_times(norm_path, wd.times);
+      wd.watches.insert(w);
+    } else {
+      i->second.watches.insert(w);
+    }
+  } else {
+    auto norm_path = utils::path_normalize(path);
+    auto full_path = utils::path_join(m_base, norm_path);
+    auto i = m_watched_files.find(norm_path);
+    if (i == m_watched_files.end()) {
+      auto &wf = m_watched_files[norm_path];
+      wf.time = fs::get_file_time(full_path);
+      wf.watches.insert(w);
+    } else {
+      i->second.watches.insert(w);
+    }
+  }
   return w;
 }
 
@@ -359,11 +385,60 @@ void CodebaseFromFS::sync(bool force, const std::function<void(bool)> &on_update
         auto t = fs::get_file_time(full_path);
         if (t != file.time) {
           file.time = t;
-          for (const auto &w : watches) notify(w);
+          for (const auto &w : watches) notify(w, norm_path);
         }
       }
     }
+    for (auto &p : m_watched_dirs) {
+      auto &path = p.first;
+      auto &dir = p.second;
+      auto &watches = dir.watches;
+      auto i = watches.begin();
+      while (i != watches.end()) {
+        const auto w = i++;
+        if ((*w)->closed()) {
+          watches.erase(w);
+        }
+      }
+      if (!watches.empty()) {
+        std::map<std::string, double> times;
+        auto norm_path = utils::path_normalize(path);
+        list_file_times(norm_path, times);
+        for (const auto &old : dir.times) {
+          if (times.find(old.first) == times.end()) {
+            for (const auto &w : watches) notify(w, old.first);
+          }
+        }
+        for (const auto &cur : times) {
+          auto i = dir.times.find(cur.first);
+          if (i != dir.times.end()) {
+            if (i->second == cur.second) continue;
+          }
+          for (const auto &w : watches) notify(w, cur.first);
+        }
+        dir.times = std::move(times);
+      }
+    }
   }
+}
+
+void CodebaseFromFS::list_file_times(const std::string &path, std::map<std::string, double> &times) {
+  std::function<void(const std::string &, std::map<std::string, double> &)> traverse;
+  traverse = [&](const std::string &path, std::map<std::string, double> &times) {
+    std::list<std::string> names;
+    auto real_path = utils::path_join(m_base, path);
+    fs::read_dir(real_path, names);
+    for (const auto &name : names) {
+      auto pathname = utils::path_join(path, name);
+      if (name.back() == '/') {
+        traverse(pathname, times);
+      } else {
+        auto t = fs::get_file_time(utils::path_join(m_base, pathname));
+        times[pathname] = t;
+      }
+    }
+  };
+  traverse(path, times);
 }
 
 //
@@ -382,7 +457,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override {}
-  virtual auto watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* override;
+  virtual auto watch(const std::string &path, const std::function<void(const std::string &)> &on_update) -> Watch* override;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
 private:
@@ -448,7 +523,7 @@ auto CodebaseFromStore::get(const std::string &path) -> SharedData* {
   return i->second->retain();
 }
 
-auto CodebaseFromStore::watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* {
+auto CodebaseFromStore::watch(const std::string &path, const std::function<void(const std::string &)> &on_update) -> Watch* {
   return new Watch(on_update);
 }
 
@@ -475,7 +550,7 @@ private:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override {}
-  virtual auto watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* override;
+  virtual auto watch(const std::string &path, const std::function<void(const std::string &)> &on_update) -> Watch* override;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
   struct WatchedFile {
@@ -558,7 +633,7 @@ auto CodebaseFromHTTP::get(const std::string &path) -> SharedData* {
   return i->second->retain();
 }
 
-auto CodebaseFromHTTP::watch(const std::string &path, const std::function<void(bool)> &on_update) -> Watch* {
+auto CodebaseFromHTTP::watch(const std::string &path, const std::function<void(const std::string &)> &on_update) -> Watch* {
   std::lock_guard<std::mutex> lock(m_mutex);
   auto w = new Watch(on_update);
   auto &wf = m_watched_files[path];
@@ -770,7 +845,7 @@ void CodebaseFromHTTP::watch_next() {
                     if (etag.is_string()) wf.etag = etag.s()->str(); else wf.etag.clear();
                     if (date.is_string()) wf.date = date.s()->str(); else wf.date.clear();
                     m_files[name] = SharedData::make(body ? *body : Data());
-                    for (const auto &w : wf.watches) notify(w);
+                    for (const auto &w : wf.watches) notify(w, name);
                   }
                   m_mutex.unlock();
                 } else {

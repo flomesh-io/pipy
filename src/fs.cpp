@@ -117,7 +117,7 @@ auto get_file_time(const std::string &filename) -> double {
 #else
   auto &ts = st.st_mtim;
 #endif
-  return ts.tv_sec + ts.tv_nsec / 1e9;
+  return ts2secs(ts);
 }
 
 auto current_dir() -> std::string {

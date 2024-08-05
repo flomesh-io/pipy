@@ -47,7 +47,9 @@ bool Watch::active() const {
 void Watch::start() {
   m_watch = Codebase::current()->watch(
     m_filename->str(),
-    [this](bool changed) { on_update(changed); }
+    [this](const std::string &filename) {
+      on_update(filename);
+    }
   );
 }
 
@@ -55,8 +57,8 @@ void Watch::end() {
   delete this;
 }
 
-void Watch::on_update(bool changed) {
-  if (changed) {
+void Watch::on_update(const std::string &filename) {
+  if (filename.length() > 0) {
     m_net.post(
       [this]() {
         InputContext ic;

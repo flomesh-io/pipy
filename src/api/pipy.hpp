@@ -105,7 +105,7 @@ public:
     pjs::Ref<pjs::Promise::Settler> m_settler;
     pjs::Ref<Codebase::Watch> m_codebase_watch;
 
-    void on_file_changed(bool changed);
+    void on_file_changed(const std::string &filename);
   };
 
   static auto version() -> pjs::Object*;
