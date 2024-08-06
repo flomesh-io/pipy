@@ -301,9 +301,10 @@ private:
 
   class Pool : public pjs::RefCount<Pool>, public List<Pool>::Item {
   public:
-    Pool(const pjs::Value &k, const pjs::Value &t)
-      : key(k), target(t) {}
+    Pool(LoadBalancer *l, const pjs::Value &k, const pjs::Value &t)
+      : lb(l), key(k), target(t) {}
 
+    LoadBalancer* lb;
     pjs::Value key;
     pjs::Value target;
     int capacity = 0;
@@ -379,6 +380,8 @@ public:
 private:
   LoadBalancer(const Options &options)
     : m_options(options) {}
+
+  ~LoadBalancer();
 
   Options m_options;
   std::map<pjs::Value, Pool*> m_targets;

@@ -665,6 +665,12 @@ LoadBalancer::Options::Options(pjs::Object *options) {
     .check_nullable();
 }
 
+LoadBalancer::~LoadBalancer() {
+  for (auto &p : m_pools) {
+    p->lb = nullptr;
+  }
+}
+
 void LoadBalancer::provision(pjs::Context &ctx, pjs::Array *targets) {
   if (targets) {
     std::map<pjs::Value, Pool*> new_targets;
@@ -683,8 +689,9 @@ void LoadBalancer::provision(pjs::Context &ctx, pjs::Array *targets) {
         auto it = m_targets.find(key);
         if (it != m_targets.end()) {
           p = it->second;
+          m_queue.remove(p);
         } else {
-          p = new Pool(key, target);
+          p = new Pool(this, key, target);
         }
 
         new_targets[key] = p;
@@ -847,6 +854,11 @@ LoadBalancer::Resource::~Resource() {
 }
 
 void LoadBalancer::Resource::free() {
+  if (auto lb = m_pool->lb) {
+    if (lb->m_options.algorithm == Algorithm::LEAST_LOAD) {
+      lb->decrease_load(m_pool);
+    }
+  }
   if (m_load > 0) {
     m_load--;
     if (auto r = back()) {
