@@ -488,6 +488,54 @@ void CodebaseStore::generate_files(
   );
 }
 
+void CodebaseStore::generate_etags(
+  Store::Batch *batch,
+  const std::string &codebase_id,
+  const std::string &codebase_path,
+  const std::string &version,
+  const std::map<std::string, std::string> &files
+) {
+  std::string etags;
+  for (const auto &p : files) {
+    const auto &path = p.first;
+    etags += path;
+    if (version.empty()) {
+      Data buf;
+      auto key = KEY_file_tree(codebase_path + path);
+      if (m_store->get(key, buf)) {
+        std::map<std::string, std::string> rec;
+        read_record(buf.to_string(), rec);
+        auto version = rec["version"];
+        if (!version.empty()) {
+          etags += '#';
+          etags += version;
+        }
+      }
+    } else {
+      etags += '#';
+      etags += version;
+    }
+    etags += '\n';
+  }
+
+  Data buf;
+  auto key = KEY_file_tree(codebase_path + "/_etags");
+  std::string etags_id;
+
+  if (m_store->get(key, buf)) {
+    std::map<std::string, std::string> rec;
+    read_record(buf.to_string(), rec);
+    etags_id = rec["id"];
+  }
+
+  if (etags_id.empty()) {
+    etags_id = utils::make_uuid_v4();
+  }
+
+  batch->set(key, Data(make_record({{ "id", etags_id }}), &s_dp));
+  batch->set(KEY_file(etags_id), Data(etags, &s_dp));
+}
+
 void CodebaseStore::erase_codebase(Store::Batch *batch, const std::string &codebase_id) {
   Data buf;
   auto store = m_store;
@@ -735,13 +783,15 @@ bool CodebaseStore::Codebase::commit_files() {
     auto key = KEY_file_tree(codebase_path + path);
     if (store->get(key, buf)) read_record(buf.to_string(), rec);
     auto version = rec["version"];
-    auto p = version.rfind('.');
-    if (p == std::string::npos) {
-      version += ".1";
-    } else {
-      auto base = version.substr(0,p);
-      auto tail = version.substr(p+1);
-      version = base + '.' + std::to_string(std::atoi(tail.c_str()) + 1);
+    if (edit.count(path) > 0 || erased.count(path) > 0) {
+      auto p = version.rfind('.');
+      if (p == std::string::npos) {
+        version += ".1";
+      } else {
+        auto base = version.substr(0,p);
+        auto tail = version.substr(p+1);
+        version = base + '.' + std::to_string(std::atoi(tail.c_str()) + 1);
+      }
     }
     rec["id"] = file_id;
     rec["version"] = version;
@@ -749,6 +799,12 @@ bool CodebaseStore::Codebase::commit_files() {
   }
 
   batch->commit();
+
+  batch = store->batch();
+  m_code_store->list_files(m_id, true, files);
+  m_code_store->generate_etags(batch, m_id, codebase_path, std::string(), files);
+  batch->commit();
+
   return true;
 }
 
@@ -820,6 +876,8 @@ bool CodebaseStore::Codebase::commit(const std::string &version, std::list<std::
     Data(make_record(info), &s_dp)
   );
 
+  m_code_store->generate_etags(batch, m_id, info["path"], version, files);
+
   std::function<
     void(
       const std::string &id,
@@ -848,6 +906,7 @@ bool CodebaseStore::Codebase::commit(const std::string &version, std::list<std::
         derived_version = std::to_string(std::atoi(derived_version.c_str()) + 1);
         info["version"] = derived_version;
         m_code_store->generate_files(batch, info["path"], info["main"], derived_version, files);
+        m_code_store->generate_etags(batch, m_id, info["path"], derived_version, files);
         batch->set(KEY_codebase(derived_id), Data(make_record(info), &s_dp));
         batch->set(derived_key, Data(version, &s_dp));
         update_list.push_back(derived_id);

@@ -70,6 +70,30 @@ public:
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
 private:
+  class Synchoronizer {
+  public:
+    Synchoronizer(size_t n, const std::function<void(bool)> &on_update)
+      : m_counter(n)
+      , m_update_all(on_update)
+    {
+      m_update_one = [this](bool updated) {
+        if (updated) m_updated = true;
+        if (!--m_counter) {
+          m_update_all(m_updated);
+          delete this;
+        }
+      };
+    }
+
+    auto update_one() const -> const std::function<void(bool)> & { return m_update_one; }
+
+  private:
+    bool m_updated = false;
+    size_t m_counter = 0;
+    std::function<void(bool)> m_update_one;
+    std::function<void(bool)> m_update_all;
+  };
+
   Codebase* m_root;
   std::map<std::string, Codebase*> m_mounts;
   std::mutex m_mutex;
@@ -157,19 +181,15 @@ auto CodebaseFromRoot::watch(const std::string &path, const std::function<void(c
       on_update(list);
     });
   }
-  return m_root->watch(norm_path, on_update);
+  return m_root->watch(path, on_update);
 }
 
 void CodebaseFromRoot::sync(bool force, const std::function<void(bool)> &on_update) {
-  auto count = m_mounts.size() + 1;
-  auto updated = false;
-  auto cb = [&](bool b) {
-    if (b) updated = true;
-    if (!--count) on_update(updated);
-  };
-  m_root->sync(force, cb);
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto s = new Synchoronizer(m_mounts.size() + 1, on_update);
+  m_root->sync(force, s->update_one());
   for (const auto &p : m_mounts) {
-    p.second->sync(force, cb);
+    p.second->sync(force, s->update_one());
   }
 }
 
@@ -384,7 +404,7 @@ void CodebaseFromFS::sync(bool force, const std::function<void(bool)> &on_update
     }
     m_watched_files.clear();
     m_version = "1";
-    on_update(true);
+    Net::current().post([=]() { on_update(true); });
   } else {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (auto &p : m_watched_files) {
@@ -586,6 +606,10 @@ private:
     std::set<pjs::Ref<Watch>> watches;
   };
 
+  struct WatchedDir {
+    std::set<pjs::Ref<Watch>> watches;
+  };
+
   pjs::Ref<URL> m_url;
   Fetch m_fetch;
   bool m_downloaded = false;
@@ -594,9 +618,12 @@ private:
   std::string m_base;
   std::string m_root;
   std::string m_entry;
+  std::map<std::string, std::string> m_file_etags;
   std::map<std::string, pjs::Ref<SharedData>> m_files;
   std::map<std::string, pjs::Ref<SharedData>> m_dl_temp;
   std::map<std::string, WatchedFile> m_watched_files;
+  std::map<std::string, WatchedDir> m_watched_dirs;
+  std::set<std::string> m_changed_files;
   std::list<std::string> m_dl_list;
   pjs::Ref<pjs::Object> m_request_header_post_status;
   std::mutex m_mutex;
@@ -604,6 +631,7 @@ private:
   void download(const std::function<void(bool)> &on_update);
   void download_next(const std::function<void(bool)> &on_update);
   void watch_next();
+  void watch_all();
   void cancel_watches();
   void response_error(const char *method, const char *path, http::ResponseHead *head);
 };
@@ -663,8 +691,16 @@ auto CodebaseFromHTTP::get(const std::string &path) -> SharedData* {
 auto CodebaseFromHTTP::watch(const std::string &path, const std::function<void(const std::list<std::string> &)> &on_update) -> Watch* {
   std::lock_guard<std::mutex> lock(m_mutex);
   auto w = new Watch(on_update);
-  auto &wf = m_watched_files[path];
-  wf.watches.insert(w);
+  if (path.empty() || path.back() == '/') {
+    auto base_path = utils::path_normalize(path);
+    if (base_path.empty() || base_path.back() != '/') base_path += '/';
+    auto &wd = m_watched_dirs[base_path];
+    wd.watches.insert(w);
+  } else {
+    auto norm_path = utils::path_normalize(path);
+    auto &wf = m_watched_files[norm_path];
+    wf.watches.insert(w);
+  }
   return w;
 }
 
@@ -728,7 +764,7 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
     nullptr,
     nullptr,
     [=](http::ResponseHead *head, Data *body) {
-      if (!head || head->status != 200) {
+      if (!head || head->status != 200 || !body) {
         response_error("GET", m_url->href()->c_str(), head);
         on_update(false);
         return;
@@ -761,6 +797,7 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
           if (!path.empty()) m_dl_list.push_back(path);
         }
         m_entry = m_dl_list.front();
+        m_file_etags.clear();
         download_next(on_update);
       } else {
         m_mutex.lock();
@@ -779,17 +816,42 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
 
 void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update) {
   if (m_dl_list.empty()) {
-    m_mutex.lock();
-    m_files = std::move(m_dl_temp);
-    m_downloaded = true;
-    for (auto &wf : m_watched_files) {
-      wf.second.etag.clear();
-      wf.second.date.clear();
+    if (on_update) {
+      m_mutex.lock();
+      m_files = std::move(m_dl_temp);
+      m_downloaded = true;
+      for (auto &wf : m_watched_files) {
+        wf.second.etag.clear();
+        wf.second.date.clear();
+      }
+      m_mutex.unlock();
+      m_fetch.close();
+      cancel_watches();
+      on_update(true);
+    } else {
+      m_mutex.lock();
+      for (const auto &p : m_dl_temp) {
+        m_files[p.first] = p.second;
+      }
+      m_mutex.unlock();
+      m_fetch.close();
+      for (const auto &p : m_watched_dirs) {
+        const auto &base = p.first;
+        std::list<std::string> list;
+        for (const auto &path : m_changed_files) {
+          if (utils::starts_with(path, base)) {
+            list.push_back(path);
+          }
+        }
+        if (list.size() > 0) {
+          for (const auto &w : p.second.watches) {
+            notify(w.get(), list);
+          }
+        }
+      }
+      m_changed_files.clear();
+      m_dl_temp.clear();
     }
-    m_mutex.unlock();
-    m_fetch.close();
-    cancel_watches();
-    on_update(true);
     return;
   }
 
@@ -802,7 +864,7 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
     nullptr,
     nullptr,
     [=](http::ResponseHead *head, Data *body) {
-      if (!head || head->status != 200) {
+      if (!head || head->status != 200 || !body) {
         response_error("GET", path.c_str(), head);
         on_update(false);
         return;
@@ -815,6 +877,12 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
         );
       }
 
+      std::string etag;
+      pjs::Value etag_val;
+      head->headers->get(s_etag, etag_val);
+      if (etag_val.is_string()) etag = etag_val.s()->str();
+      m_file_etags[name] = etag;
+
       m_dl_temp[name] = SharedData::make(body ? *body : Data());
       download_next(on_update);
     }
@@ -823,8 +891,11 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
 
 void CodebaseFromHTTP::watch_next() {
   if (m_dl_list.empty()) {
-    m_fetch.close();
-    return;
+    if (m_watched_dirs.empty()) {
+      return m_fetch.close();
+    } else {
+      return watch_all();
+    }
   }
 
   auto name = m_dl_list.front();
@@ -893,6 +964,53 @@ void CodebaseFromHTTP::watch_next() {
       }
 
       if (!m_fetch.busy()) watch_next();
+    }
+  );
+}
+
+void CodebaseFromHTTP::watch_all() {
+  m_fetch(
+    Fetch::GET,
+    pjs::Value(m_base + "/_etags").s(),
+    nullptr,
+    nullptr,
+    [=](http::ResponseHead *head, Data *body) {
+      if (head && head->status == 200 && body) {
+        auto text = body->to_string();
+        auto lines = utils::split(text, '\n');
+        std::map<std::string, std::string> etags;
+        std::set<std::string> changed;
+        for (const auto &line : lines) {
+          auto entry = utils::trim(line);
+          if (entry.empty()) continue;
+          std::string path, etag;
+          auto p = entry.find('#');
+          if (p == std::string::npos) {
+            path = entry;
+          } else {
+            path = entry.substr(0,p);
+            etag = entry.substr(p+1);
+          }
+          auto i = m_file_etags.find(path);
+          if (i == m_file_etags.end() || i->second != etag) {
+            changed.insert(path);
+          }
+          etags[path] = etag;
+        }
+        for (const auto &p : m_file_etags) {
+          if (etags.count(p.first) == 0) {
+            changed.insert(p.first);
+          }
+        }
+        for (const auto &path : changed) m_dl_list.push_back(path);
+        m_changed_files.swap(changed);
+        m_file_etags.swap(etags);
+        download_next(nullptr);
+      } else {
+        auto path = m_base + "/_etags";
+        response_error("GET", path.c_str(), head);
+        m_fetch.close();
+      }
     }
   );
 }

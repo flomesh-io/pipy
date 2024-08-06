@@ -121,6 +121,14 @@ private:
     const std::map<std::string, std::string> &files
   );
 
+  void generate_etags(
+    Store::Batch *batch,
+    const std::string &codebase_id,
+    const std::string &codebase_path,
+    const std::string &version,
+    const std::map<std::string, std::string> &files
+  );
+
   void erase_codebase(Store::Batch *batch, const std::string &codebase_id);
 
   friend class Codebase;
