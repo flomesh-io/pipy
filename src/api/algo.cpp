@@ -48,11 +48,10 @@ auto Algo::hash(const pjs::Value &value) -> size_t {
 //
 
 Cache::Options::Options(pjs::Object *options) {
-  thread_local static pjs::ConstStr str_size("size"), str_ttl("ttl");
-  Value(options, str_size)
+  Value(options, "size")
     .get(size)
     .check_nullable();
-  Value(options, str_ttl)
+  Value(options, "ttl")
     .get_seconds(ttl)
     .check_nullable();
 }
@@ -505,6 +504,100 @@ void Quota::Counter::finalize() {
   m_net.post([this]() {
     delete this;
   });
+}
+
+//
+// SharedMap
+//
+
+SharedMap::SharedMap(pjs::Str *name)
+  : m_map(Map::get(name->str()))
+{
+}
+
+auto SharedMap::size() -> size_t {
+  return m_map->size();
+}
+
+void SharedMap::clear() {
+  m_map->clear();
+}
+
+bool SharedMap::erase(pjs::Str *key) {
+  return m_map->erase(key->data());
+}
+
+bool SharedMap::has(pjs::Str *key) {
+  return m_map->has(key->data());
+}
+
+bool SharedMap::get(pjs::Str *key, pjs::Value &value) {
+  pjs::SharedValue sv;
+  if (m_map->get(key->data(), sv)) {
+    sv.to_value(value);
+    return true;
+  } else {
+    return false;
+  }
+}
+
+void SharedMap::set(pjs::Str *key, const pjs::Value &value) {
+  pjs::SharedValue sv(value);
+  m_map->set(key->data(), sv);
+}
+
+//
+// SharedMap::Map
+//
+
+std::map<std::string, SharedMap::Map*> SharedMap::Map::m_maps;
+std::mutex SharedMap::Map::m_maps_mutex;
+
+auto SharedMap::Map::get(const std::string &name) -> Map* {
+  std::lock_guard<std::mutex> lock(m_maps_mutex);
+  auto &p = m_maps[name];
+  if (!p) {
+    p = new Map;
+    p->retain();
+  }
+  return p;
+}
+
+auto SharedMap::Map::size() -> size_t {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  return m_map.size();
+}
+
+void SharedMap::Map::clear() {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  m_map.clear();
+}
+
+bool SharedMap::Map::erase(pjs::Str::CharData *key) {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto i = m_map.find(key);
+  if (i == m_map.end()) return false;
+  m_map.erase(i);
+  return true;
+}
+
+bool SharedMap::Map::has(pjs::Str::CharData *key) {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto i = m_map.find(key);
+  return i != m_map.end();
+}
+
+bool SharedMap::Map::get(pjs::Str::CharData *key, pjs::SharedValue &value) {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto i = m_map.find(key);
+  if (i == m_map.end()) return false;
+  value = i->second;
+  return true;
+}
+
+void SharedMap::Map::set(pjs::Str::CharData *key, const pjs::SharedValue &value) {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  m_map[key] = value;
 }
 
 //
@@ -1469,8 +1562,16 @@ template<> void ClassDef<Cache>::init() {
   ctor([](Context &ctx) -> Object* {
     Function *allocate = nullptr, *free = nullptr;
     Object *options = nullptr;
-    if (!ctx.arguments(0, &allocate, &free, &options)) return nullptr;
-    return Cache::make(options, allocate, free);
+    if (
+      ctx.try_arguments(2, &allocate, &free, &options) ||
+      ctx.try_arguments(1, &allocate, &options) ||
+      ctx.try_arguments(0, &options)
+    ) {
+      return Cache::make(options, allocate, free);
+    } else {
+      ctx.error_argument_type(0, "a function or an object");
+      return nullptr;
+    }
   });
 
   method("get", [](Context &ctx, Object *obj, Value &ret) {
@@ -1551,6 +1652,54 @@ template<> void ClassDef<Quota>::init() {
 }
 
 template<> void ClassDef<Constructor<Quota>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
+// SharedMap
+//
+
+template<> void ClassDef<SharedMap>::init() {
+  ctor([](Context &ctx) -> Object * {
+    Str *name;
+    if (!ctx.arguments(1, &name)) return nullptr;
+    return SharedMap::make(name);
+  });
+
+  accessor("size", [](Object *obj, Value &ret) { ret.set((int)obj->as<SharedMap>()->size()); });
+
+  method("clear", [](Context &ctx, Object *obj, Value &ret) {
+    obj->as<SharedMap>()->clear();
+  });
+
+  method("delete", [](Context &ctx, Object *obj, Value &ret) {
+    Str *key;
+    if (!ctx.arguments(1, &key)) return;
+    ret.set(obj->as<SharedMap>()->erase(key));
+  });
+
+  method("has", [](Context &ctx, Object *obj, Value &ret) {
+    Str *key;
+    if (!ctx.arguments(1, &key)) return;
+    ret.set(obj->as<SharedMap>()->has(key));
+  });
+
+  method("get", [](Context &ctx, Object *obj, Value &ret) {
+    Str *key;
+    if (!ctx.arguments(1, &key)) return;
+    if (!obj->as<SharedMap>()->get(key, ret)) ret = Value::undefined;
+  });
+
+  method("set", [](Context &ctx, Object *obj, Value &ret) {
+    Str *key;
+    Value value;
+    if (!ctx.arguments(2, &key, &value)) return;
+    obj->as<SharedMap>()->set(key, value);
+  });
+}
+
+template<> void ClassDef<Constructor<SharedMap>>::init() {
   super<Function>();
   ctor();
 }
@@ -1882,6 +2031,7 @@ template<> void ClassDef<Algo>::init() {
   ctor();
   variable("Cache", class_of<Constructor<Cache>>());
   variable("Quota", class_of<Constructor<Quota>>());
+  variable("SharedMap", class_of<Constructor<SharedMap>>());
   variable("URLRouter", class_of<Constructor<URLRouter>>());
   variable("LoadBalancer", class_of<Constructor<LoadBalancer>>());
   variable("HashingLoadBalancer", class_of<Constructor<HashingLoadBalancer>>());

@@ -878,7 +878,17 @@ void SharedValue::to_value(Value &v) const {
   }
 }
 
-void SharedValue::from_value(const Value &v) {
+void SharedValue::assign(const SharedValue &v) {
+  switch (m_t = v.m_t) {
+    case Value::Type::Boolean: m_v.b = v.m_v.b; break;
+    case Value::Type::Number: m_v.n = v.m_v.n; break;
+    case Value::Type::String: m_v.s = v.m_v.s->retain(); break;
+    case Value::Type::Object: if (auto o = m_v.o = v.m_v.o) o->retain(); break;
+    default: break;
+  }
+}
+
+void SharedValue::assign(const Value &v) {
   switch (m_t = v.type()) {
     case Value::Type::Boolean: m_v.b = v.b(); break;
     case Value::Type::Number: m_v.n = v.n(); break;
@@ -930,8 +940,9 @@ auto SharedObject::to_object() -> Object* {
     for (auto i = 0, n = b->length; i < n; i++) {
       const auto &e = b->entries[i];
       if (e.k) {
+        Ref<Str> k(Str::make(e.k));
         Value v; e.v.to_value(v);
-        obj->set(Str::make(e.k), v);
+        obj->set(k, v);
       }
     }
   }

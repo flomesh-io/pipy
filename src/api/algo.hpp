@@ -218,6 +218,64 @@ private:
 };
 
 //
+// SharedMap
+//
+
+class SharedMap : public pjs::ObjectTemplate<SharedMap> {
+public:
+  SharedMap(pjs::Str *name);
+
+  auto size() -> size_t;
+  void clear();
+  bool erase(pjs::Str *key);
+  bool has(pjs::Str *key);
+  bool get(pjs::Str *key, pjs::Value &value);
+  void set(pjs::Str *key, const pjs::Value &value);
+
+private:
+
+  //
+  // SharedMap::Map
+  //
+
+  class Map : public pjs::RefCountMT<Map> {
+  public:
+    static auto get(const std::string &name) -> Map*;
+
+    auto size() -> size_t;
+    void clear();
+    bool erase(pjs::Str::CharData *key);
+    bool has(pjs::Str::CharData *key);
+    bool get(pjs::Str::CharData *key, pjs::SharedValue &value);
+    void set(pjs::Str::CharData *key, const pjs::SharedValue &value);
+
+  private:
+    typedef pjs::Ref<pjs::Str::CharData> Key;
+
+    struct Hash {
+      size_t operator()(const Key &k) const {
+        std::hash<std::string> h;
+        return h(k->str());
+      }
+    };
+
+    struct EqualTo {
+      bool operator()(const Key &a, const Key &b) const {
+        return a->str() == b->str();
+      }
+    };
+
+    std::unordered_map<Key, pjs::SharedValue, Hash, EqualTo> m_map;
+    std::mutex m_mutex;
+
+    static std::map<std::string, Map*> m_maps;
+    static std::mutex m_maps_mutex;
+  };
+
+  pjs::Ref<Map> m_map;
+};
+
+//
 // ResourcePool
 //
 

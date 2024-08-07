@@ -30,8 +30,6 @@
 
 namespace pipy {
 
-class WorkerThread;
-
 //
 // Thread
 //

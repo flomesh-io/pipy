@@ -1913,10 +1913,12 @@ inline auto Value::value_of() const -> double {
 class SharedValue {
 public:
   SharedValue() : m_t(Value::Type::Empty) {}
-  SharedValue(const Value &v) { from_value(v); }
+  SharedValue(const SharedValue &v) { assign(v); }
+  SharedValue(const Value &v) { assign(v); }
   ~SharedValue() { release(); }
 
-  auto operator=(const Value &v) -> SharedValue& { release(); from_value(v); return *this; }
+  auto operator=(const SharedValue &v) -> SharedValue& { release(); assign(v); return *this; }
+  auto operator=(const Value &v) -> SharedValue& { release(); assign(v); return *this; }
   void to_value(Value &v) const;
 
 private:
@@ -1928,7 +1930,8 @@ private:
     SharedObject* o;
   } m_v;
 
-  void from_value(const Value &v);
+  void assign(const SharedValue &v);
+  void assign(const Value &v);
   void release();
 };
 
