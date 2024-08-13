@@ -56,7 +56,6 @@ public:
   CodebaseFromRoot(Codebase *root);
   ~CodebaseFromRoot();
 
-
   virtual auto version() const -> const std::string& override { return m_root->version(); }
   virtual bool writable() const override { return m_root->writable(); }
   virtual auto entry() const -> const std::string& override { return m_root->entry(); }
@@ -576,7 +575,7 @@ auto CodebaseFromStore::watch(const std::string &path, const std::function<void(
 
 void CodebaseFromStore::sync(bool force, const std::function<void(bool)> &on_update) {
   if (force) {
-    on_update(true);
+    Net::current().post([=]() { on_update(true); });
   }
 }
 
@@ -1060,7 +1059,7 @@ Codebase* Codebase::from_http(const std::string &url, const Fetch::Options &opti
 
 auto Codebase::normalize_path(const std::string &path) -> std::string {
   std::string k = path;
-  if (k.front() != '/') {
+  if (k.empty() || k.front() != '/') {
     return utils::path_normalize('/' + k);
   } else {
     return utils::path_normalize(k);
