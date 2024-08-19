@@ -6,6 +6,7 @@ endif()
 
 project(pipy)
 
+option(PIPY_STATICLIB "Build Pipy as static library" OFF)
 option(PIPY_SHARED "Build Pipy as dynamic library" OFF)
 option(PIPY_GUI "include builtin GUI" OFF)
 option(PIPY_CODEBASES "include builtin codebases in the executable" OFF)
@@ -172,7 +173,7 @@ if(PIPY_BROTLI)
   set(BROTLI_INC_DIR ${PIPY_BROTLI}/include)
   set(BROTLI_LIB ${PIPY_BROTLI}/lib/${LIB_BROTLI})
 else()
-  set(BROTLI_BUNDLED_MODE OFF CACHE BOOL "" FORCE)
+  set(BROTLI_BUNDLED_MODE ON CACHE BOOL "" FORCE)
   set(BROTLI_DISABLE_TESTS ON CACHE BOOL "" FORCE)
   add_subdirectory(deps/brotli-1.0.9)
   set(BROTLI_INC_DIR "${CMAKE_SOURCE_DIR}/deps/brotli-1.0.9/c/include")
@@ -367,11 +368,18 @@ SET(PIPY_SRC
   deps/sqlite-3.43.2/sqlite3.c
 )
 
-if(NOT PIPY_SHARED)
-  add_executable(pipy ${PIPY_SRC})
-else()
+if(IOS)
+  add_definitions(-D__APPLE__ -DTARGET_OS_IOS)
+endif(IOS)
+
+if(PIPY_SHARED)
   add_definitions(-DPIPY_SHARED)
   add_library(pipy SHARED ${PIPY_SRC})
+elseif(PIPY_STATICLIB)
+  add_definitions(-DPIPY_SHARED)
+  add_library(pipy STATIC ${PIPY_SRC})
+else()
+  add_executable(pipy ${PIPY_SRC})
 endif()
 
 execute_process(
@@ -387,12 +395,26 @@ if(NOT PIPY_USE_SYSTEM_ZLIB)
   add_dependencies(pipy ${ZLIB_LIB})
 endif()
 
+find_program(NODEJS_EXECUTABLE NAMES node nodejs
+  HINTS
+  $ENV{NODE_DIR}
+  PATH_SUFFIXES bin $ENV{HOMEBREW_PREFIX}
+  DOC "Node.js interpreter")
+
+if(NODEJS_EXECUTABLE)
+  message("NodeJS found at: ${NODEJS_EXECUTABLE}")
+endif()
+
 if(PIPY_GUI)
   add_definitions(-DPIPY_USE_GUI)
 
+  if(NOT NODEJS_EXECUTABLE)
+    message(FATAL_ERROR "Nodejs installation not found.")
+  endif()
+
   add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/deps/gui.tar.h
-    COMMAND node
+    COMMAND ${NODEJS_EXECUTABLE}
     ARGS pack-gui.js ${CMAKE_BINARY_DIR}/deps/gui.tar.h
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
     DEPENDS gui/pack-gui.js ${CMAKE_SOURCE_DIR}/public/index.html
@@ -404,9 +426,13 @@ endif()
 if(PIPY_CODEBASES)
   add_definitions(-DPIPY_USE_CODEBASES)
 
+  if(NOT NODEJS_EXECUTABLE)
+    message(FATAL_ERROR "Nodejs installation not found.")
+  endif()
+
   add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/deps/codebases.tar.gz.h
-    COMMAND node
+    COMMAND ${NODEJS_EXECUTABLE}
     ARGS pack-codebases.js ${CMAKE_BINARY_DIR}/deps/codebases.tar.gz.h ${PIPY_CUSTOM_CODEBASES}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
     DEPENDS gui/pack-codebases.js ${CMAKE_SOURCE_DIR}/tutorial ${CMAKE_SOURCE_DIR}/samples
