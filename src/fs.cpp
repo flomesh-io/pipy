@@ -63,8 +63,17 @@ inline static auto ts2secs(const struct timespec &ts) -> double {
 }
 
 auto home() -> std::string {
+#ifdef TARGET_OS_IOS
+    char* home = getenv("HOME");
+    if (home != nullptr) {
+        return std::string(home);
+    } else {
+        return std::string();  // Return an empty string if getenv fails
+    }
+#else
   auto pw = getpwuid(getuid());
   return pw->pw_dir;
+#endif
 }
 
 auto abs_path(const std::string &filename) -> std::string {
