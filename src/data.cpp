@@ -226,6 +226,14 @@ template<> void ClassDef<pipy::Data>::init() {
     }
   });
 
+  method("pop", [](Context &ctx, Object *obj, Value &ret) {
+    int size;
+    if (!ctx.arguments(1, &size)) return;
+    pipy::Data out;
+    obj->as<pipy::Data>()->pop(size, out);
+    ret.set(pipy::Data::make(std::move(out)));
+  });
+
   method("shift", [](Context &ctx, Object *obj, Value &ret) {
     int count;
     if (!ctx.arguments(1, &count)) return;
