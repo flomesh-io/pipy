@@ -32,12 +32,13 @@
 
 namespace pipy {
 
-FileStream::FileStream(bool read, handle_t fd, Data::Producer *dp)
+FileStream::FileStream(int read_size, handle_t fd, Data::Producer *dp)
   : FlushTarget(true)
   , m_stream(Net::context(), fd)
   , m_dp(dp)
+  , m_read_size(read_size)
 {
-  if (read) this->read();
+  read();
 }
 
 void FileStream::close() {
@@ -93,28 +94,40 @@ void FileStream::on_tap_close() {
 }
 
 void FileStream::read() {
-  pjs::Ref<Data> buffer(m_dp->make(RECEIVE_BUFFER_SIZE));
+  if (!m_read_size) return;
+
+  auto n = RECEIVE_BUFFER_SIZE;
+  if (m_read_size > 0 && m_read_size < RECEIVE_BUFFER_SIZE) n = m_read_size;
+
+  pjs::Ref<Data> buffer(m_dp->make(n));
 
   auto on_received = [=](const std::error_code &ec, size_t n) {
     InputContext ic(this);
 
+    bool read_end = false;
+
     if (n > 0) {
+      if (m_read_size > 0) {
+        m_read_size -= n;
+        if (m_read_size <= 0) {
+          m_read_size = 0;
+          read_end = true;
+        }
+      }
       m_file_pointer += n;
       buffer->pop(buffer->size() - n);
       output(buffer);
     }
 
-    if (ec) {
-      if (ec == asio::error::eof || ec == asio::error::broken_pipe) {
-        Log::debug(Log::FILES, "FileStream: %p, end of stream [fd = %d]", this, m_fd);
-        output(StreamEnd::make(StreamEnd::NO_ERROR));
-      } else if (ec != asio::error::operation_aborted) {
-        auto msg = ec.message();
-        Log::warn(
-          "FileStream: %p, error reading from stream [fd = %d]: %s",
-          this, m_fd, msg.c_str());
-        output(StreamEnd::make(StreamEnd::READ_ERROR));
-      }
+    if (read_end || ec == asio::error::eof || ec == asio::error::broken_pipe) {
+      Log::debug(Log::FILES, "FileStream: %p, end of stream [fd = %d]", this, m_fd);
+      output(StreamEnd::make(StreamEnd::NO_ERROR));
+    } else if (ec && ec != asio::error::operation_aborted) {
+      auto msg = ec.message();
+      Log::warn(
+        "FileStream: %p, error reading from stream [fd = %d]: %s",
+        this, m_fd, msg.c_str());
+      output(StreamEnd::make(StreamEnd::READ_ERROR));
 
     } else if (m_receiving_state == PAUSING) {
       m_receiving_state = PAUSED;

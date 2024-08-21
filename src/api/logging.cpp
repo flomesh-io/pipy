@@ -278,7 +278,7 @@ void Logger::StdoutTarget::write(const Data &msg) {
   if (Net::current().is_running()) {
     if (!m_file_stream) {
       m_file_stream = FileStream::make(
-        false,
+        0,
         dup(m_is_stderr ? STDERR_FILENO : STDOUT_FILENO),
         &s_dp_stdout
       );

@@ -41,7 +41,9 @@ class Read : public Filter, public EventSource {
 public:
   struct Options : public pipy::Options {
     int seek = 0;
+    int size = -1;
     pjs::Ref<pjs::Function> seek_f;
+    pjs::Ref<pjs::Function> size_f;
     Options() {}
     Options(pjs::Object *options);
   };

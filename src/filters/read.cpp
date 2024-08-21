@@ -39,6 +39,10 @@ Read::Options::Options(pjs::Object *options) {
     .get(seek)
     .get(seek_f)
     .check_nullable();
+  Value(options, "size")
+    .get(size)
+    .get(size_f)
+    .check_nullable();
 }
 
 //
@@ -53,6 +57,7 @@ Read::Read(const pjs::Value &pathname, const Options &options)
 
 Read::Read(const Read &r)
   : m_pathname(r.m_pathname)
+  , m_options(r.m_options)
 {
 }
 
@@ -92,11 +97,18 @@ void Read::process(Event *evt) {
       seek = ret.to_int32();
     }
 
+    int size = m_options.size;
+    if (auto f = m_options.size_f.get()) {
+      pjs::Value ret;
+      if (!Filter::callback(f, 0, nullptr, ret)) return;
+      size = ret.to_int32();
+    }
+
     auto *s = pathname.to_string();
     auto f = File::make(s->str());
     m_file = f->retain();
     m_file->open_read(
-      seek,
+      seek, size,
       [=](FileStream *fs) {
         if (fs) {
           fs->chain(EventSource::reply());

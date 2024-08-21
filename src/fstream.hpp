@@ -56,8 +56,8 @@ public:
   typedef asio::posix::stream_descriptor stream_t;
 #endif
 
-  static auto make(bool read, handle_t fd, Data::Producer *dp) -> FileStream* {
-    return new FileStream(read, fd, dp);
+  static auto make(int read_size, handle_t fd, Data::Producer *dp) -> FileStream* {
+    return new FileStream(read_size, fd, dp);
   }
 
   auto fd() const -> handle_t { return m_fd; }
@@ -66,7 +66,7 @@ public:
   void close();
 
 private:
-  FileStream(bool read, handle_t fd, Data::Producer *dp);
+  FileStream(int read_size, handle_t fd, Data::Producer *dp);
 
   virtual void on_event(Event *evt) override;
   virtual void on_flush() override;
@@ -86,6 +86,7 @@ private:
   size_t m_buffer_limit = 0;
   size_t m_file_pointer = 0;
   ReceivingState m_receiving_state = RECEIVING;
+  int m_read_size;
   bool m_no_close = false;
   bool m_overflowed = false;
   bool m_pumping = false;

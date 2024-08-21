@@ -38,10 +38,14 @@ namespace pipy {
 static Data::Producer s_dp("File I/O");
 
 void File::open_read(const std::function<void(FileStream*)> &cb) {
-  open_read(0, cb);
+  open_read(0, -1, cb);
 }
 
 void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
+  open_read(seek, -1, cb);
+}
+
+void File::open_read(int seek, int size, const std::function<void(FileStream*)> &cb) {
   if (m_f.valid() || m_closed) return;
 
   auto *net = &Net::current();
@@ -60,7 +64,7 @@ void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
         net->post(
           [=]() {
             m_f = f;
-            m_stream = FileStream::make(true, f.get(), &s_dp);
+            m_stream = FileStream::make(size, f.get(), &s_dp);
             if (is_std) m_stream->set_no_close();
             if (m_closed) {
               close();
@@ -120,7 +124,7 @@ void File::open_write(bool append) {
               InputContext ic;
               m_f = f;
               m_writing = true;
-              m_stream = FileStream::make(false, f.get(), &s_dp);
+              m_stream = FileStream::make(0, f.get(), &s_dp);
               if (is_std) m_stream->set_no_close();
               if (!m_buffer.empty()) {
                 m_stream->input()->input(Data::make(m_buffer));
