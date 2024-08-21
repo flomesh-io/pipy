@@ -2978,6 +2978,7 @@ public:
   public:
     static auto current() -> Period*;
     static auto make() -> Period*;
+    static void set_uncaught_exception_handler(const std::function<void(const Value &)> &handler);
 
     void set_current();
     bool pending() const { return m_settled_queue_head != nullptr; }
@@ -2998,6 +2999,7 @@ public:
     bool run_queue();
 
     thread_local static pjs::Ref<Period> s_current;
+    thread_local static std::function<void(const Value &)> s_uncaught_exception_handler;
 
     friend class Promise;
   };

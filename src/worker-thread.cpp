@@ -454,6 +454,14 @@ void WorkerThread::main() {
   Log::init();
   Pipy::argv(m_manager->m_argv);
 
+  pjs::Promise::Period::set_uncaught_exception_handler(
+    [](const pjs::Value &value) {
+      Data buf;
+      Console::dump(value, buf);
+      Log::error("[pjs] Uncaught exception from promise: %s", buf.to_string().c_str());
+    }
+  );
+
   m_new_worker = Worker::make(
     pjs::Promise::Period::current(),
     m_manager->loading_pipeline_lb(),

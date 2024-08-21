@@ -2348,6 +2348,7 @@ template<> void ClassDef<Constructor<Promise>>::init() {
 //
 
 thread_local pjs::Ref<Promise::Period> Promise::Period::s_current;
+thread_local std::function<void(const Value &)> Promise::Period::s_uncaught_exception_handler;
 
 auto Promise::Period::current() -> Period* {
   if (!s_current) {
@@ -2358,6 +2359,10 @@ auto Promise::Period::current() -> Period* {
 
 auto Promise::Period::make() -> Period* {
   return new Period();
+}
+
+void Promise::Period::set_uncaught_exception_handler(const std::function<void(const Value &)> &handler) {
+  s_uncaught_exception_handler = handler;
 }
 
 void Promise::Period::set_current() {
@@ -2485,6 +2490,11 @@ void Promise::Then::execute(Context *ctx, State state, const Value &result) {
       (*m_on_rejected)(*ctx, 1, &arg, ret);
     } else {
       ret = m_rejected_value.is_empty() ? result : m_rejected_value;
+      if (auto period = Period::current()) {
+        if (Period::s_uncaught_exception_handler) {
+          Period::s_uncaught_exception_handler(result);
+        }
+      }
     }
   }
 
