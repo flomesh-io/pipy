@@ -382,8 +382,8 @@ void FilterConfigurator::produce(const pjs::Value &producer) {
   append_filter(new Produce(producer));
 }
 
-void FilterConfigurator::read(const pjs::Value &pathname) {
-  append_filter(new Read(pathname));
+void FilterConfigurator::read(const pjs::Value &pathname, pjs::Object *options) {
+  append_filter(new Read(pathname, options));
 }
 
 void FilterConfigurator::replace_body(pjs::Object *replacement, pjs::Object *options) {
@@ -2061,9 +2061,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("read", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value pathname;
-    if (!ctx.arguments(1, &pathname)) return;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &pathname, &options)) return;
     try {
-      config->read(pathname);
+      config->read(pathname, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

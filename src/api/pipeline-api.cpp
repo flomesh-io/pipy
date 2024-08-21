@@ -56,6 +56,7 @@
 #include "filters/pipe.hpp"
 #include "filters/print.hpp"
 #include "filters/proxy-protocol.hpp"
+#include "filters/read.hpp"
 #include "filters/repeat.hpp"
 #include "filters/replace-body.hpp"
 #include "filters/replace-event.hpp"
@@ -367,6 +368,10 @@ void PipelineDesigner::mux_http(pjs::Function *session_selector, pjs::Object *op
   } else {
     require_sub_pipeline(append_filter(new http::Mux(session_selector, options)));
   }
+}
+
+void PipelineDesigner::read(const pjs::Value &filename, pjs::Object *options) {
+  append_filter(new Read(filename, options));
 }
 
 void PipelineDesigner::repeat(pjs::Function *condition) {
@@ -1146,7 +1151,15 @@ template<> void ClassDef<PipelineDesigner>::init() {
     obj->print();
   });
 
-  // PipelineDesigner.replace
+  // PipelineDesigner.read
+  filter("read", [](Context &ctx, PipelineDesigner *obj) {
+    Value filename;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &filename, &options)) return;
+    obj->read(filename, options);
+  });
+
+  // PipelineDesigner.repeat
   filter("repeat", [](Context &ctx, PipelineDesigner *obj) {
     Function *condition = nullptr;
     if (!ctx.arguments(1, &condition)) return;

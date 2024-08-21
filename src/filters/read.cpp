@@ -31,11 +31,23 @@
 namespace pipy {
 
 //
+// Read::Options
+//
+
+Read::Options::Options(pjs::Object *options) {
+  Value(options, "seek")
+    .get(seek)
+    .get(seek_f)
+    .check_nullable();
+}
+
+//
 // Read
 //
 
-Read::Read(const pjs::Value &pathname)
+Read::Read(const pjs::Value &pathname, const Options &options)
   : m_pathname(pathname)
+  , m_options(options)
 {
 }
 
@@ -72,10 +84,19 @@ void Read::process(Event *evt) {
     m_started = true;
     pjs::Value pathname;
     if (!Filter::eval(m_pathname, pathname)) return;
+
+    int seek = m_options.seek;
+    if (auto f = m_options.seek_f.get()) {
+      pjs::Value ret;
+      if (!Filter::callback(f, 0, nullptr, ret)) return;
+      seek = ret.to_int32();
+    }
+
     auto *s = pathname.to_string();
     auto f = File::make(s->str());
     m_file = f->retain();
     m_file->open_read(
+      seek,
       [=](FileStream *fs) {
         if (fs) {
           fs->chain(EventSource::reply());

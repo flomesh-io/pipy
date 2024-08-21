@@ -116,7 +116,7 @@ public:
   void pack(int batch_size, pjs::Object *options);
   void print();
   void produce(const pjs::Value &producer);
-  void read(const pjs::Value &pathname);
+  void read(const pjs::Value &pathname, pjs::Object *options);
   void replace_body(pjs::Object *replacement, pjs::Object *options);
   void replace_event(Event::Type type, pjs::Object *replacement);
   void replace_message(pjs::Object *replacement, pjs::Object *options);

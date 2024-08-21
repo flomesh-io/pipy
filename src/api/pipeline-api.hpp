@@ -112,6 +112,7 @@ public:
   void pipe(const pjs::Value &target, pjs::Object *target_map, pjs::Object *init_args);
   void pipe_next(const pjs::Value &args);
   void print();
+  void read(const pjs::Value &filename, pjs::Object *options);
   void repeat(pjs::Function *condition);
   void replace(Event::Type type, pjs::Object *replacement);
   void replace_body(pjs::Object *replacement, pjs::Object *options);

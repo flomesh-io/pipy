@@ -39,7 +39,14 @@ class File;
 
 class Read : public Filter, public EventSource {
 public:
-  Read(const pjs::Value &pathname);
+  struct Options : public pipy::Options {
+    int seek = 0;
+    pjs::Ref<pjs::Function> seek_f;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  Read(const pjs::Value &pathname, const Options &options);
 
 private:
   Read(const Read &r);
@@ -53,6 +60,7 @@ private:
 
   pjs::Value m_pathname;
   pjs::Ref<File> m_file;
+  Options m_options;
   bool m_started = false;
 };
 
