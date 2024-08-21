@@ -213,7 +213,11 @@ auto Match::exec(const std::string &path) -> pjs::Object* {
         args->set(sec.name, pjs::Str::make(s, n));
       } else {
         if (i + 1 == m_sections.size()) {
-          n = size - p;
+          while (q < size) {
+            auto c = path[q];
+            if (c == '#' || c == '?') break; else q++;
+          }
+          n = q - p;
           args->set(s_asterisk, pjs::Str::make(s, n));
         }
       }
