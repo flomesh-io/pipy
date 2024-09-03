@@ -231,6 +231,8 @@ public:
   bool has(pjs::Str *key);
   bool get(pjs::Str *key, pjs::Value &value);
   void set(pjs::Str *key, const pjs::Value &value);
+  auto add(pjs::Str *key, double value) -> double;
+  auto sub(pjs::Str *key, double value) -> double;
 
 private:
 
@@ -248,6 +250,8 @@ private:
     bool has(pjs::Str::CharData *key);
     bool get(pjs::Str::CharData *key, pjs::SharedValue &value);
     void set(pjs::Str::CharData *key, const pjs::SharedValue &value);
+    auto add(pjs::Str::CharData *key, double value) -> double;
+    auto sub(pjs::Str::CharData *key, double value) -> double;
 
   private:
     typedef pjs::Ref<pjs::Str::CharData> Key;

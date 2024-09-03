@@ -29,6 +29,7 @@
 #include "log.hpp"
 
 #include <algorithm>
+#include <limits>
 
 namespace pipy {
 namespace algo {
@@ -546,6 +547,14 @@ void SharedMap::set(pjs::Str *key, const pjs::Value &value) {
   m_map->set(key->data(), sv);
 }
 
+auto SharedMap::add(pjs::Str *key, double value) -> double {
+  return m_map->add(key->data(), value);
+}
+
+auto SharedMap::sub(pjs::Str *key, double value) -> double {
+  return m_map->sub(key->data(), value);
+}
+
 //
 // SharedMap::Map
 //
@@ -598,6 +607,30 @@ bool SharedMap::Map::get(pjs::Str::CharData *key, pjs::SharedValue &value) {
 void SharedMap::Map::set(pjs::Str::CharData *key, const pjs::SharedValue &value) {
   std::lock_guard<std::mutex> lock(m_mutex);
   m_map[key] = value;
+}
+
+auto SharedMap::Map::add(pjs::Str::CharData *key, double value) -> double {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto i = m_map.find(key);
+  if (i == m_map.end()) return std::numeric_limits<double>::quiet_NaN();
+  pjs::Value v;
+  i->second.to_value(v);
+  if (!v.is_number()) return std::numeric_limits<double>::quiet_NaN();
+  v.set(v.n() + value);
+  i->second = v;
+  return v.n();
+}
+
+auto SharedMap::Map::sub(pjs::Str::CharData *key, double value) -> double {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto i = m_map.find(key);
+  if (i == m_map.end()) return std::numeric_limits<double>::quiet_NaN();
+  pjs::Value v;
+  i->second.to_value(v);
+  if (!v.is_number()) return std::numeric_limits<double>::quiet_NaN();
+  v.set(v.n() - value);
+  i->second = v;
+  return v.n();
 }
 
 //
@@ -1696,6 +1729,20 @@ template<> void ClassDef<SharedMap>::init() {
     Value value;
     if (!ctx.arguments(2, &key, &value)) return;
     obj->as<SharedMap>()->set(key, value);
+  });
+
+  method("add", [](Context &ctx, Object *obj, Value &ret) {
+    Str *key;
+    double value;
+    if (!ctx.arguments(2, &key, &value)) return;
+    ret.set(obj->as<SharedMap>()->add(key, value));
+  });
+
+  method("sub", [](Context &ctx, Object *obj, Value &ret) {
+    Str *key;
+    double value;
+    if (!ctx.arguments(2, &key, &value)) return;
+    ret.set(obj->as<SharedMap>()->sub(key, value));
   });
 }
 
