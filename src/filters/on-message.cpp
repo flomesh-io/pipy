@@ -83,10 +83,10 @@ void OnMessage::handle(Event *evt) {
       }
       auto body = m_body_buffer.flush();
       pjs::Ref<Message> msg(Message::make(m_start->head(), body, tail, payload)), result;
+      m_start = nullptr;
       if (Handle::callback(msg)) {
         Handle::defer(evt);
       }
-      m_start = nullptr;
       return;
     }
   }

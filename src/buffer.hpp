@@ -154,6 +154,21 @@ public:
     }
   }
 
+  void flush_until(const std::function<bool(Event*)> &out) {
+    while (auto e = m_events.head()) {
+      m_events.remove(e);
+      e->m_in_buffer = false;
+      if (m_stats) {
+        if (auto data = e->as<Data>()) {
+          m_stats->size -= data->size();
+        }
+      }
+      auto ret = out(e);
+      e->release();
+      if (ret) break;
+    }
+  }
+
   void clear() {
     List<Event> events(std::move(m_events));
     while (auto e = events.head()) {

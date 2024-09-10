@@ -74,10 +74,10 @@ void OnBody::handle(Event *evt) {
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_started) {
       auto body = m_body_buffer.flush();
+      m_started = false;
       if (Handle::callback(body)) {
         Handle::defer(evt);
       }
-      m_started = false;
       return;
     }
   }

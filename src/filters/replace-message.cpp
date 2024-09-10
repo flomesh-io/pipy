@@ -84,8 +84,8 @@ void ReplaceMessage::handle(Event *evt) {
         payload = end->payload();
       }
       pjs::Ref<Message> msg(Message::make(m_start->head(), m_body_buffer.flush(), tail, payload));
-      if (!Replace::callback(msg)) return;
       m_start = nullptr;
+      if (!Replace::callback(msg)) return;
     }
   }
 }

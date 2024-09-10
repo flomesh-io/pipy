@@ -90,8 +90,9 @@ bool Handle::on_callback_return(const pjs::Value &result) {
     Filter::output(m_deferred_event);
     m_deferred_event = nullptr;
   }
-  m_event_buffer.flush([this](Event *evt) {
+  m_event_buffer.flush_until([this](Event *evt) {
     handle(evt);
+    return m_waiting;
   });
   return true;
 }

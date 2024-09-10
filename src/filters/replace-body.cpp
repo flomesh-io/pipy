@@ -76,8 +76,8 @@ void ReplaceBody::handle(Event *evt) {
 
     } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
       pjs::Ref<Data> body = m_body_buffer.flush();
-      if (!Replace::callback(body)) return;
       m_started = false;
+      if (!Replace::callback(body)) return;
       Replace::pass(evt);
     }
   }
