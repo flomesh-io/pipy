@@ -460,6 +460,10 @@ void kill(int pid, int sig) {
   ::kill(pid, sig);
 }
 
+FileHandle::FileHandle(int fd, const char *mode) {
+  m_file = fdopen(fd, mode);
+}
+
 auto FileHandle::std_input() -> FileHandle {
   return FileHandle(stdin);
 }

@@ -29,6 +29,7 @@
 #include "net.hpp"
 #include "event.hpp"
 #include "input.hpp"
+#include "os-platform.hpp"
 
 #include <stdio.h>
 
@@ -49,24 +50,22 @@ class FileStream :
 {
 public:
 #ifdef _WIN32
-  typedef HANDLE handle_t;
   typedef asio::windows::random_access_handle stream_t;
 #else
-  typedef int handle_t;
   typedef asio::posix::stream_descriptor stream_t;
 #endif
 
-  static auto make(int read_size, handle_t fd, Data::Producer *dp) -> FileStream* {
+  static auto make(int read_size, os::FileHandle fd, Data::Producer *dp) -> FileStream* {
     return new FileStream(read_size, fd, dp);
   }
 
-  auto fd() const -> handle_t { return m_fd; }
+  auto fd() const -> os::FileHandle { return m_fd; }
   void set_no_close() { m_no_close = true; }
   void set_buffer_limit(size_t size) { m_buffer_limit = size; }
   void close();
 
 private:
-  FileStream(int read_size, handle_t fd, Data::Producer *dp);
+  FileStream(int read_size, os::FileHandle fd, Data::Producer *dp);
 
   virtual void on_event(Event *evt) override;
   virtual void on_flush() override;
@@ -80,7 +79,7 @@ private:
   };
 
   stream_t m_stream;
-  handle_t m_fd;
+  os::FileHandle m_fd;
   Data::Producer* m_dp;
   Data m_buffer;
   size_t m_buffer_limit = 0;
@@ -91,6 +90,7 @@ private:
   bool m_overflowed = false;
   bool m_pumping = false;
   bool m_ended = false;
+  bool m_closed = false;
 
   void read();
   void write(Data *data);

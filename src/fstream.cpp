@@ -32,9 +32,10 @@
 
 namespace pipy {
 
-FileStream::FileStream(int read_size, handle_t fd, Data::Producer *dp)
+FileStream::FileStream(int read_size, os::FileHandle fd, Data::Producer *dp)
   : FlushTarget(true)
-  , m_stream(Net::context(), fd)
+  , m_stream(Net::context(), fd.get())
+  , m_fd(fd)
   , m_dp(dp)
   , m_read_size(read_size)
 {
@@ -42,12 +43,11 @@ FileStream::FileStream(int read_size, handle_t fd, Data::Producer *dp)
 }
 
 void FileStream::close() {
+  if (m_closed) return;
+
   std::error_code ec;
-  if (m_no_close) {
-    m_stream.release();
-  } else {
-    m_stream.close(ec);
-  }
+  m_stream.release();
+  if (!m_no_close) m_fd.close();
 
   if (m_receiving_state == PAUSED) {
     m_receiving_state = RECEIVING;
@@ -55,10 +55,12 @@ void FileStream::close() {
   }
 
   if (ec) {
-    Log::error("FileStream: %p, error closing stream [fd = %d], %s", this, m_fd, ec.message().c_str());
+    Log::error("FileStream: %p, error closing stream [fd = %d], %s", this, m_fd.get(), ec.message().c_str());
   } else if (Log::is_enabled(Log::FILES)) {
-    Log::debug(Log::FILES, "FileStream: %p, stream closed [fd = %d]", this, m_fd);
+    Log::debug(Log::FILES, "FileStream: %p, stream closed [fd = %d]", this, m_fd.get());
   }
+
+  m_closed = true;
 }
 
 void FileStream::on_event(Event *evt) {
@@ -120,14 +122,16 @@ void FileStream::read() {
     }
 
     if (read_end || ec == asio::error::eof || ec == asio::error::broken_pipe) {
-      Log::debug(Log::FILES, "FileStream: %p, end of stream [fd = %d]", this, m_fd);
+      Log::debug(Log::FILES, "FileStream: %p, end of stream [fd = %d]", this, m_fd.get());
       output(StreamEnd::make(StreamEnd::NO_ERROR));
+      close();
     } else if (ec && ec != asio::error::operation_aborted) {
       auto msg = ec.message();
       Log::warn(
         "FileStream: %p, error reading from stream [fd = %d]: %s",
-        this, m_fd, msg.c_str());
+        this, m_fd.get(), msg.c_str());
       output(StreamEnd::make(StreamEnd::READ_ERROR));
+      close();
 
     } else if (m_receiving_state == PAUSING) {
       m_receiving_state = PAUSED;
@@ -157,13 +161,13 @@ void FileStream::read() {
 }
 
 void FileStream::write(Data *data) {
-  if (!m_ended) {
+  if (!m_closed && !m_ended) {
     if (!data->empty()) {
       if (!m_overflowed) {
         if (m_buffer_limit > 0 && m_buffer.size() >= m_buffer_limit) {
           Log::error(
             "FileStream: %p, buffer overflow, size = %d, fd = %d",
-            this, m_fd, m_buffer.size());
+            this, m_fd.get(), m_buffer.size());
           m_overflowed = true;
         }
       }
@@ -177,7 +181,7 @@ void FileStream::write(Data *data) {
 }
 
 void FileStream::end() {
-  if (!m_ended) {
+  if (!m_closed && !m_ended) {
     m_ended = true;
     if (m_buffer.empty()) {
       close();
@@ -200,7 +204,7 @@ void FileStream::pump() {
       auto msg = ec.message();
       Log::warn(
         "FileStream: %p, error writing to stream [fd = %d], %s",
-        this, m_fd, msg.c_str());
+        this, m_fd.get(), msg.c_str());
       m_buffer.clear();
 
     } else {

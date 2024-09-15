@@ -253,7 +253,7 @@ bool Exec::exec_argv(const std::list<std::string> &args) {
 
     fcntl(master_fd, F_SETFL, fcntl(master_fd, F_GETFL, 0) | O_NONBLOCK);
 
-    m_stdout = m_stdin = FileStream::make(-1, master_fd, &s_dp);
+    m_stdout = m_stdin = FileStream::make(-1, os::FileHandle(master_fd, "r+"), &s_dp);
     m_stdout->chain(m_stdout_reader.input());
 
   } else {
@@ -262,9 +262,9 @@ bool Exec::exec_argv(const std::list<std::string> &args) {
     pipe(out);
     pipe(err);
 
-    m_stdin = FileStream::make(0, in[1], &s_dp);
-    m_stdout = FileStream::make(-1, out[0], &s_dp);
-    m_stderr = FileStream::make(-1, err[0], &s_dp);
+    m_stdin = FileStream::make(0, os::FileHandle(in[1], "w"), &s_dp);
+    m_stdout = FileStream::make(-1, os::FileHandle(out[0], "r"), &s_dp);
+    m_stderr = FileStream::make(-1, os::FileHandle(err[0], "r"), &s_dp);
     m_stdout->chain(m_stdout_reader.input());
     m_stderr->chain(m_stderr_reader.input());
 

@@ -64,11 +64,8 @@ void File::open_read(int seek, int size, const std::function<void(FileStream*)> 
         net->post(
           [=]() {
             m_f = f;
-            m_stream = FileStream::make(size, f.get(), &s_dp);
+            m_stream = FileStream::make(size, f, &s_dp);
             if (is_std) m_stream->set_no_close();
-            if (m_closed) {
-              close();
-            }
             cb(m_stream);
             m_open_signal->fire();
             release();
@@ -124,7 +121,7 @@ void File::open_write(bool append) {
               InputContext ic;
               m_f = f;
               m_writing = true;
-              m_stream = FileStream::make(0, f.get(), &s_dp);
+              m_stream = FileStream::make(0, f, &s_dp);
               if (is_std) m_stream->set_no_close();
               if (!m_buffer.empty()) {
                 m_stream->input()->input(Data::make(m_buffer));

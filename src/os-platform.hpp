@@ -122,6 +122,7 @@ namespace os {
 class FileHandle {
 public:
   FileHandle() : m_file(nullptr) {}
+  FileHandle(int fd, const char *mode);
 
   static auto std_input() -> FileHandle;
   static auto std_output() -> FileHandle;
