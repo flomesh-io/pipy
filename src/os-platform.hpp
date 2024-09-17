@@ -72,6 +72,7 @@ namespace os {
 class FileHandle {
 public:
   FileHandle() : m_handle(INVALID_HANDLE_VALUE) {}
+  FileHandle(HANDLE handle) : m_handle(handle) {}
 
   static auto std_input() -> FileHandle;
   static auto std_output() -> FileHandle;
@@ -86,7 +87,6 @@ public:
   void close();
 
 private:
-  FileHandle(HANDLE handle) : m_handle(handle) {}
   HANDLE m_handle;
 };
 
