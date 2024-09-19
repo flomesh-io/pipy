@@ -2244,10 +2244,18 @@ void Promise::dequeue(bool run) {
     auto p = m_thens_head;
     m_thens_head = nullptr;
     m_thens_tail = nullptr;
-    while (p) {
-      auto then = p; p = p->m_next;
-      if (run) then->execute(m_state, m_result);
-      delete then;
+    if (p) {
+      while (p) {
+        auto then = p; p = p->m_next;
+        if (run) then->execute(m_state, m_result);
+        delete then;
+      }
+    } else if (m_state == REJECTED) {
+      if (auto period = Period::current()) {
+        if (Period::s_uncaught_exception_handler) {
+          Period::s_uncaught_exception_handler(m_result);
+        }
+      }
     }
     m_next = nullptr;
     m_queued = false;
@@ -2488,13 +2496,11 @@ void Promise::Then::execute(Context *ctx, State state, const Value &result) {
     if (m_on_rejected) {
       state = RESOLVED;
       (*m_on_rejected)(*ctx, 1, &arg, ret);
+    } else if (m_rejected_value.is_empty()) {
+      ret = result;
     } else {
-      ret = m_rejected_value.is_empty() ? result : m_rejected_value;
-      if (auto period = Period::current()) {
-        if (Period::s_uncaught_exception_handler) {
-          Period::s_uncaught_exception_handler(result);
-        }
-      }
+      ret = m_rejected_value;
+      state = RESOLVED;
     }
   }
 
