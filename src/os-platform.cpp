@@ -272,31 +272,27 @@ void kill(int pid, int sig) {
 
 auto FileHandle::std_input() -> FileHandle {
   if (!s_stdin_server) {
-    s_stdin_server = new StdioServer(
-      GetStdHandle(STD_INPUT_HANDLE),
-      "\\\\.\\pipe\\pipy.stdin",
-      true
-    );
+    char name[256];
+    std::snprintf(name, sizeof(name), "\\\\.\\pipe\\pipy.stdin\\%08x", GetCurrentProcessId());
+    s_stdin_server = new StdioServer(GetStdHandle(STD_INPUT_HANDLE), name, true);
   }
   return FileHandle(s_stdin_server->connect());
 }
 
 auto FileHandle::std_output() -> FileHandle {
   if (!s_stdout_server) {
-    s_stdout_server = new StdioServer(
-      GetStdHandle(STD_OUTPUT_HANDLE),
-      "\\\\.\\pipe\\pipy.stdout"
-    );
+    char name[256];
+    std::snprintf(name, sizeof(name), "\\\\.\\pipe\\pipy.stdout\\%08x", GetCurrentProcessId());
+    s_stdout_server = new StdioServer(GetStdHandle(STD_OUTPUT_HANDLE), name);
   }
   return FileHandle(s_stdout_server->connect());
 }
 
 auto FileHandle::std_error() -> FileHandle {
   if (!s_stderr_server) {
-    s_stderr_server = new StdioServer(
-      GetStdHandle(STD_ERROR_HANDLE),
-      "\\\\.\\pipe\\pipy.stderr"
-    );
+    char name[256];
+    std::snprintf(name, sizeof(name), "\\\\.\\pipe\\pipy.stderr\\%08x", GetCurrentProcessId());
+    s_stderr_server = new StdioServer(GetStdHandle(STD_ERROR_HANDLE), name);
   }
   return FileHandle(s_stderr_server->connect());
 }
