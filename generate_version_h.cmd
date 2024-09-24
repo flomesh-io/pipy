@@ -6,6 +6,8 @@ for /f %%i in ('git log -1 --format^=%%H') do set COMMIT=%%i
 
 for /f "eol= tokens=* delims=" %%i in ('"git log -1 --format=%%cD"') do set COMMIT_DATE=%%i
 
+echo. > %1
+
 echo #ifndef __VERSION_H__ >> %1
 echo #define __VERSION_H__ >> %1
 echo. >> %1
