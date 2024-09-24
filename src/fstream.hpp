@@ -55,7 +55,7 @@ public:
   typedef asio::posix::stream_descriptor stream_t;
 #endif
 
-  static auto make(int read_size, os::FileHandle fd, Data::Producer *dp) -> FileStream* {
+  static auto make(size_t read_size, os::FileHandle fd, Data::Producer *dp) -> FileStream* {
     return new FileStream(read_size, fd, dp);
   }
 
@@ -65,7 +65,7 @@ public:
   void close();
 
 private:
-  FileStream(int read_size, os::FileHandle fd, Data::Producer *dp);
+  FileStream(size_t read_size, os::FileHandle fd, Data::Producer *dp);
 
   virtual void on_event(Event *evt) override;
   virtual void on_flush() override;

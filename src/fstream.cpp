@@ -32,7 +32,7 @@
 
 namespace pipy {
 
-FileStream::FileStream(int read_size, os::FileHandle fd, Data::Producer *dp)
+FileStream::FileStream(size_t read_size, os::FileHandle fd, Data::Producer *dp)
   : FlushTarget(true)
   , m_stream(Net::context(), fd.get())
   , m_fd(fd)
@@ -110,8 +110,10 @@ void FileStream::read() {
 
     if (n > 0) {
       if (m_read_size > 0) {
-        m_read_size -= n;
-        if (m_read_size <= 0) {
+        if (m_read_size > n) {
+          m_read_size -= n;
+        } else {
+          n = m_read_size;
           m_read_size = 0;
           read_end = true;
         }

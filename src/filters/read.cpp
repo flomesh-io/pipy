@@ -90,18 +90,18 @@ void Read::process(Event *evt) {
     pjs::Value pathname;
     if (!Filter::eval(m_pathname, pathname)) return;
 
-    int seek = m_options.seek;
+    size_t seek = m_options.seek;
     if (auto f = m_options.seek_f.get()) {
       pjs::Value ret;
       if (!Filter::callback(f, 0, nullptr, ret)) return;
-      seek = ret.to_int32();
+      seek = (size_t)ret.to_int64();
     }
 
-    int size = m_options.size;
+    size_t size = m_options.size;
     if (auto f = m_options.size_f.get()) {
       pjs::Value ret;
       if (!Filter::callback(f, 0, nullptr, ret)) return;
-      size = ret.to_int32();
+      size = (size_t)ret.to_int64();
     }
 
     auto *s = pathname.to_string();

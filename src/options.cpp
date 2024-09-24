@@ -115,6 +115,12 @@ Options::Value& Options::Value::get(size_t &value, int thousand) {
   add_type(POSITIVE_NUMBER);
   if (m_got) return *this;
   if (m_value.is_nullish()) return *this;
+  if (m_value.is<pjs::Int>()) {
+    auto i = m_value.to_int64();
+    value = (size_t)i;
+    m_got = true;
+    return *this;
+  }
   double v;
   if (get_number(v, thousand) && !std::isinf(v) && v >= 0) {
     value = v;

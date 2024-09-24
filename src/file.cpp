@@ -41,11 +41,11 @@ void File::open_read(const std::function<void(FileStream*)> &cb) {
   open_read(0, -1, cb);
 }
 
-void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
+void File::open_read(size_t seek, const std::function<void(FileStream*)> &cb) {
   open_read(seek, -1, cb);
 }
 
-void File::open_read(int seek, int size, const std::function<void(FileStream*)> &cb) {
+void File::open_read(size_t seek, size_t size, const std::function<void(FileStream*)> &cb) {
   if (m_f.valid() || m_closed) return;
 
   auto *net = &Net::current();
