@@ -579,6 +579,13 @@ int pipy_main(int argc, char *argv[]) {
       codebase = Codebase::from_root(codebase);
       codebase->set_current();
 
+      s_admin_ip = admin_ip;
+      s_admin_port = admin_port;
+
+      if (!opts.admin_port.empty() && !opts.admin_port_off) {
+        toggle_admin_port();
+      }
+
       bool started = false, start_error = false;
 
       load = [&]() {
@@ -608,13 +615,6 @@ int pipy_main(int argc, char *argv[]) {
             if (!started) {
               fail();
               return;
-            }
-
-            s_admin_ip = admin_ip;
-            s_admin_port = admin_port;
-
-            if (!opts.admin_port.empty() && !opts.admin_port_off) {
-              toggle_admin_port();
             }
 
             if (!opts.no_reload) {
