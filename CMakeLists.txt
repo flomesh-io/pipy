@@ -256,6 +256,7 @@ SET(PIPY_SRC
   src/api/url.cpp
   src/api/xml.cpp
   src/api/yaml.cpp
+  src/api/zlib.cpp
   src/buffer.cpp
   src/codebase.cpp
   src/codebase-store.cpp

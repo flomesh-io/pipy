@@ -63,6 +63,7 @@
 #include "api/url.hpp"
 #include "api/xml.hpp"
 #include "api/yaml.hpp"
+#include "api/zlib.hpp"
 #include "log.hpp"
 #include "utils.hpp"
 
@@ -111,6 +112,9 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // XML
   variable("XML", class_of<XML>());
+
+  // zlib
+  variable("zlib", class_of<ZLib>());
 
   // Protobuf
   variable("protobuf", class_of<Protobuf>());
