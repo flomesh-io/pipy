@@ -111,7 +111,7 @@ As mentioned in [Global variables](/tutorial/04-routing/#global-variables) from 
             msg.head.path,
           )?.next?.()
 +       ) => (
-+       ))
++       ))()
       )
     )
 ```
@@ -131,7 +131,7 @@ Next, we change `_target` to a new local variable `s`, and move `_target`, toget
 +         )
         ) => (
 +         _target = services[s]?.next?.()
-        ))
+        ))()
       )
     )
 ```
