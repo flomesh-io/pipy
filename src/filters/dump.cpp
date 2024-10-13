@@ -100,8 +100,10 @@ void Dump::process(Event *evt) {
   };
 
   db.push(str, Log::format_header(Log::INFO, str, sizeof(str)));
-  db.push(s_prefix_worker);
-  db.push(str, str_fmt( "%d", WorkerThread::current()->index()));
+  if (auto t = WorkerThread::current()) {
+    db.push(s_prefix_worker);
+    db.push(str, str_fmt( "%d", t->index()));
+  }
   db.push(s_prefix_context);
   db.push(str, str_fmt( "%d", context()->id()));
   db.push(']');

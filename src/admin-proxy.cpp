@@ -161,9 +161,16 @@ void AdminProxy::open(const std::string &ip, int port, const Options &options) {
     ppl_connect = ppl;
   }
 
+  m_session_selector = pjs::Method::make(
+    "admin-proxy-session-selector",
+    [](pjs::Context &, pjs::Object*, pjs::Value &ret) {
+      ret.set(pjs::Object::make());
+    }
+  );
+
   ppl_inbound->append(new http::Demux(nullptr))->add_sub_pipeline(ppl_request);
   ppl_request->append(new AdminProxyHandler(this))->add_sub_pipeline(ppl_forward);
-  ppl_forward->append(new http::Mux(nullptr, nullptr))->add_sub_pipeline(ppl_connect);
+  ppl_forward->append(new http::Mux(pjs::Function::make(m_session_selector), nullptr))->add_sub_pipeline(ppl_connect);
 
   Listener::Options opts;
   auto listener = Listener::get(Port::Protocol::TCP, ip, port);

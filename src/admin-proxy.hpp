@@ -83,6 +83,7 @@ private:
   std::map<std::string, pjs::Ref<http::File>> m_www_file_cache;
   pjs::Ref<http::Directory> m_gui_files;
 
+  pjs::Ref<pjs::Method> m_session_selector;
   pjs::Ref<Message> m_response_not_found;
   pjs::Ref<Message> m_response_method_not_allowed;
 
