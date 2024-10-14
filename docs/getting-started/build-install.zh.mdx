@@ -27,7 +27,7 @@ $ ./build.sh
 
 ```sh
 $ cd pipy
-$ docker build --squash --rm -t pipy .·
+$ docker build --squash --rm -t pipy .
 ```
 
 > **注意：** 添加 `--squash` 选项可以获得更小的镜像。这是一个实验性功能，需要在 `/etc/docker/daemon.json` 中添加 `{ "experimental": true }` 并重启 Docker daemon 开启。
