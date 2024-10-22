@@ -2831,6 +2831,34 @@ template<> void ClassDef<Array>::init() {
     }));
   });
 
+  method("findLast", [](Context &ctx, Object *obj, Value &ret) {
+    Function *callback;
+    if (!ctx.arguments(1, &callback)) return;
+    obj->as<Array>()->findLast([&](Value &v, int i) -> bool {
+      Value argv[3], ret;
+      argv[0] = v;
+      argv[1].set(i);
+      argv[2].set(obj);
+      (*callback)(ctx, 3, argv, ret);
+      if (!ctx.ok()) return true;
+      return ret.to_boolean();
+    }, ret);
+  });
+
+  method("findLastIndex", [](Context &ctx, Object *obj, Value &ret) {
+    Function *callback;
+    if (!ctx.arguments(1, &callback)) return;
+    ret.set(obj->as<Array>()->findLastIndex([&](Value &v, int i) -> bool {
+      Value argv[3], ret;
+      argv[0] = v;
+      argv[1].set(i);
+      argv[2].set(obj);
+      (*callback)(ctx, 3, argv, ret);
+      if (!ctx.ok()) return true;
+      return ret.to_boolean();
+    }));
+  });
+
   method("flat", [](Context &ctx, Object *obj, Value &ret) {
     int depth = 1;
     if (!ctx.arguments(0, &depth)) return;
@@ -3134,6 +3162,29 @@ auto Array::findIndex(std::function<bool(Value&, int)> callback) -> int {
     return !ret;
   });
   return found;
+}
+
+void Array::findLast(std::function<bool(Value&, int)> callback, Value &result) {
+  auto n = std::min(m_size, (int)m_data->size()) - 1;
+  auto values = m_data->elements();
+  for (int i = n; i >= 0; i--) {
+    auto &v = values[i];
+    if (!v.is_empty() && callback(v, i)) {
+      result = v;
+      return;
+    }
+  }
+  result = Value::undefined;
+}
+
+auto Array::findLastIndex(std::function<bool(Value&, int)> callback) -> int {
+  auto n = std::min(m_size, (int)m_data->size()) - 1;
+  auto values = m_data->elements();
+  for (int i = n; i >= 0; i--) {
+    auto &v = values[i];
+    if (!v.is_empty() && callback(v, i)) return i;
+  }
+  return -1;
 }
 
 auto Array::flat(int depth) -> Array* {

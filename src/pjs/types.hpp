@@ -3746,6 +3746,8 @@ public:
   auto filter(std::function<bool(Value&, int)> callback) -> Array*;
   void find(std::function<bool(Value&, int)> callback, Value &result);
   auto findIndex(std::function<bool(Value&, int)> callback) -> int;
+  void findLast(std::function<bool(Value&, int)> callback, Value &result);
+  auto findLastIndex(std::function<bool(Value&, int)> callback) -> int;
   auto flat(int depth = 1) -> Array*;
   auto flatMap(std::function<bool(Value&, int, Value&)> callback) -> Array*;
   void forEach(std::function<bool(Value&, int)> callback);
