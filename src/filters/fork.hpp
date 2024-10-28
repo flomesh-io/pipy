@@ -64,11 +64,12 @@ private:
   Mode m_mode;
   pjs::Value m_init_arg;
   pjs::PooledArray<Branch>* m_branches = nullptr;
+  Branch* m_winner = nullptr;
   EventBuffer m_buffer;
   int m_counter = 0;
   bool m_waiting = false;
 
-  void on_branch_end(Branch *branch);
+  void on_branch_output(Branch *branch, Event *evt);
 };
 
 } // namespace pipy

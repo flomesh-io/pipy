@@ -89,6 +89,7 @@ void Fork::reset() {
     m_branches->free();
     m_branches = nullptr;
   }
+  m_winner = nullptr;
   m_buffer.clear();
   m_counter = 0;
   m_waiting = false;
@@ -102,7 +103,7 @@ void Fork::process(Event *evt) {
       auto arr = init_arg.as<pjs::Array>();
       auto len = arr->length();
       m_branches = pjs::PooledArray<Branch>::make(len);
-      if (m_mode != FORK && len > 0) m_waiting = true;
+      if (m_mode == JOIN && len > 0) m_waiting = true;
       for (int i = 0; i < len; i++) {
         auto pipeline = sub_pipeline(0, true);
         auto &branch = m_branches->at(i);
@@ -116,7 +117,7 @@ void Fork::process(Event *evt) {
       }
     } else {
       m_branches = pjs::PooledArray<Branch>::make(1);
-      if (m_mode != FORK) m_waiting = true;
+      if (m_mode == JOIN) m_waiting = true;
       auto pipeline = sub_pipeline(0, m_mode != FORK)->start(1, &init_arg);
       auto &branch = m_branches->at(0);
       branch.fork = this;
@@ -134,33 +135,36 @@ void Fork::process(Event *evt) {
 
   if (m_waiting) {
     m_buffer.push(evt);
-  } else {
+  } else if (m_mode != RACE) {
     Filter::output(evt);
   }
 }
 
-void Fork::on_branch_end(Branch *branch) {
-  m_counter++;
+void Fork::on_branch_output(Branch *branch, Event *evt) {
   if (m_mode == JOIN) {
-    if (m_counter >= m_branches->size()) {
-      m_waiting = false;
-    }
-  } else {
-    m_waiting = false;
-  }
-  if (!m_waiting) {
-    m_buffer.flush(
-      [this](Event *evt) {
-        Filter::output(evt);
+    if (evt->is<StreamEnd>()) {
+      m_counter++;
+      if (m_counter >= m_branches->size()) {
+        m_waiting = false;
+        m_buffer.flush(
+          [this](Event *evt) {
+            Filter::output(evt);
+          }
+        );
       }
-    );
+    }
+  } else if (m_mode == RACE) {
+    if (!m_winner) {
+      m_winner = branch;
+    }
+    if (branch == m_winner) {
+      Filter::output(evt);
+    }
   }
 }
 
 void Fork::Branch::on_event(Event *evt) {
-  if (evt->is<StreamEnd>()) {
-    fork->on_branch_end(this);
-  }
+  fork->on_branch_output(this, evt);
 }
 
 } // namespace pipy
