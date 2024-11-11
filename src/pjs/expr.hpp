@@ -184,7 +184,7 @@ public:
   Discard(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -220,7 +220,7 @@ public:
   virtual bool is_comma_ended() const override { return m_is_comma_ended; }
   virtual bool eval(Context &ctx, Value &result) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -239,7 +239,7 @@ public:
     : m_exprs(std::move(exprs)) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -319,6 +319,8 @@ private:
   Ref<Str> m_s;
 };
 
+class Identifier;
+
 //
 // ObjectLiteral
 //
@@ -333,7 +335,8 @@ public:
   virtual void unpack(std::vector<Ref<Str>> &vars) const override;
   virtual bool unpack(Context &ctx, const Value &src, Value *dst, int &idx) override;
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool assign(Context &ctx, Value &value) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -345,6 +348,9 @@ private:
   };
 
   std::list<Entry> m_entries;
+  std::vector<std::unique_ptr<Identifier>> m_unpack_vars;
+  std::vector<Value> m_unpack_vals;
+  bool m_is_left_value = false;
   Ref<Class> m_class;
 };
 
@@ -357,7 +363,7 @@ public:
   ArrayExpansion(Expr *expr) : m_array(expr) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -380,12 +386,16 @@ public:
   virtual void unpack(std::vector<Ref<Str>> &vars) const override;
   virtual bool unpack(Context &ctx, const Value &src, Value *dst, int &idx) override;
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool assign(Context &ctx, Value &value) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
   std::list<std::unique_ptr<Expr>> m_list;
+  std::vector<std::unique_ptr<Identifier>> m_unpack_vars;
+  std::vector<Value> m_unpack_vals;
+  bool m_is_left_value = false;
 };
 
 //
@@ -398,7 +408,7 @@ public:
   FunctionLiteral(Expr *inputs, Stmt *output);
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
@@ -575,7 +585,7 @@ public:
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool assign(Context &ctx, Value &value) override;
   virtual bool clear(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
@@ -595,7 +605,7 @@ public:
   OptionalProperty(Expr *obj, Expr *key) : m_obj(obj), m_key(key) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -615,7 +625,7 @@ public:
   Construction(Expr *func, std::vector<std::unique_ptr<Expr>> &&argv) : m_func(func), m_argv(std::move(argv)) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -633,7 +643,7 @@ public:
   Invocation(Expr *func, std::vector<std::unique_ptr<Expr>> &&argv) : m_func(func), m_argv(std::move(argv)) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
@@ -653,7 +663,7 @@ public:
   OptionalInvocation(Expr *func, std::vector<std::unique_ptr<Expr>> &&argv) : m_func(func), m_argv(std::move(argv)) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -671,7 +681,7 @@ public:
   Plus(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -688,7 +698,7 @@ public:
   Negation(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -705,7 +715,7 @@ public:
   Addition(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -723,7 +733,7 @@ public:
   Subtraction(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -741,7 +751,7 @@ public:
   Multiplication(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -759,7 +769,7 @@ public:
   Division(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -777,7 +787,7 @@ public:
   Remainder(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -795,7 +805,7 @@ public:
   Exponentiation(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -813,7 +823,7 @@ public:
   ShiftLeft(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -831,7 +841,7 @@ public:
   ShiftRight(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -849,7 +859,7 @@ public:
   UnsignedShiftRight(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -867,7 +877,7 @@ public:
   BitwiseNot(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -884,7 +894,7 @@ public:
   BitwiseAnd(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -902,7 +912,7 @@ public:
   BitwiseOr(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -920,7 +930,7 @@ public:
   BitwiseXor(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -938,7 +948,7 @@ public:
   LogicalNot(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -955,7 +965,7 @@ public:
   LogicalAnd(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -973,7 +983,7 @@ public:
   LogicalOr(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -991,7 +1001,7 @@ public:
   NullishCoalescing(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1009,7 +1019,7 @@ public:
   Equality(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1027,7 +1037,7 @@ public:
   Inequality(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1045,7 +1055,7 @@ public:
   Identity(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1063,7 +1073,7 @@ public:
   Nonidentity(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1081,7 +1091,7 @@ public:
   GreaterThan(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1099,7 +1109,7 @@ public:
   GreaterThanOrEqual(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1117,7 +1127,7 @@ public:
   LessThan(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1135,7 +1145,7 @@ public:
   LessThanOrEqual(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1153,7 +1163,7 @@ public:
   In(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1172,7 +1182,7 @@ public:
   InstanceOf(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1199,7 +1209,7 @@ public:
   TypeOf(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1216,7 +1226,7 @@ public:
   PostIncrement(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1233,7 +1243,7 @@ public:
   PostDecrement(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1250,7 +1260,7 @@ public:
   PreIncrement(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1267,7 +1277,7 @@ public:
   PreDecrement(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1284,7 +1294,7 @@ public:
   Delete(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1305,7 +1315,7 @@ public:
   virtual bool is_argument() const override;
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual bool unpack(Context &ctx, const Value &src, Value *dst, int &idx) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
@@ -1326,7 +1336,7 @@ public:
   AdditionAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1344,7 +1354,7 @@ public:
   SubtractionAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1362,7 +1372,7 @@ public:
   MultiplicationAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1380,7 +1390,7 @@ public:
   DivisionAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1398,7 +1408,7 @@ public:
   RemainderAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1416,7 +1426,7 @@ public:
   ExponentiationAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1434,7 +1444,7 @@ public:
   ShiftLeftAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1452,7 +1462,7 @@ public:
   ShiftRightAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1470,7 +1480,7 @@ public:
   UnsignedShiftRightAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1488,7 +1498,7 @@ public:
   BitwiseAndAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1506,7 +1516,7 @@ public:
   BitwiseOrAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1524,7 +1534,7 @@ public:
   BitwiseXorAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1542,7 +1552,7 @@ public:
   LogicalAndAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1560,7 +1570,7 @@ public:
   LogicalOrAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1578,7 +1588,7 @@ public:
   LogicalNullishAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -1596,7 +1606,7 @@ public:
   Conditional(Expr *a, Expr *b, Expr *c) : m_a(a), m_b(b), m_c(c) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Module *module, Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, LegacyImports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 

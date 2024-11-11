@@ -60,7 +60,7 @@ bool Block::is_expression() const {
   return m_stmts.size() == 1 && m_stmts.front()->is_expression();
 }
 
-bool Block::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool Block::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   Tree::Scope s(Tree::Scope::BLOCK, &scope);
   for (const auto &p : m_stmts) {
     if (!p->declare(module, s, error)) {
@@ -101,7 +101,7 @@ void Block::dump(std::ostream &out, const std::string &indent) {
 // Label
 //
 
-bool Label::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool Label::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   Tree::Scope s(m_name, &scope);
   return m_stmt->declare(module, s, error);
 }
@@ -126,7 +126,7 @@ void Label::dump(std::ostream &out, const std::string &indent) {
 // Evaluate
 //
 
-bool Evaluate::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool Evaluate::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return m_expr->declare(module, scope, error);
 }
 
@@ -159,7 +159,7 @@ bool Evaluate::declare_export(Module *module, bool is_default, Error &error) {
 // Var
 //
 
-bool Var::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool Var::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   auto name = m_identifier->name();
   auto s = scope.parent();
   while (!s->is_root()) s = s->parent();
@@ -233,7 +233,7 @@ bool Var::is_fiber(const std::string &name) {
 // Function
 //
 
-bool Function::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool Function::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   m_is_definition = scope.parent()->is_root();
   auto name = m_identifier->name();
   auto s = scope.parent();
@@ -287,7 +287,7 @@ void Function::dump(std::ostream &out, const std::string &indent) {
 // If
 //
 
-bool If::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool If::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   if (!m_cond->declare(module, scope, error)) return false;
   if (!m_then->declare(module, scope, error)) return false;
   if (m_else && !m_else->declare(module, scope, error)) return false;
@@ -327,7 +327,7 @@ void If::dump(std::ostream &out, const std::string &indent) {
 // Switch
 //
 
-bool Switch::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool Switch::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   Tree::Scope s(Tree::Scope::SWITCH, &scope);
   if (!m_cond->declare(module, s, error)) return false;
   for (const auto &p : m_cases) {
@@ -399,7 +399,7 @@ void Switch::dump(std::ostream &out, const std::string &indent) {
 // Break
 //
 
-bool Break::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool Break::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   auto *s = &scope;
   if (m_label) {
     while (s && s->label() != m_label->name()) {
@@ -434,7 +434,7 @@ void Break::dump(std::ostream &out, const std::string &indent) {
 // Return
 //
 
-bool Return::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool Return::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   if (m_expr && !m_expr->declare(module, scope, error)) return false;
   return true;
 }
@@ -463,7 +463,7 @@ void Return::dump(std::ostream &out, const std::string &indent) {
 // Throw
 //
 
-bool Throw::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool Throw::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   if (m_expr && !m_expr->declare(module, scope, error)) return false;
   return true;
 }
@@ -504,7 +504,7 @@ Try::Try(Stmt *try_clause, Stmt *catch_clause, Stmt *finally_clause, Expr *excep
   }
 }
 
-bool Try::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool Try::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   if (!m_try->declare(module, scope, error)) return false;
   if (m_catch) {
     m_catch_scope.parent(&scope);
@@ -571,7 +571,7 @@ void Try::dump(std::ostream &out, const std::string &indent) {
 // Import
 //
 
-bool Import::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool Import::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   thread_local static ConstStr s_star("*");
   if (scope.parent()->kind() != Tree::Scope::MODULE) {
     error.tree = this;
@@ -610,7 +610,7 @@ void Import::dump(std::ostream &out, const std::string &indent) {
 // Export
 //
 
-bool Export::declare(Module *module, Tree::Scope &scope, Error &error) {
+bool Export::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   if (scope.parent()->kind() != Tree::Scope::MODULE) {
     error.tree = this;
     error.message = "illegal export";
