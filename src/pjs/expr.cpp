@@ -308,14 +308,14 @@ void ObjectLiteral::unpack(std::vector<Ref<Str>> &vars) const {
   }
 }
 
-bool ObjectLiteral::unpack(Context &ctx, Value &arg, int &var) {
-  auto obj = arg.to_object();
+bool ObjectLiteral::unpack(Context &ctx, const Value &src, Value *dst, int &idx) {
+  auto obj = src.to_object();
   if (!obj) return error(ctx, "cannot destruct null");
   for (const auto &e : m_entries) {
     if (auto *key = dynamic_cast<StringLiteral*>(e.key.get())) {
       Value val;
       obj->get(key->s(), val);
-      if (!e.value->unpack(ctx, val, var)) {
+      if (!e.value->unpack(ctx, val, dst, idx)) {
         obj->release();
         return false;
       }
@@ -435,14 +435,14 @@ void ArrayLiteral::unpack(std::vector<Ref<Str>> &vars) const {
   }
 }
 
-bool ArrayLiteral::unpack(Context &ctx, Value &arg, int &var) {
-  if (!arg.is_array()) return error(ctx, "cannot destruct");
-  auto *a = arg.as<Array>();
+bool ArrayLiteral::unpack(Context &ctx, const Value &src, Value *dst, int &idx) {
+  if (!src.is_array()) return error(ctx, "cannot destruct");
+  auto *a = src.as<Array>();
   int i = 0;
   for (const auto &p : m_list) {
     Value val;
     a->get(i++, val);
-    if (!p->unpack(ctx, val, var)) return false;
+    if (!p->unpack(ctx, val, dst, idx)) return false;
   }
   return true;
 }
@@ -773,8 +773,8 @@ bool Identifier::is_argument() const { return true; }
 void Identifier::to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>>&) const { args.push_back(m_key); }
 void Identifier::unpack(std::vector<Ref<Str>> &vars) const { vars.push_back(m_key); }
 
-bool Identifier::unpack(Context &ctx, Value &arg, int &var) {
-  ctx.scope()->value(var++) = arg;
+bool Identifier::unpack(Context &ctx, const Value &src, Value *dst, int &idx) {
+  dst[idx++] = src;
   return true;
 }
 
@@ -2367,8 +2367,8 @@ void Assignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imp
   m_r->resolve(module, ctx, l, imports);
 }
 
-bool Assignment::unpack(Context &ctx, Value &arg, int &var) {
-  return m_l->unpack(ctx, arg, var);
+bool Assignment::unpack(Context &ctx, const Value &src, Value *dst, int &idx) {
+  return m_l->unpack(ctx, src, dst, idx);
 }
 
 void Assignment::dump(std::ostream &out, const std::string &indent) {

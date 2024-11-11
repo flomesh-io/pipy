@@ -136,7 +136,7 @@ auto Tree::Scope::instantiate(Context &ctx) -> pjs::Scope* {
     }
     if (auto v = init.unpack) { // Unpack objects
       auto index = init.unpack_index;
-      if (!v->unpack(ctx, arg, index)) {
+      if (!v->unpack(ctx, arg, ctx.scope()->values(), index)) {
         return nullptr;
       }
     }
