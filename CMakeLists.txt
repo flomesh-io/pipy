@@ -22,6 +22,7 @@ option(PIPY_STATIC "statically link to libc" OFF)
 option(PIPY_LTO "enable LTO" OFF)
 option(PIPY_USE_NTLS, "Use externally compiled TongSuo Crypto library instead of OpenSSL. Used with PIPY_OPENSSL" OFF)
 option(PIPY_USE_SYSTEM_ZLIB "Use system installed zlib" OFF)
+option(PIPY_USE_SYSTEM_OPENSSL "Use system installed OpenSSL" OFF)
 
 set(BUILD_SHARED_LIBS OFF)
 set(BUILD_TESTING OFF)
@@ -130,7 +131,15 @@ else()
   endif(PIPY_USE_SYSTEM_ZLIB)
 endif()
 
-if(PIPY_OPENSSL)
+if(PIPY_USE_SYSTEM_OPENSSL)
+  find_package(OpenSSL REQUIRED)
+  if(OPENSSL_FOUND)
+    set(OPENSSL_INC_DIR ${OPENSSL_INCLUDE_DIR})
+    message(STATUS "Using system-installed OpenSSL")
+  else()
+    message(FATAL_ERROR "System OpenSSL not found. Set PIPY_USE_SYSTEM_OPENSSL to OFF or install OpenSSL.")
+  endif()
+elseif(PIPY_OPENSSL)
   if(PIPY_USE_NTLS)
     add_definitions(-DPIPY_USE_NTLS)
   endif(PIPY_USE_NTLS)
@@ -167,7 +176,9 @@ else()
   endif()
 endif()
 
-add_custom_target(OpenSSL DEPENDS ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL})
+if(NOT PIPY_USE_SYSTEM_OPENSSL)
+  add_custom_target(OpenSSL DEPENDS ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL})
+endif()
 
 if(PIPY_BROTLI)
   set(BROTLI_INC_DIR ${PIPY_BROTLI}/include)
@@ -390,7 +401,11 @@ execute_process(
 
 add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
 
-add_dependencies(pipy yajl_s expat OpenSSL ${BROTLI_LIB} GenVer)
+add_dependencies(pipy yajl_s expat ${BROTLI_LIB} GenVer)
+
+if(NOT PIPY_USE_SYSTEM_OPENSSL)
+  add_dependencies(pipy OpenSSL)
+endif()
 
 if(NOT PIPY_USE_SYSTEM_ZLIB)
   add_dependencies(pipy ${ZLIB_LIB})
@@ -486,11 +501,15 @@ target_link_libraries(
   yaml
   expat
   ${ZLIB_LIB}
-  ${OPENSSL_LIB_DIR}/${LIB_SSL}
-  ${OPENSSL_LIB_DIR}/${LIB_CRYPTO}
   ${BROTLI_LIB}
   leveldb
 )
+
+if(PIPY_USE_SYSTEM_OPENSSL)
+  target_link_libraries(pipy ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY})
+else()
+  target_link_libraries(pipy ${OPENSSL_LIB_DIR}/${LIB_SSL} ${OPENSSL_LIB_DIR}/${LIB_CRYPTO})
+endif()
 
 if(WIN32)
   target_link_libraries(pipy crypt32 userenv)
