@@ -1528,7 +1528,8 @@ auto Mux::verify_http_version(pjs::Str *name) -> int {
 //
 
 Mux::Session::Session(const Mux::Options &options, std::shared_ptr<BufferStats> buffer_stats)
-  : Encoder(false, buffer_stats)
+  : MuxQueue(this)
+  , Encoder(false, buffer_stats)
   , Decoder(true)
   , http2::Client(options)
   , m_options(options)

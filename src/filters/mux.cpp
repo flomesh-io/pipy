@@ -115,6 +115,19 @@ MuxSession::Options::Options(pjs::Object *options) {
 //   - MuxSessionPools
 //
 
+void MuxSession::increase_share_count() {
+  m_share_count++;
+  m_pool->sort(this);
+}
+
+void MuxSession::decrease_share_count() {
+  if (m_pool) {
+    m_pool->free(this);
+  } else {
+    close();
+  }
+}
+
 void MuxSession::set_pending(bool pending) {
   if (pending != m_is_pending) {
     if (!pending) {
@@ -157,14 +170,6 @@ void MuxSession::close() {
   }
 }
 
-void MuxSession::free() {
-  if (m_pool) {
-    m_pool->free(this);
-  } else {
-    close();
-  }
-}
-
 //
 // MuxSessionPool
 //
@@ -185,9 +190,7 @@ auto MuxSessionPool::alloc() -> MuxSession* {
     if ((max_share_count <= 0 || s->m_share_count < max_share_count) &&
         (max_message_count <= 0 || s->m_message_count < max_message_count)
       ) {
-      s->m_share_count++;
       s->m_message_count++;
-      sort(s);
       return s;
     }
     s = s->next();
@@ -376,7 +379,6 @@ void MuxSource::reset() {
   if (m_session) {
     stop_waiting();
     close_stream();
-    m_session->free();
     m_session = nullptr;
   }
   m_waiting_events.clear();
@@ -424,7 +426,6 @@ void MuxSource::alloc_stream() {
   if (m_session && !m_session->is_open()) {
     stop_waiting();
     close_stream();
-    m_session->free();
     m_session = nullptr;
   }
 
@@ -569,6 +570,17 @@ void MuxQueue::on_reply(Event *evt) {
 //   - MuxQueue if dedicated
 //   - MuxQueue::Receiver
 //
+
+MuxQueue::Stream::Stream(MuxQueue *queue, MuxSource *source)
+  : m_queue(queue)
+  , m_source(source)
+{
+  queue->m_session->increase_share_count();
+}
+
+MuxQueue::Stream::~Stream() {
+  m_queue->m_session->decrease_share_count();
+}
 
 void MuxQueue::Stream::on_event(Event *evt) {
   auto q = m_queue;

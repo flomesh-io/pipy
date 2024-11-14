@@ -61,7 +61,7 @@ public:
 
   struct Options : public pipy::Options {
     double max_idle = 60;
-    int max_queue = 0;
+    int max_queue = 1;
     int max_messages = 0;
     Options() {}
     Options(pjs::Object *options);
@@ -71,6 +71,9 @@ public:
   virtual auto mux_session_open_stream(MuxSource *source) -> EventFunction* = 0;
   virtual void mux_session_close_stream(EventFunction *stream) = 0;
   virtual void mux_session_close() = 0;
+
+  void increase_share_count();
+  void decrease_share_count();
 
 protected:
   auto pool() const -> MuxSessionPool* { return m_pool; }
@@ -85,13 +88,12 @@ protected:
 private:
   void open(MuxSource *source, Pipeline *pipeline);
   void close();
-  void free();
 
   MuxSessionPool* m_pool = nullptr;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<StreamEnd> m_eos;
   List<MuxSource> m_waiting_sources;
-  int m_share_count = 1;
+  int m_share_count = 0;
   int m_message_count = 0;
   double m_free_time = 0;
   bool m_is_pending = false;
@@ -217,6 +219,8 @@ private:
 
 class MuxQueue : public EventSource {
 protected:
+  MuxQueue(MuxSession *session) : m_session(session) {}
+
   void reset();
   auto stream(MuxSource *source) -> EventFunction*;
   void close(EventFunction *stream);
@@ -238,11 +242,11 @@ private:
     public pjs::RefCount<Stream>,
     public EventFunction
   {
-  protected:
-    Stream(MuxQueue *queue, MuxSource *source)
-      : m_queue(queue)
-      , m_source(source) {}
+  public:
+    Stream(MuxQueue *queue, MuxSource *source);
+    ~Stream();
 
+  protected:
     virtual void on_event(Event *evt) override;
 
   private:
@@ -279,12 +283,13 @@ private:
     pjs::Ref<Stream> m_stream;
     int m_output_count;
     bool m_has_message_started = false;
+
+    friend class MuxQueue;
   };
 
+  MuxSession* m_session;
   List<Receiver> m_receivers;
   pjs::Ref<Stream> m_dedicated_stream;
-
-  friend class Stream;
 };
 
 //
@@ -346,6 +351,8 @@ protected:
     public pjs::Pooled<Session, MuxSession>,
     public MuxQueue
   {
+    Session() : MuxQueue(this) {}
+
     virtual void mux_session_open(MuxSource *source) override;
     virtual auto mux_session_open_stream(MuxSource *source) -> EventFunction* override;
     virtual void mux_session_close_stream(EventFunction *stream) override;
