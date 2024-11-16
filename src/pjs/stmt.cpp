@@ -160,55 +160,112 @@ bool Evaluate::declare_export(Module *module, bool is_default, Error &error) {
 //
 
 bool Var::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
-  auto name = m_identifier->name();
+  std::vector<Ref<Str>> names;
+  for (const auto &e : m_list) {
+    if (auto id = e->as<expr::Identifier>()) {
+      id->unpack(names);
+      continue;
+    }
+    if (auto assign = e->as<expr::Assignment>()) {
+      auto l = assign->lvalue();
+      if (
+        l->is<expr::Identifier>() ||
+        l->is<expr::ObjectLiteral>() ||
+        l->is<expr::ArrayLiteral>()
+      ) {
+        if (l->is_left_value()) {
+          l->unpack(names);
+          m_assignments.push_back(assign);
+          continue;
+        }
+      }
+    }
+    error.message = "illegal variable declaration";
+    error.tree = e.get();
+    return false;
+  }
+
   auto s = scope.parent();
   while (!s->is_root()) s = s->parent();
-  if (is_fiber(name->str())) {
-    if (!check_reserved(name->str(), error)) return false;
-    s->declare_fiber_var(name, module);
-  } else {
-    s->declare_var(name);
+  for (const auto &name : names) {
+    if (is_fiber(name->str())) {
+      if (!check_reserved(name->str(), error)) return false;
+      s->declare_fiber_var(name, module);
+    } else {
+      s->declare_var(name);
+    }
   }
-  if (m_expr && !m_expr->declare(module, scope, error)) return false;
+
+  for (auto e : m_assignments) {
+    if (!e->declare(module, scope, error, false)) {
+      return false;
+    }
+  }
+
   return true;
 }
 
 void Var::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
-  if (m_expr) {
-    m_identifier->resolve(module, ctx, l, imports);
-    m_expr->resolve(module, ctx, l, imports);
+  for (auto e : m_assignments) {
+    e->resolve(module, ctx, l, imports);
   }
 }
 
 void Var::execute(Context &ctx, Result &result) {
-  if (m_expr) {
+  for (auto e : m_assignments) {
     Value val;
-    if (m_expr->eval(ctx, val) && m_identifier->assign(ctx, val)) {
-      result.set_done();
-    }
+    if (!e->eval(ctx, val)) return;
   }
+  result.set_done();
 }
 
 bool Var::declare_export(Module *module, bool is_default, Error &error) {
-  auto name = m_identifier->name();
-  if (!check_reserved(name->str(), error)) return false;
-  if (is_fiber(name->str())) {
-    error.tree = this;
-    error.message = "cannot export a fiber variable";
+  std::vector<Ref<Str>> names;
+  for (const auto &e : m_list) {
+    if (auto id = e->as<expr::Identifier>()) {
+      id->unpack(names);
+      continue;
+    }
+    if (auto assign = e->as<expr::Assignment>()) {
+      auto l = assign->lvalue();
+      if (l->is<expr::Identifier>()) {
+        l->unpack(names);
+        m_assignments.push_back(assign);
+        continue;
+      }
+    }
+    error.message = "illegal export";
+    error.tree = e.get();
     return false;
   }
-  if (is_default) {
-    module->add_export(s_default, name);
-  } else {
-    module->add_export(name, name);
+
+  for (const auto &name : names) {
+    if (!check_reserved(name->str(), error)) return false;
+    if (is_fiber(name->str())) {
+      error.tree = this;
+      error.message = "cannot export a fiber variable";
+      return false;
+    }
+    if (is_default) {
+      module->add_export(s_default, name);
+    } else {
+      module->add_export(name, name);
+    }
   }
-  if (m_expr && !m_expr->declare(module, module->scope(), error)) return false;
+
+  for (auto e : m_assignments) {
+    if (!e->declare(module, module->scope(), error, false)) {
+      return false;
+    }
+  }
+
   return true;
 }
 
 void Var::dump(std::ostream &out, const std::string &indent) {
-  out << indent << "var " << m_identifier->name()->str() << std::endl;
-  if (m_expr) m_expr->dump(out, indent + "  ");
+  out << indent << "var" << std::endl;
+  auto indent2 = indent + "  ";
+  for (const auto &e : m_list) e->dump(out, indent2);
 }
 
 bool Var::check_reserved(const std::string &name, Error &error) {

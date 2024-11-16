@@ -61,7 +61,7 @@ void Tree::Scope::declare_arg(Expr *expr) {
     InitArg init;
     init.index = index;
     if (auto assign = dynamic_cast<expr::Assignment*>(expr)) {
-      init.default_value = assign->value();
+      init.default_value = assign->rvalue();
     }
     if (m_args[index] == Str::empty) {
       init.unpack = expr;

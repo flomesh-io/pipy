@@ -153,8 +153,8 @@ private:
 
 class Var : public Exportable {
 public:
-  Var(expr::Identifier *name, Expr *expr)
-    : m_identifier(name), m_expr(expr) {}
+  Var(std::vector<std::unique_ptr<Expr>> &&list)
+    : m_list(std::move(list)) {}
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) override;
@@ -163,9 +163,8 @@ public:
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
-  std::unique_ptr<expr::Identifier> m_identifier;
-  std::unique_ptr<Expr> m_resolved;
-  std::unique_ptr<Expr> m_expr;
+  std::vector<std::unique_ptr<Expr>> m_list;
+  std::vector<expr::Assignment*> m_assignments;
 
   bool check_reserved(const std::string &name, Error &error);
 
@@ -356,7 +355,7 @@ inline Stmt* block() { return new stmt::Block(); }
 inline Stmt* block(std::list<std::unique_ptr<Stmt>> &&stmts) { return new stmt::Block(std::move(stmts)); }
 inline Stmt* label(const std::string &name, Stmt *stmt) { return new stmt::Label(name, stmt); }
 inline Stmt* evaluate(Expr *expr) { return new stmt::Evaluate(expr); }
-inline Stmt* var(expr::Identifier *name, Expr *expr = nullptr) { return new stmt::Var(name, expr); }
+inline Stmt* var(std::vector<std::unique_ptr<Expr>> &&list) { return new stmt::Var(std::move(list)); }
 inline Stmt* function(expr::Identifier *name, Expr *expr) { return new stmt::Function(name, expr); }
 inline Stmt* if_else(Expr *cond, Stmt *then_clause, Stmt *else_clause = nullptr) { return new stmt::If(cond, then_clause, else_clause); }
 inline Stmt* switch_case(Expr *cond, std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> &&cases) { return new stmt::Switch(cond, std::move(cases)); }

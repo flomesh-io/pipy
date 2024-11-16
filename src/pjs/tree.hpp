@@ -158,6 +158,13 @@ public:
   };
 
   //
+  // Tree types
+  //
+
+  template<class T> bool is() { return as<T>() ? true : false; }
+  template<class T> auto as() -> T* { return dynamic_cast<T*>(this); }
+
+  //
   // Tree location in script
   //
 

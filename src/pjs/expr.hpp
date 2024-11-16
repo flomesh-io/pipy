@@ -1310,7 +1310,8 @@ class Assignment : public Expr {
 public:
   Assignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
-  auto value() const -> Expr* { return m_r.get(); }
+  auto lvalue() const -> Expr* { return m_l.get(); }
+  auto rvalue() const -> Expr* { return m_r.get(); }
 
   virtual bool is_argument() const override;
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;

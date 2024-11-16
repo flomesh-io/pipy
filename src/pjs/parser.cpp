@@ -1301,17 +1301,16 @@ Stmt* ScriptParser::statement() {
     }
     case Token::ID("var"): {
       read(l);
-      if (peek_eol(MissingIdentifier)) return nullptr;
-      auto name = read_identifier(MissingIdentifier);
-      if (!name) return nullptr;
-      if (read(Token::ID("="))) {
-        auto e = expression();
-        if (!e) return nullptr;
-        read(Token::ID(";"));
-        return locate(var(name.release(), e), l);
-      }
+      auto e = expression(false);
+      if (!e) return nullptr;
       read_semicolons();
-      return locate(var(name.release()), l);
+      std::vector<std::unique_ptr<Expr>> list;
+      if (auto comp = e->as<expr::Compound>()) {
+        comp->break_down(list);
+      } else {
+        list.emplace_back(e);
+      }
+      return locate(var(std::move(list)), l);
     }
     case Token::ID("function"): {
       read(l);
