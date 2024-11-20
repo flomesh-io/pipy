@@ -432,7 +432,9 @@ void CodebaseStore::generate_files(
   const std::map<std::string, std::string> &files
 ) {
   std::set<std::string> old_keys;
-  m_store->keys(KEY_file_tree(codebase_path), old_keys);
+  auto base_file_path = KEY_file_tree(codebase_path);
+  if (base_file_path.back() != '/') base_file_path += '/';
+  m_store->keys(base_file_path, old_keys);
 
   for (const auto &i : files) {
     auto &path = i.first;
