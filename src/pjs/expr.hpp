@@ -216,6 +216,9 @@ public:
     out = std::move(m_exprs);
   }
 
+  auto expression_count() const -> size_t { return m_exprs.size(); }
+  auto expression(size_t i) const -> Expr* { return m_exprs[i].get(); }
+
   virtual bool is_argument_list() const override;
   virtual bool is_comma_ended() const override { return m_is_comma_ended; }
   virtual bool eval(Context &ctx, Value &result) override;

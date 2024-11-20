@@ -156,6 +156,9 @@ public:
   Var(std::vector<std::unique_ptr<Expr>> &&list)
     : m_list(std::move(list)) {}
 
+  static bool is_fiber(const std::string &name);
+  static bool is_reserved(const std::string &name);
+
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
   virtual void resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
@@ -167,9 +170,6 @@ private:
   std::vector<expr::Assignment*> m_assignments;
 
   bool check_reserved(const std::string &name, Error &error);
-
-  static bool is_fiber(const std::string &name);
-  static bool is_reserved(const std::string &name);
 };
 
 //
@@ -230,6 +230,30 @@ public:
 private:
   std::unique_ptr<Expr> m_cond;
   std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> m_cases;
+};
+
+//
+// For
+//
+
+class For : public Stmt {
+public:
+  For(bool is_var, Expr *init, Expr *cond, Expr *step, Stmt *body)
+    : m_is_var(is_var), m_init(init), m_cond(cond), m_step(step), m_body(body) {}
+
+  virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
+  virtual void resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) override;
+  virtual void execute(Context &ctx, Result &result) override;
+  virtual void dump(std::ostream &out, const std::string &indent) override;
+
+private:
+  bool m_is_var;
+  std::unique_ptr<Expr> m_init;
+  std::unique_ptr<Expr> m_cond;
+  std::unique_ptr<Expr> m_step;
+  std::unique_ptr<Stmt> m_body;
+
+  bool check_reserved(const std::string &name, Error &error);
 };
 
 //
@@ -359,6 +383,7 @@ inline Stmt* var(std::vector<std::unique_ptr<Expr>> &&list) { return new stmt::V
 inline Stmt* function(expr::Identifier *name, Expr *expr) { return new stmt::Function(name, expr); }
 inline Stmt* if_else(Expr *cond, Stmt *then_clause, Stmt *else_clause = nullptr) { return new stmt::If(cond, then_clause, else_clause); }
 inline Stmt* switch_case(Expr *cond, std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> &&cases) { return new stmt::Switch(cond, std::move(cases)); }
+inline Stmt* for_loop(bool is_var, Expr *init, Expr *cond, Expr *step, Stmt *body) { return new stmt::For(is_var, init, cond, step, body); }
 inline Stmt* try_catch(Stmt *try_clause, Stmt *catch_clause, Stmt *finally_clause, Expr *exception_variable) { return new stmt::Try(try_clause, catch_clause, finally_clause, exception_variable); }
 inline Stmt* flow_break() { return new stmt::Break(); }
 inline Stmt* flow_break(expr::Identifier *label) { return new stmt::Break(label); }

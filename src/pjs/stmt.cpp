@@ -453,6 +453,107 @@ void Switch::dump(std::ostream &out, const std::string &indent) {
 }
 
 //
+// For
+//
+
+bool For::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
+  if (m_is_var && m_init) {
+    std::vector<Ref<Str>> names;
+    if (auto assign = m_init->as<expr::Assignment>()) {
+      auto lvalue = assign->lvalue();
+      if (auto id = lvalue->as<expr::Identifier>()) {
+        names.emplace_back(id->name());
+      } else {
+        error.tree = lvalue;
+        error.message = "illegal left-value in assignment";
+        return false;
+      }
+    } else if (auto comp = m_init->as<expr::Compound>()) {
+      for (size_t i = 0, n = comp->expression_count(); i < n; i++) {
+        auto expr = comp->expression(i);
+        if (auto assign = expr->as<expr::Assignment>()) {
+          auto lvalue = assign->lvalue();
+          if (auto id = lvalue->as<expr::Identifier>()) {
+            names.emplace_back(id->name());
+          } else {
+            error.tree = lvalue;
+            error.message = "illegal left-value in assignment";
+            return false;
+          }
+        }
+      }
+    }
+    auto s = scope.parent();
+    while (!s->is_root()) s = s->parent();
+    for (const auto &name : names) {
+      if (Var::is_fiber(name->str())) {
+        if (!check_reserved(name->str(), error)) return false;
+        s->declare_fiber_var(name, module);
+      } else {
+        s->declare_var(name);
+      }
+    }
+  }
+
+  Tree::Scope s(Tree::Scope::LOOP, &scope);
+  if (m_init && !m_init->declare(module, s, error, false)) return false;
+  if (m_cond && !m_cond->declare(module, s, error, false)) return false;
+  if (m_step && !m_step->declare(module, s, error, false)) return false;
+  if (m_body && !m_body->declare(module, s, error, false)) return false;
+
+  return true;
+}
+
+void For::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
+  if (m_init) m_init->resolve(module, ctx, l, imports);
+  if (m_cond) m_cond->resolve(module, ctx, l, imports);
+  if (m_step) m_step->resolve(module, ctx, l, imports);
+  if (m_body) m_body->resolve(module, ctx, l, imports);
+}
+
+void For::execute(Context &ctx, Result &result) {
+  Value val;
+  if (m_init && !m_init->eval(ctx, val)) return;
+  for (;;) {
+    if (m_cond) {
+      if (!m_cond->eval(ctx, val)) return;
+      if (!val.to_boolean()) break;
+    }
+    if (m_body) {
+      m_body->execute(ctx, result);
+      if (!ctx.ok()) return;
+      if (result.is_break()) {
+        if (result.label) return;
+        break;
+      }
+      if (result.is_continue()) {
+        if (m_step && !m_step->eval(ctx, val)) return;
+        continue;
+      }
+      if (!result.is_done()) return;
+    }
+    if (m_step && !m_step->eval(ctx, val)) return;
+  }
+  result.set_done();
+}
+
+bool For::check_reserved(const std::string &name, Error &error) {
+  if (!Var::is_reserved(name)) return true;
+  error.tree = this;
+  error.message = "reserved variable name '" + name + "'";
+  return false;
+}
+
+void For::dump(std::ostream &out, const std::string &indent) {
+  auto indent2 = indent + "    ";
+  out << indent << "for" << std::endl;
+  out << indent << "  init" << std::endl; if (m_init) m_init->dump(out, indent2);
+  out << indent << "  cond" << std::endl; if (m_cond) m_cond->dump(out, indent2);
+  out << indent << "  step" << std::endl; if (m_step) m_step->dump(out, indent2);
+  out << indent << "  body" << std::endl; if (m_body) m_body->dump(out, indent2);
+}
+
+//
 // Break
 //
 
@@ -463,7 +564,7 @@ bool Break::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
       s = s->parent();
     }
   } else {
-    while (s && s->kind() != Tree::Scope::SWITCH) {
+    while (s && s->kind() != Tree::Scope::SWITCH && s->kind() != Tree::Scope::LOOP) {
       s = s->parent();
     }
   }

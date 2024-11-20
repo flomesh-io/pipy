@@ -1368,8 +1368,37 @@ Stmt* ScriptParser::statement() {
       }
       return locate(switch_case(cond.release(), std::move(cases)), l);
     }
+    case Token::ID("for"): {
+      read(l);
+      bool is_var = false;
+      std::unique_ptr<Expr> init, cond, step;
+      if (!read(Token::ID("("), TokenExpected)) return nullptr;
+      if (read(Token::ID("var"))) is_var = true;
+      if (!read(Token::ID(";"))) {
+        auto e = expression();
+        if (!e) return nullptr;
+        init.reset(e);
+      }
+      if (!read(Token::ID(";"), TokenExpected)) return nullptr;
+      if (!read(Token::ID(";"))) {
+        auto e = expression();
+        if (!e) return nullptr;
+        cond.reset(e);
+      }
+      if (!read(Token::ID(";"), TokenExpected)) return nullptr;
+      if (!read(Token::ID(")"))) {
+        auto e = expression();
+        if (!e) return nullptr;
+        step.reset(e);
+      }
+      if (!read(Token::ID(")"), TokenExpected)) return nullptr;
+      auto s = statement();
+      if (!s) return nullptr;
+      return for_loop(is_var, init.release(), cond.release(), step.release(), s);
+    }
     case Token::ID("break"): {
       read(l);
+      if (peek_eol() || peek_end()) return locate(flow_break(), l);
       if (auto name = read_identifier()) {
         read_semicolons();
         return locate(flow_break(name.release()), l);
