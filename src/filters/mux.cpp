@@ -500,6 +500,10 @@ void MuxSource::close_stream() {
 // MuxQueue
 //
 
+MuxQueue::~MuxQueue() {
+  m_session = nullptr; // So that session destruction will recur as stream destruction
+}
+
 void MuxQueue::reset() {
   EventSource::close();
   while (auto r = m_receivers.head()) {
@@ -579,7 +583,9 @@ MuxQueue::Stream::Stream(MuxQueue *queue, MuxSource *source)
 }
 
 MuxQueue::Stream::~Stream() {
-  m_queue->m_session->decrease_share_count();
+  if (m_queue->m_session) {
+    m_queue->m_session->decrease_share_count();
+  }
 }
 
 void MuxQueue::Stream::on_event(Event *evt) {

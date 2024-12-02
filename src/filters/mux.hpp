@@ -220,6 +220,7 @@ private:
 class MuxQueue : public EventSource {
 protected:
   MuxQueue(MuxSession *session) : m_session(session) {}
+  ~MuxQueue();
 
   void reset();
   auto stream(MuxSource *source) -> EventFunction*;
