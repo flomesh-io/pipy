@@ -202,7 +202,7 @@ void MainOptions::parse(const std::list<std::string> &args) {
       } else if (k == "--log-file-max-count") {
         log_file_max_count = std::atoi(v.c_str());
       } else if (k == "--log-file-rotate-interval") {
-        log_file_rotate_interval = std::atof(v.c_str());
+        log_file_rotate_interval = utils::get_seconds(v);
       } else if (k == "--log-level") {
         if (
           utils::starts_with(v, "debug") && (
