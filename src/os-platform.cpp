@@ -340,6 +340,12 @@ auto FileHandle::append(const std::string &filename) -> FileHandle {
   return FileHandle(h);
 }
 
+auto FileHandle::tell() -> size_t {
+  LONG high = 0;
+  DWORD low = SetFilePointer(m_handle, 0, &high, FILE_CURRENT);
+  return ((size_t) high << 32) + low;
+}
+
 void FileHandle::seek(size_t pos) {
   SetFilePointer(m_handle, pos, NULL, FILE_BEGIN);
 }
@@ -485,6 +491,10 @@ auto FileHandle::write(const std::string &filename) -> FileHandle {
 auto FileHandle::append(const std::string &filename) -> FileHandle {
   auto f = fopen(filename.c_str(), "ab");
   return FileHandle(f);
+}
+
+auto FileHandle::tell() -> size_t {
+  return ftell(m_file);
 }
 
 void FileHandle::seek(size_t pos) {

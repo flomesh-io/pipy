@@ -31,6 +31,7 @@
 #include "module.hpp"
 #include "fstream.hpp"
 #include "filters/pack.hpp"
+#include "filters/tee.hpp"
 #include "filters/tls.hpp"
 
 #include <atomic>
@@ -97,9 +98,12 @@ public:
 
   class FileTarget : public Target {
   public:
-    static void close_all_writers();
+    struct Options : public Tee::Options {
+      Options() { shared = true; append = true; }
+      Options(pjs::Object *options) : Tee::Options(options) { shared = true; append = true; }
+    };
 
-    FileTarget(pjs::Str *filename);
+    FileTarget(pjs::Str *filename, const Options &options = Options());
 
   private:
     virtual void write(const Data &msg) override;
@@ -116,24 +120,11 @@ public:
       }
     };
 
-    //
-    // Logger::FileTarget::Writer
-    //
-
-    class Writer {
-    public:
-      Writer(const std::string &filename);
-      void write(const Data &msg);
-      void shutdown();
-    private:
-      pjs::Ref<Module> m_module;
-      pjs::Ref<PipelineLayout> m_pipeline_layout;
-      pjs::Ref<Pipeline> m_pipeline;
-    };
-
     pjs::Ref<pjs::Str> m_filename;
-
-    static std::map<std::string, std::unique_ptr<Writer>> s_all_writers;
+    Options m_options;
+    pjs::Ref<Module> m_module;
+    pjs::Ref<PipelineLayout> m_pipeline_layout;
+    pjs::Ref<Pipeline> m_pipeline;
   };
 
   //

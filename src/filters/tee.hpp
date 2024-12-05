@@ -32,6 +32,9 @@
 #include "options.hpp"
 #include "fstream.hpp"
 
+#include <atomic>
+#include <string>
+
 namespace pipy {
 
 //
@@ -41,9 +44,30 @@ namespace pipy {
 class Tee : public Filter {
 public:
   struct Options : public pipy::Options {
+    bool shared = false;
     bool append = false;
+    int max_file_size = 0;
+    int max_file_count = 0;
+    double rotate_interval = 0;
     Options() {}
     Options(pjs::Object *options);
+  };
+
+  class Target : public pjs::RefCountMT<Target> {
+  public:
+    Target(const std::string &filename, const Options &options);
+    ~Target();
+
+    void write(const Data &data);
+
+  private:
+    const std::string m_filename;
+    Options m_options;
+    pjs::Ref<File> m_file;
+    int m_written_size = 0;
+    double m_file_time = 0;
+
+    void write_async(const Data &data);
   };
 
   Tee(const pjs::Value &filename, const Options &options);
@@ -61,6 +85,12 @@ private:
   pjs::Value m_filename;
   pjs::Ref<pjs::Str> m_resolved_filename;
   pjs::Ref<File> m_file;
+  pjs::Ref<Target> m_target;
+
+  static std::map<std::string, pjs::Ref<Target>> s_targets;
+  static std::mutex s_targets_mutex;
+
+  static auto get_target(const std::string &filename, const Options &options) -> Target*;
 };
 
 } // namespace pipy

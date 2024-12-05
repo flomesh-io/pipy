@@ -133,6 +133,7 @@ public:
 
   auto get() const -> int { return fileno(m_file); }
   bool valid() const { return m_file; }
+  auto tell() -> size_t;
   void seek(size_t pos);
   void close();
 

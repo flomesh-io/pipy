@@ -118,7 +118,7 @@ bool Logger::tail(const std::string &name, Data &buffer) {
 }
 
 void Logger::close_all() {
-  FileTarget::close_all_writers();
+
 }
 
 Logger::Logger(pjs::Str *name)
@@ -305,67 +305,22 @@ void Logger::StdoutTarget::write(const Data &msg) {
 // Logger::FileTarget
 //
 
-void Logger::FileTarget::close_all_writers() {
-  s_all_writers.clear();
-}
-
-Logger::FileTarget::FileTarget(pjs::Str *filename)
+Logger::FileTarget::FileTarget(pjs::Str *filename, const Options &options)
   : m_filename(pjs::Str::make(fs::abs_path(filename->str())))
-{
-}
-
-void Logger::FileTarget::write(const Data &msg) {
-  auto name = m_filename->data()->retain();
-  auto sd = SharedData::make(msg)->retain();
-  Net::main().post(
-    [=]() {
-      Writer *writer = nullptr;
-      const auto &filename = name->str();
-      auto i = s_all_writers.find(filename);
-      if (i != s_all_writers.end()) {
-        writer = i->second.get();
-      } else {
-        writer = new Writer(filename);
-        s_all_writers[filename].reset(writer);
-      }
-      InputContext ic;
-      Data data;
-      sd->to_data(data);
-      writer->write(data);
-      name->release();
-      sd->release();
-    }
-  );
-}
-
-//
-// Logger::FileTarget::Writer
-//
-
-std::map<std::string, std::unique_ptr<Logger::FileTarget::Writer>> Logger::FileTarget::s_all_writers;
-
-Logger::FileTarget::Writer::Writer(const std::string &filename)
-  : m_module(new Module)
+  , m_options(options)
+  , m_module(new Module)
 {
   PipelineLayout *ppl = PipelineLayout::make();
-  Tee::Options options;
-  options.append = true;
   ppl->append(new Tee(filename, options));
-
   m_pipeline_layout = ppl;
   m_pipeline = Pipeline::make(ppl, Context::make());
 }
 
-void Logger::FileTarget::Writer::write(const Data &msg) {
+void Logger::FileTarget::write(const Data &msg) {
   Data *buf = Data::make();
   s_dp.push(buf, &msg);
   s_dp.push(buf, '\n');
   m_pipeline->input()->input(buf);
-}
-
-void Logger::FileTarget::Writer::shutdown() {
-  m_module->shutdown();
-  m_pipeline = nullptr;
 }
 
 //
@@ -605,8 +560,9 @@ template<> void ClassDef<Logger>::init() {
 
   method("toFile", [](Context &ctx, Object *obj, Value &ret) {
     pjs::Str *filename;
-    if (!ctx.arguments(1, &filename)) return;
-    obj->as<Logger>()->add_target(new Logger::FileTarget(filename));
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(1, &filename, &options)) return;
+    obj->as<Logger>()->add_target(new Logger::FileTarget(filename, options));
     ret.set(obj);
   });
 
