@@ -67,6 +67,9 @@ void MainOptions::show_help() {
   std::cout << "  --pipy-options                       Indicate the beginning of Pipy options while processing script arguments" << std::endl;
   std::cout << "  --threads=<number>                   Number of worker threads (1, 2, ... max)" << std::endl;
   std::cout << "  --log-file=<filename>                Set the pathname of the log file" << std::endl;
+  std::cout << "  --log-file-max-size=<size>           Set the maximum log file size in bytes" << std::endl;
+  std::cout << "  --log-file-max-count=<number>        Set the number of log files to keep" << std::endl;
+  std::cout << "  --log-file-rotate-interval=<time>    Set the time of interval log files are rotated (such as '15m', '1h', ...)" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --log-history-limit=<size>           Set size limit of log history in bytes" << std::endl;
   std::cout << "  --log-local=<stdout|stderr|null>     Select local output for system log" << std::endl;
@@ -194,6 +197,12 @@ void MainOptions::parse(const std::list<std::string> &args) {
         }
       } else if (k == "--log-file") {
         log_file = v;
+      } else if (k == "--log-file-max-size") {
+        log_file_max_size = utils::get_binary_size(v);
+      } else if (k == "--log-file-max-count") {
+        log_file_max_count = std::atoi(v.c_str());
+      } else if (k == "--log-file-rotate-interval") {
+        log_file_rotate_interval = std::atof(v.c_str());
       } else if (k == "--log-level") {
         if (
           utils::starts_with(v, "debug") && (
@@ -233,9 +242,7 @@ void MainOptions::parse(const std::list<std::string> &args) {
         else if (v == "info") log_level = Log::INFO;
         else throw std::runtime_error("unknown log level: " + v);
       } else if (k == "--log-history-limit") {
-        char *end;
-        log_history_limit = std::strtol(v.c_str(), &end, 10);
-        if (*end || log_history_limit < 0) throw std::runtime_error("--log-history-limit expects a non-negative number");
+        log_history_limit = utils::get_binary_size(v);
       } else if (k == "--log-local") {
         if (v == "null") log_local = Log::OUTPUT_NULL;
         else if (v == "stdout") log_local = Log::OUTPUT_STDOUT;

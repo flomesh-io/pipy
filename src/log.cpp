@@ -41,6 +41,7 @@ namespace pipy {
 //
 
 static std::string s_log_filename;
+static logging::Logger::FileTarget::Options s_logger_options;
 static Log::Level s_log_level = Log::INFO;
 static Log::Output s_log_local_output = Log::OUTPUT_STDERR;
 static int s_log_topics = 0;
@@ -88,7 +89,7 @@ void Log::init() {
   }
   if (!s_log_filename.empty()) {
     pjs::Ref<pjs::Str> s(pjs::Str::make(s_log_filename));
-    s_logger->add_target(new logging::Logger::FileTarget(s));
+    s_logger->add_target(new logging::Logger::FileTarget(s, s_logger_options));
   }
 }
 
@@ -99,6 +100,12 @@ void Log::shutdown() {
 
 void Log::set_filename(const std::string &filename) {
   s_log_filename = filename;
+}
+
+void Log::set_rotate(double interval, int max_file_size, int max_file_count) {
+  s_logger_options.max_file_size = max_file_size;
+  s_logger_options.max_file_count = max_file_count;
+  s_logger_options.rotate_interval = interval;
 }
 
 void Log::set_level(Level level) {

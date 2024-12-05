@@ -423,6 +423,7 @@ int pipy_main(int argc, char *argv[]) {
     os::init();
     Net::init();
     Log::set_filename(opts.log_file);
+    Log::set_rotate(opts.log_file_rotate_interval, opts.log_file_max_size, opts.log_file_max_count);
     Log::set_level(opts.log_level);
     Log::set_topics(opts.log_topics);
     Log::set_local_output(opts.log_local);

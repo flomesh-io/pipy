@@ -75,6 +75,7 @@ public:
   static void init();
   static void shutdown();
   static void set_filename(const std::string &filename);
+  static void set_rotate(double interval, int max_file_size, int max_file_count);
   static void set_level(Level level);
   static void set_topics(int topics);
   static void set_local_output(Output output);

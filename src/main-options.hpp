@@ -60,6 +60,9 @@ public:
   bool        reuse_port = false;
   int         threads = 1;
   std::string log_file;
+  int         log_file_max_size = 0;
+  int         log_file_max_count = 0;
+  double      log_file_rotate_interval = 0;
   Log::Level  log_level = Log::INFO;
   Log::Output log_local = Log::OUTPUT_STDERR;
   size_t      log_history_limit = 1024*1024;
