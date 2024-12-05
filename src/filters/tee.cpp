@@ -29,6 +29,13 @@
 #include "utils.hpp"
 
 #include <algorithm>
+#include <time.h>
+
+#ifdef _WIN32
+
+inline static void localtime_r(const time_t* timer, struct tm* buf) { localtime_s(buf, timer); }
+
+#endif // _WIN32
 
 namespace pipy {
 

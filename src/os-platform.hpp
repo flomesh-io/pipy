@@ -83,6 +83,7 @@ public:
 
   auto get() const -> HANDLE { return m_handle; }
   bool valid() const { return m_handle != INVALID_HANDLE_VALUE; }
+  auto tell() -> size_t;
   void seek(size_t pos);
   void close();
 
