@@ -1909,14 +1909,27 @@ void TunnelServer::start_tunnel(Message *response) {
 // TunnelClient
 //
 
+TunnelClient::Options::Options(pjs::Object *options) {
+  Value(options, "onState")
+    .get(on_state_f)
+    .check_nullable();
+}
+
 TunnelClient::TunnelClient(pjs::Object *handshake)
   : m_handshake(handshake)
+{
+}
+
+TunnelClient::TunnelClient(pjs::Object *handshake, const Options &options)
+  : m_handshake(handshake)
+  , m_options(options)
 {
 }
 
 TunnelClient::TunnelClient(const TunnelClient &r)
   : Filter(r)
   , m_handshake(r.m_handshake)
+  , m_options(r.m_options)
 {
 }
 
@@ -1941,11 +1954,18 @@ void TunnelClient::reset() {
   m_request_head = nullptr;
   m_response_head = nullptr;
   m_eos = nullptr;
+  m_on_state_change = nullptr;
   m_is_tunnel_started = false;
 }
 
 void TunnelClient::process(Event *evt) {
   if (!m_pipeline) {
+    if (m_options.on_state_f) {
+      m_on_state_change = [=](State state) {
+        pjs::Value arg(pjs::EnumDef<State>::name(state)), ret;
+        Filter::callback(m_options.on_state_f, 1, &arg, ret);
+      };
+    }
     pjs::Ref<pjs::Object> handshake;
     if (m_handshake) {
       if (m_handshake->is_instance_of<Message>()) {
@@ -1964,6 +1984,9 @@ void TunnelClient::process(Event *evt) {
     m_request_head = pjs::coerce<RequestHead>(msg->head());
     m_pipeline = sub_pipeline(0, true, EventSource::reply())->start();
     Filter::output(msg->as<Message>(), m_pipeline->input());
+    if (m_on_state_change) {
+      m_on_state_change(State::connecting);
+    }
   }
 
   if (m_is_tunnel_started) {
@@ -1992,12 +2015,18 @@ void TunnelClient::on_reply(Event *evt) {
       auto tt = m_request_head->tunnel_type();
       if (m_response_head->is_tunnel_ok(tt)) {
         m_is_tunnel_started = true;
+        if (m_on_state_change) {
+          m_on_state_change(State::connected);
+        }
         if (m_eos) {
           EventFunction::input()->input_async(m_eos);
         } else {
           EventFunction::input()->flush_async();
         }
       } else {
+        if (m_on_state_change) {
+          m_on_state_change(State::closed);
+        }
         Filter::output(StreamEnd::make());
       }
       m_request_head = nullptr;
@@ -2022,6 +2051,13 @@ template<> void ClassDef<Mux::Session::VersionSelector>::init() {
 
 template<> void ClassDef<Server::Handler>::init() {
   super<Promise::Callback>();
+}
+
+template<> void EnumDef<TunnelClient::State>::init() {
+  define(TunnelClient::State::idle, "idle");
+  define(TunnelClient::State::connecting, "connecting");
+  define(TunnelClient::State::connected, "connected");
+  define(TunnelClient::State::closed, "closed");
 }
 
 } // namespace pjs

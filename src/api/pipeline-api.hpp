@@ -63,7 +63,7 @@ public:
   void compress(const pjs::Value &algorithm);
   void compress_http(const pjs::Value &algorithm);
   void connect(const pjs::Value &target, pjs::Object *options);
-  void connect_http_tunnel(pjs::Object *handshake);
+  void connect_http_tunnel(pjs::Object *handshake, pjs::Object *options);
   void connect_proxy_protocol(const pjs::Value &address);
   void connect_socks(const pjs::Value &address);
   void connect_tls(pjs::Object *options);

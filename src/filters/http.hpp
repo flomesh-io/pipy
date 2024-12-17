@@ -529,7 +529,21 @@ private:
 
 class TunnelClient : public Filter, public EventSource {
 public:
+  enum class State {
+    idle,
+    connecting,
+    connected,
+    closed,
+  };
+
+  struct Options : public pipy::Options {
+    pjs::Ref<pjs::Function> on_state_f;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
   TunnelClient(pjs::Object *handshake);
+  TunnelClient(pjs::Object *handshake, const Options &options);
 
 private:
   TunnelClient(const TunnelClient &r);
@@ -547,6 +561,8 @@ private:
   pjs::Ref<ResponseHead> m_response_head;
   pjs::Ref<StreamEnd> m_eos;
   Data m_buffer;
+  Options m_options;
+  std::function<void(State state)> m_on_state_change;
   bool m_is_tunnel_started = false;
 };
 

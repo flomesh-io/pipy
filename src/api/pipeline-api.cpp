@@ -174,8 +174,8 @@ void PipelineDesigner::connect(const pjs::Value &target, pjs::Object *options) {
   }
 }
 
-void PipelineDesigner::connect_http_tunnel(pjs::Object *handshake) {
-  require_sub_pipeline(append_filter(new http::TunnelClient(handshake)));
+void PipelineDesigner::connect_http_tunnel(pjs::Object *handshake, pjs::Object *options) {
+  require_sub_pipeline(append_filter(new http::TunnelClient(handshake, options)));
 }
 
 void PipelineDesigner::connect_proxy_protocol(const pjs::Value &address) {
@@ -750,8 +750,9 @@ template<> void ClassDef<PipelineDesigner>::init() {
   // PipelineDesigner.connectHTTPTunnel
   filter("connectHTTPTunnel", [](Context &ctx, PipelineDesigner *obj) {
     Object *handshake;
-    if (!ctx.arguments(1, &handshake)) return;
-    obj->connect_http_tunnel(handshake);
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &handshake, &options)) return;
+    obj->connect_http_tunnel(handshake, options);
   });
 
   // PipelineDesigner.connectProxyProtocol
