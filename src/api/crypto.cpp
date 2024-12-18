@@ -168,8 +168,16 @@ PublicKey::PublicKey(pjs::Str *data) {
 }
 
 PublicKey::PublicKey(PrivateKey *pkey) {
+#ifdef PIPY_USE_OPENSSL1
+  m_pkey = pkey->pkey();
+  if (!m_pkey)
+    throw_error();
+  EVP_PKEY_up_ref(m_pkey);
+#else
   m_pkey = EVP_PKEY_dup(pkey->pkey());
-  if (!m_pkey) throw_error();
+  if (!m_pkey)
+    throw_error();
+#endif
 }
 
 PublicKey::~PublicKey() {
@@ -423,7 +431,15 @@ Certificate::Certificate(const Options &options) {
       throw std::runtime_error("missing public key");
     }
 
-    // Digest algorithm
+        // Digest algorithm
+#ifdef PIPY_USE_OPENSSL1
+    const EVP_MD *md = nullptr;
+    if (EVP_PKEY_type(EVP_PKEY_id(options.private_key->pkey())) == EVP_PKEY_RSA ||
+        EVP_PKEY_type(EVP_PKEY_id(options.private_key->pkey())) == EVP_PKEY_EC) {
+      // Default to SHA256 for RSA and EC keys
+      md = EVP_sha256();
+    }
+#else
     char digest_name[80];
     if (EVP_PKEY_get_default_digest_name(options.private_key->pkey(), digest_name, sizeof(digest_name)) == 2) {
       if (!std::strcmp(digest_name, "UNDEF")) {
@@ -431,6 +447,7 @@ Certificate::Certificate(const Options &options) {
       }
     }
     auto md = digest_name[0] ? Hash::algorithm(digest_name) : nullptr;
+#endif
 
     // Sign
     if (!X509_sign(x509, options.private_key->pkey(), md)) throw_error();

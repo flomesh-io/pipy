@@ -23,6 +23,7 @@ option(PIPY_LTO "enable LTO" OFF)
 option(PIPY_USE_NTLS, "Use externally compiled TongSuo Crypto library instead of OpenSSL. Used with PIPY_OPENSSL" OFF)
 option(PIPY_USE_SYSTEM_ZLIB "Use system installed zlib" OFF)
 option(PIPY_USE_SYSTEM_OPENSSL "Use system installed OpenSSL" OFF)
+option(PIPY_USE_OPENSSL1, "Use openssl v1 when compiling pipy" OFF)
 
 set(BUILD_SHARED_LIBS OFF)
 set(BUILD_TESTING OFF)
@@ -131,6 +132,10 @@ else()
   endif(PIPY_USE_SYSTEM_ZLIB)
 endif()
 
+if(PIPY_USE_OPENSSL1)
+  add_definitions(-DPIPY_USE_OPENSSL1)
+endif()
+
 if(PIPY_USE_SYSTEM_OPENSSL)
   find_package(OpenSSL REQUIRED)
   if(OPENSSL_FOUND)
@@ -148,6 +153,16 @@ elseif(PIPY_OPENSSL)
   set(OPENSSL_LIB_DIR ${PIPY_OPENSSL}/lib)
 
 else()
+  if (DEFINED PIPY_USE_OPENSSL1)
+      message(FATAL_ERROR 
+          "Error: OpenSSL v1 detected (PIPY_USE_OPENSSL1 is set).\n"
+          "To compile with OpenSSL v1, you must set one of the following options:\n"
+          "  - PIPY_OPENSSL: Provide a custom OpenSSL installation path.\n"
+          "  - PIPY_USE_SYSTEM_OPENSSL: Use the system-installed OpenSSL library.\n"
+          "Please configure CMake with the correct option and try again."
+      )
+  endif()
+
   set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-3.2.0)
   set(OPENSSL_LIB_DIR ${OPENSSL_SRC_DIR}/build)
   set(OPENSSL_INC_DIR ${OPENSSL_SRC_DIR}/include ${OPENSSL_LIB_DIR}/include)

@@ -353,9 +353,16 @@ auto TLSSession::hostname() -> pjs::Str* {
 
 auto TLSSession::peer() -> crypto::Certificate* {
   if (!m_peer) {
+#ifndef PIPY_USE_OPENSSL1
     if (auto x = SSL_get0_peer_certificate(m_ssl)) {
       m_peer = crypto::Certificate::make(x);
     }
+#else
+    if (auto x = SSL_get_peer_certificate(m_ssl)) {
+      m_peer = crypto::Certificate::make(x);
+      X509_free(x);
+    }
+#endif
   }
   return m_peer;
 }
