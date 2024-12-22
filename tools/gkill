@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+
+#Gracefully kill sidecar.
+#Pipy won't accept new connections when receiving SIGINT signal
+#And quit after all connections are closed.
+
+kill -SIGINT 1

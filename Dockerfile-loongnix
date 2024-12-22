@@ -52,6 +52,7 @@ FROM cr.loongnix.cn/loongson/loongnix-server:8.3 as prod
 COPY --from=builder /pipy/bin/pipy /usr/local/bin/pipy
 COPY --from=builder /pipy/tutorial /etc/pipy
 COPY --from=builder /usr/bin/su-exec /usr/bin/su-exec
+COPY tools/{wait,gkill} /usr/local/bin
 RUN yum install -y --quiet ca-certificates libstdc++ libcap tar curl iptables tzdata socat logrotate 
 RUN useradd -ru 1340 pipy \
     && chmod -R g=u /usr/local/bin/pipy /etc/pipy \

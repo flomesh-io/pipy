@@ -1,0 +1,93 @@
+#!/usr/bin/env sh
+
+# Default values
+DEFAULT_URL="http://127.0.0.1:15000/config_dump"
+DEFAULT_REQ_TMOUT=1    # Single request timeout in seconds
+DEFAULT_INTERVAL=1      # Interval between requests in seconds
+DEFAULT_TIMEOUT=60     # Total timeout in seconds
+
+# Display usage
+usage() {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  -u, --url URL          URL to check (default: $DEFAULT_URL)"
+    echo "  -r, --req-tmout SEC    Single request timeout in seconds (default: $DEFAULT_REQ_TMOUT)"
+    echo "  -i, --interval SEC     Interval between requests in seconds (default: $DEFAULT_INTERVAL)"
+    echo "  -t, --timeout SEC      Total timeout in seconds (default: $DEFAULT_TIMEOUT)"
+    echo "  -h, --help            Show this help message"
+}
+
+# Initialize variables with default values
+URL=$DEFAULT_URL
+REQ_TMOUT=$DEFAULT_REQ_TMOUT
+INTERVAL=$DEFAULT_INTERVAL
+TIMEOUT=$DEFAULT_TIMEOUT
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -u|--url)
+            URL="$2"
+            shift 2
+            ;;
+        -r|--req-tmout)
+            REQ_TMOUT="$2"
+            shift 2
+            ;;
+        -i|--interval)
+            INTERVAL="$2"
+            shift 2
+            ;;
+        -t|--timeout)
+            TIMEOUT="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown parameter: $1"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+# Calculate start time
+start_time=$(date +%s)
+
+echo "Starting HTTP service check..."
+echo "URL: $URL"
+echo "Single request timeout (REQ_TMOUT): $REQ_TMOUT seconds"
+echo "Request interval (INTERVAL): $INTERVAL seconds"
+echo "Total timeout (TIMEOUT): $TIMEOUT seconds"
+
+while true; do
+    # Check if total timeout is exceeded
+    current_time=$(date +%s)
+    elapsed=$((current_time - start_time))
+    
+    if [ $elapsed -ge $TIMEOUT ]; then
+        echo "Total timeout of $TIMEOUT seconds reached. Service check failed!"
+        exit 1
+    fi
+    
+    # Send HTTP request
+    response=$(curl -s -o /dev/null -w "%{http_code}" \
+               --connect-timeout $REQ_TMOUT \
+               --max-time $REQ_TMOUT \
+               "$URL" 2>/dev/null)
+    
+    if [ "$response" = "200" ]; then
+        echo "HTTP service is ready!"
+        echo "Total time elapsed: $elapsed seconds"
+        exit 0
+    else
+        echo "Service not ready, HTTP status code: $response"
+        echo "Time elapsed: $elapsed seconds, timeout: $TIMEOUT seconds"
+        echo "Waiting $INTERVAL seconds before next attempt..."
+        sleep $INTERVAL
+    fi
+done
+
