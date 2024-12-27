@@ -70,6 +70,7 @@ public:
     ELF       = 1<<14,
     BPF       = 1<<15,
     USER      = 1<<16,
+    CODEBASE  = 1<<17,
   };
 
   static void init();

@@ -102,13 +102,14 @@ static void show_version() {
 // Reload codebase
 //
 
-static void reload_codebase(bool force) {
+static void reload_codebase(bool force, const std::function<void()> &cb = nullptr) {
   if (auto *codebase = Codebase::current()) {
+    Log::debug(Log::CODEBASE, "[codebase] Start syncing codebase");
     codebase->sync(
-      force, [](bool ok) {
-        if (ok) {
-          WorkerManager::get().reload();
-        }
+      force, [=](bool ok) {
+        Log::debug(Log::CODEBASE, "[codebase] Codebase synced (updated = %d)", ok);
+        if (ok) WorkerManager::get().reload();
+        if (cb) cb();
       }
     );
   }
@@ -199,9 +200,8 @@ static PoolCleaner s_pool_cleaner;
 class CodeUpdater : public PeriodicJob {
   virtual void run() override {
     if (!s_has_shutdown) {
-      reload_codebase(false);
+      reload_codebase(false, [=]() { next(); });
     }
-    next();
   }
 };
 
@@ -263,13 +263,16 @@ private:
     status.to_json(db, metrics ? &buffer_metrics : nullptr);
     db.flush();
 
+    auto time = utils::now();
+    auto size = buffer.size();
+
     InputContext ic;
     (*m_fetch)(
       Fetch::POST,
       m_url->path(),
       m_headers,
       Data::make(std::move(buffer)),
-      [this](http::ResponseHead *head, Data *body) {
+      [=](http::ResponseHead *head, Data *body) {
         m_local_ip = m_fetch->outbound()->local_address()->str();
 
         // "206 Partial Content" is used by a "smart" repo
@@ -277,6 +280,12 @@ private:
         if (head->status != 206) {
           m_initial_metrics = true;
         }
+
+        Log::debug(
+          Log::CODEBASE,
+          "[codebase] Sent status report in %dms (size = %d)",
+          int(utils::now() - time), size
+        );
       }
     );
   }

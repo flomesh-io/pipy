@@ -629,8 +629,9 @@ private:
 
   void download(const std::function<void(bool)> &on_update);
   void download_next(const std::function<void(bool)> &on_update);
-  void watch_next();
-  void watch_all();
+  void download_next_updated(const std::function<void()> &cb);
+  void watch_next(const std::function<void()> &cb);
+  void watch_all(const std::function<void()> &cb);
   void cancel_watches();
   void response_error(const char *method, const char *path, http::ResponseHead *head);
 };
@@ -711,6 +712,8 @@ void CodebaseFromHTTP::sync(bool force, const std::function<void(bool)> &on_upda
     return;
   }
 
+  Log::debug(Log::CODEBASE, "[codebase] Start checking remote codebase updates");
+
   // Check updates
   m_fetch(
     Fetch::HEAD,
@@ -733,9 +736,21 @@ void CodebaseFromHTTP::sync(bool force, const std::function<void(bool)> &on_upda
       if (etag.is_string()) etag_str = etag.s()->str();
       if (date.is_string()) date_str = date.s()->str();
 
+      Log::debug(
+        Log::CODEBASE,
+        "[codebase] HEAD %s -> %d %s date '%s' etag '%s'",
+        m_url->href()->c_str(),
+        head->status,
+        head->statusText->c_str(),
+        date_str.c_str(),
+        etag_str.c_str()
+      );
+
       if (!m_downloaded || etag_str != m_etag || date_str != m_date) {
+        Log::debug(Log::CODEBASE, "[codebase] Start downloading remote codebase");
         download(on_update);
       } else {
+        Log::debug(Log::CODEBASE, "[codebase] Remote codebase unchanged");
         m_mutex.lock();
         m_dl_list.clear();
         for (auto &wf : m_watched_files) {
@@ -750,7 +765,7 @@ void CodebaseFromHTTP::sync(bool force, const std::function<void(bool)> &on_upda
           if (!watches.empty()) m_dl_list.push_back(wf.first);
         }
         m_mutex.unlock();
-        watch_next();
+        watch_next([=]() { on_update(false); });
       }
     }
   );
@@ -888,12 +903,72 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
   );
 }
 
-void CodebaseFromHTTP::watch_next() {
+void CodebaseFromHTTP::download_next_updated(const std::function<void()> &cb) {
+  if (m_dl_list.empty()) {
+    m_mutex.lock();
+    for (const auto &p : m_dl_temp) {
+      m_files[p.first] = p.second;
+    }
+    m_mutex.unlock();
+    m_fetch.close();
+    for (const auto &p : m_watched_dirs) {
+      const auto &base = p.first;
+      std::list<std::string> list;
+      for (const auto &path : m_changed_files) {
+        if (utils::starts_with(path, base)) {
+          list.push_back(path);
+        }
+      }
+      if (list.size() > 0) {
+        for (const auto &w : p.second.watches) {
+          notify(w.get(), list);
+        }
+      }
+    }
+    m_changed_files.clear();
+    m_dl_temp.clear();
+    return cb();
+  }
+
+  auto name = m_dl_list.front();
+  auto path = m_base + name;
+  m_dl_list.pop_front();
+  m_fetch(
+    Fetch::GET,
+    pjs::Value(path).s(),
+    nullptr,
+    nullptr,
+    [=](http::ResponseHead *head, Data *body) {
+      if (!head || head->status != 200 || !body) {
+        response_error("GET", path.c_str(), head);
+
+      } else {
+        Log::info(
+          "[codebase] GET %s -> %d bytes",
+          path.c_str(),
+          body->size()
+        );
+
+        std::string etag;
+        pjs::Value etag_val;
+        head->headers->get(s_etag, etag_val);
+        if (etag_val.is_string()) etag = etag_val.s()->str();
+        m_file_etags[name] = etag;
+        m_dl_temp[name] = SharedData::make(body ? *body : Data());
+      }
+
+      download_next_updated(cb);
+    }
+  );
+}
+
+void CodebaseFromHTTP::watch_next(const std::function<void()> &cb) {
   if (m_dl_list.empty()) {
     if (m_watched_dirs.empty()) {
-      return m_fetch.close();
+      m_fetch.close();
+      return cb();
     } else {
-      return watch_all();
+      return watch_all(cb);
     }
   }
 
@@ -916,6 +991,16 @@ void CodebaseFromHTTP::watch_next() {
         if (etag.is_string()) etag_str = etag.s()->str();
         if (date.is_string()) date_str = date.s()->str();
 
+        Log::debug(
+          Log::CODEBASE,
+          "[codebase] HEAD %s -> %d %s date '%s' etag '%s'",
+          path.c_str(),
+          head->status,
+          head->statusText->c_str(),
+          date_str.c_str(),
+          etag_str.c_str()
+        );
+
         m_mutex.lock();
 
         auto i = m_watched_files.find(name);
@@ -932,6 +1017,13 @@ void CodebaseFromHTTP::watch_next() {
               nullptr,
               [=](http::ResponseHead *head, Data *body) {
                 if (head && head->status == 200) {
+                  Log::debug(
+                    Log::CODEBASE,
+                    "[codebase] GET %s -> %d %s",
+                    path.c_str(),
+                    head->status,
+                    head->statusText->c_str()
+                  );
                   m_mutex.lock();
                   auto i = m_watched_files.find(name);
                   if (i != m_watched_files.end()) {
@@ -950,7 +1042,7 @@ void CodebaseFromHTTP::watch_next() {
                 } else {
                   response_error("GET", path.c_str(), head);
                 }
-                watch_next();
+                watch_next(cb);
               }
             );
           }
@@ -962,12 +1054,12 @@ void CodebaseFromHTTP::watch_next() {
         response_error("HEAD", path.c_str(), head);
       }
 
-      if (!m_fetch.busy()) watch_next();
+      if (!m_fetch.busy()) watch_next(cb);
     }
   );
 }
 
-void CodebaseFromHTTP::watch_all() {
+void CodebaseFromHTTP::watch_all(const std::function<void()> &cb) {
   m_fetch(
     Fetch::GET,
     pjs::Value(m_base + "/_etags").s(),
@@ -975,6 +1067,13 @@ void CodebaseFromHTTP::watch_all() {
     nullptr,
     [=](http::ResponseHead *head, Data *body) {
       if (head && head->status == 200 && body) {
+        Log::debug(
+          Log::CODEBASE,
+          "[codebase] GET %s/_etags -> %d %s",
+          m_base.c_str(),
+          head->status,
+          head->statusText->c_str()
+        );
         auto text = body->to_string();
         auto lines = utils::split(text, '\n');
         std::map<std::string, std::string> etags;
@@ -1004,11 +1103,12 @@ void CodebaseFromHTTP::watch_all() {
         for (const auto &path : changed) m_dl_list.push_back(path);
         m_changed_files.swap(changed);
         m_file_etags.swap(etags);
-        download_next(nullptr);
+        download_next_updated(cb);
       } else {
         auto path = m_base + "/_etags";
         response_error("GET", path.c_str(), head);
         m_fetch.close();
+        cb();
       }
     }
   );
