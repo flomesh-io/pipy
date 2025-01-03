@@ -230,15 +230,20 @@ private:
     static Data::Producer s_dp("Status Reports");
     if (s_has_shutdown) return;
     if (!m_fetch->busy()) {
+      Log::debug(Log::CODEBASE, "[codebase] Start collecting status");
+
       WorkerManager::get().status(
         [this](Status &status) {
           if (m_send_metrics) {
+            Log::debug(Log::CODEBASE, "[codebase] Start collecting metrics");
             WorkerManager::get().stats(
               [&](stats::MetricDataSum &metric_data_sum) {
+                Log::debug(Log::CODEBASE, "[codebase] Start sending status report");
                 send(status, &metric_data_sum);
               }
             );
           } else {
+            Log::debug(Log::CODEBASE, "[codebase] Start sending status report");
             send(status, nullptr);
           }
         }
@@ -283,8 +288,8 @@ private:
 
         Log::debug(
           Log::CODEBASE,
-          "[codebase] Sent status report in %dms (size = %d)",
-          int(utils::now() - time), size
+          "[codebase] Sent status report in %dms (size = %d, response = %d)",
+          int(utils::now() - time), size, head->status
         );
       }
     );
