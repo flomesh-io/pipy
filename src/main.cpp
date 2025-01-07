@@ -277,19 +277,21 @@ private:
       m_url->path(),
       m_headers,
       Data::make(std::move(buffer)),
-      [=](http::ResponseHead *head, Data *body) {
+      [=](http::ResponseHead *head, Data *) {
         m_local_ip = m_fetch->outbound()->local_address()->str();
+
+        auto status = head ? head->status : 0;
 
         // "206 Partial Content" is used by a "smart" repo
         // to indicate that subsequent metric reports can be incremental
-        if (head->status != 206) {
+        if (status != 206) {
           m_initial_metrics = true;
         }
 
         Log::debug(
           Log::CODEBASE,
           "[codebase] Sent status report in %dms (size = %d, response = %d)",
-          int(utils::now() - time), size, head->status
+          int(utils::now() - time), size, status
         );
       }
     );

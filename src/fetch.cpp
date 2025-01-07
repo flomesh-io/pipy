@@ -55,9 +55,7 @@ void Fetch::Receiver::process(Event *evt) {
       m_body->push(*data);
     }
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (m_body) {
-      m_fetch->on_response(m_head, m_body);
-    }
+    m_fetch->on_response(m_head, m_body);
     m_head = nullptr;
     m_body = nullptr;
   }
