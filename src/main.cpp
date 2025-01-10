@@ -53,6 +53,7 @@
 #include <tuple>
 
 #include <openssl/opensslv.h>
+#include <openssl/conf.h>
 
 using namespace pipy;
 
