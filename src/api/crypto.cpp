@@ -78,6 +78,8 @@ auto Crypto::get_openssl_engine() -> ENGINE* {
 }
 
 void Crypto::init(const std::string &engine_id) {
+  OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, nullptr);
+
   if (!engine_id.empty()) {
     ENGINE_load_builtin_engines();
 
@@ -150,12 +152,8 @@ PublicKey::PublicKey(EVP_PKEY *pkey) : m_pkey(pkey) {
 
 PublicKey::PublicKey(Data *data) {
   if (!data->size()) throw std::runtime_error("Data size is zero");
-  if (s_openssl_engine) {
-    m_pkey = load_by_engine(data->to_string());
-  } else {
-    auto buf = data->to_bytes();
-    m_pkey = read_pem(&buf[0], buf.size());
-  }
+  auto buf = data->to_bytes();
+  m_pkey = read_pem(&buf[0], buf.size());
 }
 
 PublicKey::PublicKey(pjs::Str *data) {
@@ -203,10 +201,7 @@ auto PublicKey::read_pem(const void *data, size_t size) -> EVP_PKEY* {
 
 auto PublicKey::load_by_engine(const std::string &id) -> EVP_PKEY* {
   auto pkey = ENGINE_load_public_key(s_openssl_engine, id.c_str(), nullptr, nullptr);
-  if (!pkey) {
-    std::string msg("cannot load public key from OpenSSL engine: ");
-    throw std::runtime_error(msg + id);
-  }
+  if (!pkey) throw_error();
   EVP_PKEY_set1_engine(pkey, s_openssl_engine);
   return pkey;
 }
@@ -226,12 +221,8 @@ PrivateKey::GenerateOptions::GenerateOptions(pjs::Object *options) {
 
 PrivateKey::PrivateKey(Data *data) {
   if (!data->size()) throw std::runtime_error("Data size is zero");
-  if (s_openssl_engine) {
-    m_pkey = load_by_engine(data->to_string());
-  } else {
-    auto buf = data->to_bytes();
-    m_pkey = read_pem(&buf[0], buf.size());
-  }
+  auto buf = data->to_bytes();
+  m_pkey = read_pem(&buf[0], buf.size());
 }
 
 PrivateKey::PrivateKey(pjs::Str *data) {
@@ -308,10 +299,7 @@ auto PrivateKey::read_pem(const void *data, size_t size) -> EVP_PKEY* {
 
 auto PrivateKey::load_by_engine(const std::string &id) -> EVP_PKEY* {
   auto pkey = ENGINE_load_private_key(s_openssl_engine, id.c_str(), nullptr, nullptr);
-  if (!pkey) {
-    std::string msg("cannot load private key from OpenSSL engine: ");
-    throw std::runtime_error(msg + id);
-  }
+  if (!pkey) throw_error();
   EVP_PKEY_set1_engine(pkey, s_openssl_engine);
   return pkey;
 }

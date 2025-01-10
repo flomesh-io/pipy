@@ -79,6 +79,7 @@ static void show_version() {
   std::cout << "Tongsuo          : " << TONGSUO_VERSION_TEXT << std::endl;
 #else
   std::cout << "OpenSSL          : " << OPENSSL_VERSION_TEXT << std::endl;
+  std::cout << "OpenSSL Conf     : " << CONF_get1_default_config_file() << std::endl;
 #endif
 
 #ifdef PIPY_USE_GUI
