@@ -28,10 +28,14 @@
 namespace pipy {
 
 Net* Net::s_main = nullptr;
-thread_local Net Net::s_current;
+
+auto Net::current() -> Net& {
+  static thread_local Net s_current;
+  return s_current;
+}
 
 void Net::init() {
-  s_main = &s_current;
+  s_main = &current();
 
 #ifdef _WIN32
   asio::detail::win_thread::set_terminate_threads(true);
