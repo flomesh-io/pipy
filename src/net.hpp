@@ -48,15 +48,13 @@ public:
     return *s_main;
   }
 
-  static auto current() -> Net& {
-    return s_current;
-  }
+  static auto current() -> Net&;
 
   static auto context() -> asio::io_context& {
-    return s_current.m_io_context;
+    return current().m_io_context;
   }
 
-  static bool is_main() { return &s_current == s_main; }
+  static bool is_main() { return &current() == s_main; }
 
   auto io_context() -> asio::io_context& { return m_io_context; }
   bool is_running() const { return m_is_running; }
@@ -72,7 +70,6 @@ private:
   asio::io_context m_io_context;
   bool m_is_running;
   static Net* s_main;
-  static thread_local Net s_current;
 };
 
 //
