@@ -245,7 +245,7 @@ auto Str::parse_int(int base) const -> double {
   char *p = nullptr;
   auto n = std::strtoll(c_str(), &p, base);
   while (*p && std::isblank(*p)) p++;
-  return *p ? NAN : n;
+  return *p ? std::numeric_limits<double>::quiet_NaN() : n;
 }
 
 bool Str::parse_int64(int64_t &i, int base) {
