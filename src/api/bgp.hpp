@@ -52,6 +52,7 @@ public:
     UPDATE = 2,
     NOTIFICATION = 3,
     KEEPALIVE = 4,
+    ROUTE_REFRESH = 5,
   };
 
   //
@@ -166,6 +167,25 @@ public:
     friend class pjs::ObjectTemplate<MessageNotification>;
   };
 
+
+  //
+  // BGP::MessageRouteRefresh
+  //
+
+  class MessageRouteRefresh : public pjs::ObjectTemplate<MessageRouteRefresh> {
+  public:
+    int afi = 0;
+    int safi = 0;
+
+  private:
+    MessageRouteRefresh() {}
+    MessageRouteRefresh(int af, int saf)
+      : afi(af)
+      , safi(saf) {}
+
+    friend class pjs::ObjectTemplate<MessageRouteRefresh>;
+  };
+
   //
   // BGP::Parser
   //
@@ -205,6 +225,7 @@ public:
     bool parse_open(Data::Reader &r);
     bool parse_update(Data::Reader &r);
     bool parse_notification(Data::Reader &r);
+    bool parse_route_refresh(Data::Reader &r);
     bool error(int code, int subcode);
 
     bool read(Data::Reader &r, Data &data, size_t size);

@@ -1,7 +1,7 @@
 export default function (config, address) {
 
   var AS_TRANS = 23456
-  var MY_AS = config.as
+  var MY_AS = Number.parseInt(config.as)
   var BGP_IDENTIFIER = config.id
   var HOLD_TIME = (holdTime in config ? config.holdTime : 90)
   var IPV4_NEXT_HOP = os.env.BGP_SPEAKER_IPV4_NEXTHOP || config.ipv4.nextHop
@@ -169,6 +169,11 @@ export default function (config, address) {
                 // Multiprotocol Extensions: IPv6 unicast
                 code: 1,
                 value: new Data([0, 2, 0, 1]),
+              },
+              {
+                // Route Refresh Capability
+                code: 2,
+                value: new Data,
               },
               {
                 // Graceful Restart Capability
