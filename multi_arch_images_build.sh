@@ -111,8 +111,7 @@ for arch in "${ARCHS[@]}"; do
     # 构建镜像
     docker buildx build --platform $arch -t ${IMAGE}:${IMAGE_TAG}-$arch_name \
         --network=host \
-        --build-arg VERSION=$VERSION \
-        --build-arg REVISION=$REVISION \
+        --build-arg COMMIT_TAG=$RELEASE_VERSION \
         --build-arg COMMIT_ID=$COMMIT_ID \
         --build-arg COMMIT_DATE="$COMMIT_DATE" \
         --build-arg PIPY_GUI="$PIPY_GUI" \
