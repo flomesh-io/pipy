@@ -7,11 +7,8 @@ ENV  pkg_bindir              ${pkg_prefix}/bin
 ENV  CXX       		     clang++
 ENV  CC			     clang
 
-ARG VERSION
-ENV VERSION=${VERSION}
-
-ARG REVISION
-ENV REVISION=${REVISION}
+ARG COMMIT_TAG
+ENV CI_COMMIT_TAG=${COMMIT_TAG}
 
 ARG COMMIT_ID
 ENV CI_COMMIT_SHA=${COMMIT_ID}
@@ -40,7 +37,7 @@ RUN rm -fr pipy/build \
     && mkdir pipy/build \
     && cd pipy/build \
     && export CI_COMMIT_SHA \
-    && export CI_COMMIT_TAG=${VERSION}-${REVISION} \
+    && export CI_COMMIT_TAG \
     && export CI_COMMIT_DATE \
     && cmake -DPIPY_GUI=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DPIPY_CODEBASES=${PIPY_GUI} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} .. \
     && make -j$(getconf _NPROCESSORS_ONLN) \
