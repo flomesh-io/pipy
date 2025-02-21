@@ -8,7 +8,7 @@ var isExiting = false
 var $peer
 
 var session = pipeline($=>$
-  .mux(() => $peer).to($=>$
+  .mux(() => $peer, { maxQueue: 0 }).to($=>$
     .encodeBGP({ enableAS4: () => $peer.isAS4() })
     .handleMessage(msg => console.debug('>>>', $peer.state(), msg.payload))
     .connect(() => $peer.destination, { idleTimeout: 0 })

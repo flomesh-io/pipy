@@ -205,26 +205,13 @@ auto BGP::decode(const Data &data, bool enable_as4) -> pjs::Array* {
 
 void BGP::encode(pjs::Object *payload, bool enable_as4, Data &data) {
   Data payload_buffer;
-
-  pjs::Ref<Message> msg;
-  if (payload && payload->is<Message>()) {
-    msg = payload->as<Message>();
-  } else {
-    msg = Message::make();
-    if (payload) pjs::class_of<Message>()->assign(msg, payload);
-  }
+  pjs::Ref<Message> msg = pjs::coerce<Message>(payload);
 
   if (auto *body = msg->body.get()) {
     Data::Builder db(payload_buffer, &s_dp);
     switch (msg->type.get()) {
       case MessageType::OPEN: {
-        pjs::Ref<MessageOpen> m;
-        if (body->is<MessageOpen>()) {
-          m = body->as<MessageOpen>();
-        } else {
-          m = MessageOpen::make();
-          pjs::class_of<MessageOpen>()->assign(m, body);
-        }
+        pjs::Ref<MessageOpen> m = pjs::coerce<MessageOpen>(body);
         uint8_t ip[4];
         if (!m->identifier || !utils::get_ip_v4(m->identifier->str(), ip)) {
           std::memset(ip, 0, sizeof(ip));
@@ -276,13 +263,7 @@ void BGP::encode(pjs::Object *payload, bool enable_as4, Data &data) {
       }
 
       case MessageType::UPDATE: {
-        pjs::Ref<MessageUpdate> m;
-        if (body->is<MessageUpdate>()) {
-          m = body->as<MessageUpdate>();
-        } else {
-          m = MessageUpdate::make();
-          pjs::class_of<MessageUpdate>()->assign(m, body);
-        }
+        pjs::Ref<MessageUpdate> m = pjs::coerce<MessageUpdate>(body);
         Data withdrawn, path_addr;
         if (auto *a = m->withdrawnRoutes.get()) {
           Data::Builder db(withdrawn, &s_dp);
@@ -357,19 +338,27 @@ void BGP::encode(pjs::Object *payload, bool enable_as4, Data &data) {
       }
 
       case MessageType::NOTIFICATION: {
-        pjs::Ref<MessageNotification> m;
-        if (body->is<MessageNotification>()) {
-          m = body->as<MessageNotification>();
-        } else {
-          m = MessageNotification::make();
-          pjs::class_of<MessageNotification>()->assign(m, body);
-        }
+        pjs::Ref<MessageNotification> m = pjs::coerce<MessageNotification>(body);
         db.push(uint8_t(m->errorCode));
         db.push(uint8_t(m->errorSubcode));
         if (auto *data = m->data.get()) db.push(*data);
         break;
       }
-      default: break;
+
+      case MessageType::ROUTE_REFRESH: {
+        pjs::Ref<MessageRouteRefresh> m = pjs::coerce<MessageRouteRefresh>(body);
+        db.push(uint16_t(m->afi));
+        db.push(uint8_t(0));
+        db.push(uint8_t(m->safi));
+        break;
+      }
+
+      default: {
+        if (body->is<Data>()) {
+          db.push(*body->as<Data>());
+	}
+	break;
+      }
     }
     db.flush();
   }
@@ -435,7 +424,10 @@ auto BGP::Parser::on_state(int state, int c) -> int {
           break;
         case MessageType::KEEPALIVE:
           break;
-        default: error(0, 0); return ERROR;
+        case MessageType::ROUTE_REFRESH:
+          m_message->body = MessageRouteRefresh::make();
+          break;
+        default: break;
       }
       if (size > sizeof(m_header)) {
         m_body->clear();
@@ -461,7 +453,13 @@ auto BGP::Parser::on_state(int state, int c) -> int {
         case MessageType::NOTIFICATION:
           parse_ok = parse_notification(r);
           break;
-        default: break;
+        case MessageType::ROUTE_REFRESH:
+          parse_ok = parse_route_refresh(r);
+          break;
+        default:
+          m_message->body = Data::make(*m_body);
+          parse_ok = true;
+          break;
       }
       if (parse_ok) {
         Deframer::need_flush();
@@ -581,6 +579,23 @@ bool BGP::Parser::parse_notification(Data::Reader &r) {
   body->errorCode = code;
   body->errorSubcode = subcode;
   if (!data.empty()) body->data = Data::make(std::move(data));
+
+  return true;
+}
+
+bool BGP::Parser::parse_route_refresh(Data::Reader &r) {
+  auto *body = m_message->body->as<MessageRouteRefresh>();
+
+  uint16_t afi;
+  uint8_t reserved;
+  uint8_t safi;
+
+  if (!read(r, afi)) return false;
+  if (!read(r, reserved)) return false;
+  if (!read(r, safi)) return false;
+
+  body->afi = afi;
+  body->safi = safi;
 
   return true;
 }
@@ -845,6 +860,7 @@ template<> void EnumDef<BGP::MessageType>::init() {
   define(BGP::MessageType::UPDATE, "UPDATE");
   define(BGP::MessageType::NOTIFICATION, "NOTIFICATION");
   define(BGP::MessageType::KEEPALIVE, "KEEPALIVE");
+  define(BGP::MessageType::ROUTE_REFRESH, "ROUTE_REFRESH");
 }
 
 //
@@ -906,7 +922,25 @@ template<> void ClassDef<BGP::PathAttribute>::init() {
 //
 
 template<> void ClassDef<BGP::Message>::init() {
-  field<EnumValue<BGP::MessageType>>("type", [](BGP::Message *obj) { return &obj->type; });
+  accessor("type",
+    [](Object *obj, Value &ret) {
+      auto t = obj->as<BGP::Message>()->type;
+      auto s = EnumDef<BGP::MessageType>::name(t);
+      if (!s) {
+        ret.set((int)t);
+      } else {
+        ret.set(s);
+      }
+    },
+    [](Object *obj, const Value &val) {
+      if (val.is_string()) {
+        obj->as<BGP::Message>()->type = EnumDef<BGP::MessageType>::value(val.s());
+      } else {
+        obj->as<BGP::Message>()->type = (BGP::MessageType)val.to_int32();
+      }
+    }
+  );
+
   field<Ref<Object>>("body", [](BGP::Message *obj) { return &obj->body; });
 }
 
@@ -940,6 +974,15 @@ template<> void ClassDef<BGP::MessageNotification>::init() {
   field<int>("errorCode", [](BGP::MessageNotification *obj) { return &obj->errorCode; });
   field<int>("errorSubcode", [](BGP::MessageNotification *obj) { return &obj->errorSubcode; });
   field<Ref<pipy::Data>>("data", [](BGP::MessageNotification *obj) { return &obj->data; });
+}
+
+//
+// BGP::MessageRouteRefresh
+//
+
+template<> void ClassDef<BGP::MessageRouteRefresh>::init() {
+  field<int>("afi", [](BGP::MessageRouteRefresh *obj) { return &obj->afi; });
+  field<int>("safi", [](BGP::MessageRouteRefresh *obj) { return &obj->safi; });
 }
 
 } // namespace pjs
