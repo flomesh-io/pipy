@@ -147,6 +147,8 @@ public:
   auto issuer() -> pjs::Object*;
   auto subject() -> pjs::Object*;
   auto subject_alt_names() -> pjs::Array*;
+  auto not_before() -> double;
+  auto not_after() -> double;
 
 private:
   Certificate(X509 *x509);

@@ -42,6 +42,8 @@
 
 #include <stdexcept>
 
+#include <ctime>
+
 namespace pipy {
 namespace crypto {
 
@@ -493,6 +495,20 @@ auto Certificate::subject_alt_names() -> pjs::Array* {
     m_subject_alt_names = arr;
   }
   return m_subject_alt_names;
+}
+
+auto Certificate::not_before() -> double {
+  std::tm tm;
+  auto t = X509_get0_notBefore(m_x509);
+  ASN1_TIME_to_tm(t, &tm);
+  return (double)std::mktime(&tm) * 1000;
+}
+
+auto Certificate::not_after() -> double {
+  std::tm tm;
+  auto t = X509_get0_notAfter(m_x509);
+  ASN1_TIME_to_tm(t, &tm);
+  return (double)std::mktime(&tm) * 1000;
 }
 
 auto Certificate::read_pem(const void *data, size_t size) -> X509* {
@@ -1417,6 +1433,8 @@ template<> void ClassDef<Certificate>::init() {
   accessor("issuer", [](Object *obj, Value &ret) { ret.set(obj->as<Certificate>()->issuer()); });
   accessor("subject", [](Object *obj, Value &ret) { ret.set(obj->as<Certificate>()->subject()); });
   accessor("subjectAltNames", [](Object *obj, Value &ret) { ret.set(obj->as<Certificate>()->subject_alt_names()); });
+  accessor("notBefore", [](Object *obj, Value &ret) { ret.set(obj->as<Certificate>()->not_before()); });
+  accessor("notAfter", [](Object *obj, Value &ret) { ret.set(obj->as<Certificate>()->not_after()); });
 }
 
 template<> void ClassDef<Constructor<Certificate>>::init() {
