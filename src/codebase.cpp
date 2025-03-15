@@ -624,6 +624,7 @@ private:
   std::map<std::string, WatchedDir> m_watched_dirs;
   std::set<std::string> m_changed_files;
   std::list<std::string> m_dl_list;
+  std::list<std::string> m_rm_list;
   pjs::Ref<pjs::Object> m_request_header_post_status;
   std::mutex m_mutex;
 
@@ -909,12 +910,20 @@ void CodebaseFromHTTP::download_next_updated(const std::function<void()> &cb) {
     for (const auto &p : m_dl_temp) {
       m_files[p.first] = p.second;
     }
+    for (const auto &p : m_rm_list) {
+      m_files.erase(p);
+    }
     m_mutex.unlock();
     m_fetch.close();
     for (const auto &p : m_watched_dirs) {
       const auto &base = p.first;
       std::list<std::string> list;
       for (const auto &path : m_changed_files) {
+        if (utils::starts_with(path, base)) {
+          list.push_back(path);
+        }
+      }
+      for (const auto &path : m_rm_list) {
         if (utils::starts_with(path, base)) {
           list.push_back(path);
         }
@@ -927,6 +936,7 @@ void CodebaseFromHTTP::download_next_updated(const std::function<void()> &cb) {
     }
     m_changed_files.clear();
     m_dl_temp.clear();
+    m_rm_list.clear();
     return cb();
   }
 
@@ -1097,10 +1107,12 @@ void CodebaseFromHTTP::watch_all(const std::function<void()> &cb) {
         }
         for (const auto &p : m_file_etags) {
           if (etags.count(p.first) == 0) {
-            changed.insert(p.first);
+            m_rm_list.push_back(p.first);
           }
         }
-        for (const auto &path : changed) m_dl_list.push_back(path);
+        for (const auto &path : changed) {
+          m_dl_list.push_back(path);
+        }
         m_changed_files.swap(changed);
         m_file_etags.swap(etags);
         download_next_updated(cb);

@@ -771,6 +771,7 @@ bool CodebaseStore::Codebase::commit_files() {
         auto i = base_files.find(path);
         if (i == base_files.end()) {
           batch->erase(KEY_file_tree(codebase_path + path));
+          files.erase(path);
         } else {
           files[path] = i->second;
         }
