@@ -157,7 +157,7 @@ jobs:
   aarch64-binary:
     needs: set-release-version
     name: aarch64-binary
-    runs-on: [self-hosted, arm64]
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
 
@@ -209,7 +209,7 @@ jobs:
   aarch64-alpine-docker:
     needs: set-release-version
     name: aarch64-alpine-docker
-    runs-on: [self-hosted, arm64]
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
 
