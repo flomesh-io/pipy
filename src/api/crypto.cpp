@@ -501,14 +501,14 @@ auto Certificate::not_before() -> double {
   std::tm tm;
   auto t = X509_get0_notBefore(m_x509);
   ASN1_TIME_to_tm(t, &tm);
-  return (double)std::mktime(&tm) * 1000;
+  return (double)(std::mktime(&tm) + tm.tm_gmtoff) * 1000;
 }
 
 auto Certificate::not_after() -> double {
   std::tm tm;
   auto t = X509_get0_notAfter(m_x509);
   ASN1_TIME_to_tm(t, &tm);
-  return (double)std::mktime(&tm) * 1000;
+  return (double)(std::mktime(&tm) + tm.tm_gmtoff) * 1000;
 }
 
 auto Certificate::read_pem(const void *data, size_t size) -> X509* {
