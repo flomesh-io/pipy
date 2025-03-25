@@ -501,14 +501,22 @@ auto Certificate::not_before() -> double {
   std::tm tm;
   auto t = X509_get0_notBefore(m_x509);
   ASN1_TIME_to_tm(t, &tm);
+#ifdef WIN32
+  return (double)_mkgmtime64(&tm) * 1000;
+#else
   return (double)(std::mktime(&tm) + tm.tm_gmtoff) * 1000;
+#endif
 }
 
 auto Certificate::not_after() -> double {
   std::tm tm;
   auto t = X509_get0_notAfter(m_x509);
   ASN1_TIME_to_tm(t, &tm);
-  return (double)(std::mktime(&tm) + tm.tm_gmtoff) * 1000;
+#ifdef WIN32
+  return (double)_mkgmtime64(&tm) * 1000;
+#else
+  return (double)(std::mktime(&tm) + tm.tm_gmtoff) * 1000
+#endif
 }
 
 auto Certificate::read_pem(const void *data, size_t size) -> X509* {
