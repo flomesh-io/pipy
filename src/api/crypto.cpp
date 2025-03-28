@@ -515,7 +515,7 @@ auto Certificate::not_after() -> double {
 #ifdef WIN32
   return (double)_mkgmtime64(&tm) * 1000;
 #else
-  return (double)(std::mktime(&tm) + tm.tm_gmtoff) * 1000
+  return (double)(std::mktime(&tm) + tm.tm_gmtoff) * 1000;
 #endif
 }
 
