@@ -1556,7 +1556,7 @@ void Mux::Session::mux_session_open(MuxSource *source) {
 
 auto Mux::Session::mux_session_open_stream(MuxSource *source) -> EventFunction* {
   if (m_http2) {
-    return http2::Client::stream();
+    return http2::Client::stream([=]() { source->discard(); });
   } else {
     return MuxQueue::stream(source);
   }
@@ -2012,22 +2012,24 @@ void TunnelClient::on_reply(Event *evt) {
 
   } else if (evt->is<MessageEnd>()) {
     if (m_response_head) {
-      auto tt = m_request_head->tunnel_type();
-      if (m_response_head->is_tunnel_ok(tt)) {
-        m_is_tunnel_started = true;
-        if (m_on_state_change) {
-          m_on_state_change(State::connected);
-        }
-        if (m_eos) {
-          EventFunction::input()->input_async(m_eos);
+      if (m_request_head) {
+        auto tt = m_request_head->tunnel_type();
+        if (m_response_head->is_tunnel_ok(tt)) {
+          m_is_tunnel_started = true;
+          if (m_on_state_change) {
+            m_on_state_change(State::connected);
+          }
+          if (m_eos) {
+            EventFunction::input()->input_async(m_eos);
+          } else {
+            EventFunction::input()->flush_async();
+          }
         } else {
-          EventFunction::input()->flush_async();
+          if (m_on_state_change) {
+            m_on_state_change(State::closed);
+          }
+          Filter::output(StreamEnd::make());
         }
-      } else {
-        if (m_on_state_change) {
-          m_on_state_change(State::closed);
-        }
-        Filter::output(StreamEnd::make());
       }
       m_request_head = nullptr;
       m_response_head = nullptr;

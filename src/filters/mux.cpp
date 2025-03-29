@@ -387,6 +387,10 @@ void MuxSource::reset() {
   m_has_alloc_error = false;
 }
 
+void MuxSource::discard() {
+  m_stream = nullptr;
+}
+
 void MuxSource::key(const pjs::Value &key) {
   if (key.is_object() && key.o()) {
     m_session_weak_key = key.o()->weak_ptr();

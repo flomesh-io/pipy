@@ -178,6 +178,9 @@ private:
 //
 
 class MuxSource : public List<MuxSource>::Item {
+public:
+  void discard();
+
 protected:
   MuxSource(std::shared_ptr<BufferStats> buffer_stats = nullptr);
   MuxSource(const MuxSource &r);
