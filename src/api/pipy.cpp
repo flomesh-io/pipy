@@ -69,7 +69,7 @@ thread_local static std::list<pjs::Ref<pjs::Function>> s_exit_callbacks;
 
 auto Pipy::version() -> pjs::Object* {
   auto obj = pjs::Object::make();
-  obj->set("version", PIPY_VERSION);
+  obj->set("tag", PIPY_VERSION);
   obj->set("commit", PIPY_COMMIT);
   obj->set("date", PIPY_COMMIT_DATE);
   return obj;
