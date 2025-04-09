@@ -301,7 +301,7 @@ auto Worker::load_module(pjs::Module *referer, const std::string &path) -> pjs::
 
   auto sd = Codebase::current()->get(name);
   if (!sd) {
-    Log::error("[pjs] Cannot open script %s", name.c_str());
+    Log::warn("[pjs] Cannot open script %s", name.c_str());
     return nullptr;
   }
 
