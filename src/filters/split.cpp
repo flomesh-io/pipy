@@ -76,7 +76,6 @@ void Split::reset() {
   Filter::reset();
   delete m_split;
   m_split = nullptr;
-  m_head = nullptr;
   m_started = false;
   if (m_separator.is_function()) {
     m_kmp = nullptr;
@@ -84,10 +83,8 @@ void Split::reset() {
 }
 
 void Split::process(Event *evt) {
-
-  if (auto *start = evt->as<MessageStart>()) {
+  if (auto data = evt->as<Data>()) {
     if (!m_split) {
-      m_head = start->head();
       if (!m_kmp) {
         pjs::Value ret;
         if (!eval(m_separator, ret)) return;
@@ -113,7 +110,7 @@ void Split::process(Event *evt) {
       m_split = m_kmp->split(
         [this](Data *data) {
           if (!m_started) {
-            Filter::output(MessageStart::make(m_head));
+            Filter::output(MessageStart::make());
             m_started = true;
           }
           if (data) {
@@ -125,8 +122,6 @@ void Split::process(Event *evt) {
         }
       );
     }
-
-  } else if (auto data = evt->as<Data>()) {
     if (m_split) {
       m_split->input(*data);
     }
@@ -136,7 +131,6 @@ void Split::process(Event *evt) {
       m_split->end();
       delete m_split;
       m_split = nullptr;
-      m_head = nullptr;
       if (m_separator.is_function()) m_kmp = nullptr;
       if (evt->is<StreamEnd>()) Filter::output(evt);
     }

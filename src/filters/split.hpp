@@ -52,7 +52,6 @@ private:
 
   pjs::Value m_separator;
   pjs::Ref<KMP> m_kmp;
-  pjs::Ref<pjs::Object> m_head;
   KMP::Split* m_split = nullptr;
   bool m_started = false;
 };
