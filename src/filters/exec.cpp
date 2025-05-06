@@ -63,6 +63,9 @@ Exec::Options::Options(pjs::Object *options) {
   Value(options, "pty")
     .get(pty)
     .check_nullable();
+  Value(options, "env")
+    .get(env)
+    .check_nullable();
   Value(options, "onStart")
     .get(on_start_f)
     .check_nullable();
@@ -140,6 +143,30 @@ void Exec::process(Event *evt) {
     pjs::Value ret;
     if (!eval(m_command, ret)) return;
 
+    std::list<std::string> env;
+    if (m_options.env) {
+      auto env_obj = m_options.env.get();
+      if (env_obj->is_function()) {
+        pjs::Value val;
+        Filter::eval(env_obj->as<pjs::Function>(), val);
+        if (!val.is_nullish() && !val.is_object()) {
+          return Filter::error("options.env didn't return an object");
+        }
+        env_obj = val.o();
+      }
+      if (env_obj) {
+        env_obj->iterate_all(
+          [&](pjs::Str *k, pjs::Value &v) {
+            if (k->length() > 0) {
+              auto s = v.to_string();
+              env.push_back(k->str() + '=' + s->str());
+              s->release();
+            }
+          }
+        );
+      }
+    }
+
     if (ret.is_array()) {
       std::list<std::string> args;
       ret.as<pjs::Array>()->iterate_all(
@@ -149,11 +176,11 @@ void Exec::process(Event *evt) {
           s->release();
         }
       );
-      exec_argv(args);
+      exec_argv(args, env);
 
     } else {
       auto *s = ret.to_string();
-      exec_line(s->str());
+      exec_line(s->str(), env);
       s->release();
     }
 
@@ -205,7 +232,7 @@ void Exec::check_ending() {
 
 #ifndef _WIN32
 
-bool Exec::exec_argv(const std::list<std::string> &args) {
+bool Exec::exec_argv(const std::list<std::string> &args, const std::list<std::string> &env) {
   auto argc = args.size();
   if (!argc) {
     Filter::error("exec() with no arguments");
@@ -215,7 +242,12 @@ bool Exec::exec_argv(const std::list<std::string> &args) {
   size_t i = 0;
   pjs::vl_array<char*> argv(argc + 1);
   for (const auto &arg : args) argv[i++] = strdup(arg.c_str());
-  argv[argc] = nullptr;
+  argv[i] = nullptr;
+
+  i = 0;
+  pjs::vl_array<char*> envp(env.size() + 1);
+  for (const auto &var : env) envp[i++] = strdup(var.c_str());
+  envp[i] = nullptr;
 
   int pid = 0;
 
@@ -247,7 +279,11 @@ bool Exec::exec_argv(const std::list<std::string> &args) {
     pid = forkpty(&master_fd, nullptr, &term, nullptr);
 
     if (pid == 0) {
-      execvp(argv[0], argv);
+      if (env.size() > 0) {
+        execve(argv[0], argv, envp);
+      } else {
+        execvp(argv[0], argv);
+      }
       std::terminate();
     }
 
@@ -274,7 +310,11 @@ bool Exec::exec_argv(const std::list<std::string> &args) {
       dup2(in[0], 0);
       dup2(out[1], 1);
       dup2(err[1], 2);
-      execvp(argv[0], argv);
+      if (env.size() > 0) {
+        execve(argv[0], argv, envp);
+      } else {
+        execvp(argv[0], argv);
+      }
       std::terminate();
     }
 
@@ -284,6 +324,7 @@ bool Exec::exec_argv(const std::list<std::string> &args) {
   }
 
   for (i = 0; i < argc; i++) free(argv[i]);
+  for (i = 0; i < env.size(); i++) free(envp[i]);
 
   if (pid < 0) {
     Filter::error("unable to fork");
@@ -300,8 +341,8 @@ bool Exec::exec_argv(const std::list<std::string> &args) {
   return true;
 }
 
-bool Exec::exec_line(const std::string &line) {
-  return exec_argv(utils::split_argv(line));
+bool Exec::exec_line(const std::string &line, const std::list<std::string> &env) {
+  return exec_argv(utils::split_argv(line), env);
 }
 
 void Exec::kill_process() {
@@ -310,11 +351,11 @@ void Exec::kill_process() {
 
 #else // _WIN32
 
-bool Exec::exec_argv(const std::list<std::string> &args) {
-  return exec_line(os::windows::encode_argv(args));
+bool Exec::exec_argv(const std::list<std::string> &args, const std::list<std::string> &env) {
+  return exec_line(os::windows::encode_argv(args), env);
 }
 
-bool Exec::exec_line(const std::string &line) {
+bool Exec::exec_line(const std::string &line, const std::list<std::string> &env) {
   if (!m_pipe_stdin.open(this, "stdin", false)) return false;
   if (!m_pipe_stdout.open(this, "stdout", true)) return false;
   if (!m_pipe_stderr.open(this, "stderr", true)) return false;

@@ -48,6 +48,7 @@ public:
   struct Options : public pipy::Options {
     bool std_err = false;
     bool pty = false;
+    pjs::Ref<pjs::Object> env;
     pjs::Ref<pjs::Function> on_start_f;
     pjs::Ref<pjs::Function> on_exit_f;
     Options() {}
@@ -131,8 +132,8 @@ private:
 
   void on_process_exit(int exit_code);
   void check_ending();
-  bool exec_argv(const std::list<std::string> &args);
-  bool exec_line(const std::string &line);
+  bool exec_argv(const std::list<std::string> &args, const std::list<std::string> &env);
+  bool exec_line(const std::string &line, const std::list<std::string> &env);
   void kill_process();
 
   //
