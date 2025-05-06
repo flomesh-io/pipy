@@ -372,11 +372,23 @@ bool Exec::exec_line(const std::string &line, const std::list<std::string> &env)
   pjs::vl_array<wchar_t, 1000> buf_line(line_w.length() + 1);
   std::memcpy(buf_line.data(), line_w.c_str(), buf_line.size() * sizeof(wchar_t));
 
+  std::vector<char> env_block;
+  if (env.size() > 0) {
+    for (const auto &var : env) {
+      for (char c : var) env_block.push_back(c);
+      env_block.push_back('\0');
+    }
+    env_block.push_back('\0');
+  }
+
   PROCESS_INFORMATION pi;
   if (!CreateProcessW(
     NULL,
     buf_line.data(),
-    NULL, NULL, TRUE, 0, NULL, NULL,
+    NULL, NULL,
+    TRUE, 0,
+    env_block.size() > 0 ? env_block.data() : NULL,
+    NULL,
     &si, &pi
   )) {
     Filter::error(
