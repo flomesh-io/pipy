@@ -50,6 +50,7 @@ class Pipy : public pjs::FunctionTemplate<Pipy> {
 public:
   struct ExecOptions : public Options {
     bool std_err = false;
+    pjs::Ref<Object> env;
     pjs::Ref<Data> std_in;
     pjs::Ref<pjs::Function> on_exit_f;
     ExecOptions() {}

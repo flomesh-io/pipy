@@ -95,6 +95,9 @@ void Pipy::on_exit(const std::function<void(int)> &on_exit) {
 static Data::Producer s_dp("pipy.exec()");
 
 Pipy::ExecOptions::ExecOptions(pjs::Object *options) {
+  Value(options, "env")
+    .get(env)
+    .check_nullable();
   Value(options, "stdin")
     .get(std_in)
     .check_nullable();
@@ -118,10 +121,28 @@ static auto exec_argv(const std::list<std::string> &args, const Pipy::ExecOption
     no_arguments();
   }
 
-  int n = 0;
-  char *argv[argc + 1];
-  for (const auto &arg : args) argv[n++] = strdup(arg.c_str());
-  argv[n] = nullptr;
+  int i = 0;
+  pjs::vl_array<char*> argv(argc + 1);
+  for (const auto &arg : args) argv[i++] = strdup(arg.c_str());
+  argv[i] = nullptr;
+
+  std::list<std::string> env;
+  if (options.env) {
+    options.env->iterate_all(
+      [&](pjs::Str *k, pjs::Value &v) {
+        if (k->length() > 0) {
+          auto s = v.to_string();
+          env.push_back(k->str() + '=' + s->str());
+          s->release();
+        }
+      }
+    );
+  }
+
+  i = 0;
+  pjs::vl_array<char*> envp(env.size() + 1);
+  for (const auto &var : env) envp[i++] = strdup(var.c_str());
+  envp[i] = nullptr;
 
   Pipy::ExecResult result;
   std::thread t_stdout, t_stderr;
@@ -144,7 +165,11 @@ static auto exec_argv(const std::list<std::string> &args, const Pipy::ExecOption
       if (pipes[0][0]) dup2(pipes[0][0], 0);
       dup2(pipes[1][1], 1);
       dup2(pipes[2][1] ? pipes[2][1] : pipes[1][1], 2);
-      execvp(argv[0], argv);
+      if (env.size() > 0) {
+        execve(argv[0], argv, envp);
+      } else {
+        execvp(argv[0], argv);
+      }
       std::terminate();
     } else if (pid < 0) {
       throw std::runtime_error("unable to fork");
@@ -211,6 +236,9 @@ static auto exec_argv(const std::list<std::string> &args, const Pipy::ExecOption
     if (pipes[i][0]) close(pipes[i][0]);
     if (pipes[i][1]) close(pipes[i][1]);
   }
+
+  for (i = 0; i < argc; i++) free(argv[i]);
+  for (i = 0; i < env.size(); i++) free(envp[i]);
 
   result.out = s_dp.make(buf_stdout);
 
