@@ -307,10 +307,35 @@ static auto exec_line(const std::string &line, const Pipy::ExecOptions &options)
     pjs::vl_array<wchar_t, 1000> buf_line(line_w.length() + 1);
     std::memcpy(buf_line.data(), line_w.c_str(), buf_line.size() * sizeof(wchar_t));
 
+    std::list<std::string> env;
+    if (options.env) {
+      options.env->iterate_all(
+        [&](pjs::Str *k, pjs::Value &v) {
+          if (k->length() > 0) {
+            auto s = v.to_string();
+            env.push_back(k->str() + '=' + s->str());
+            s->release();
+          }
+        }
+      );
+    }
+
+    std::vector<char> env_block;
+    if (env.size() > 0) {
+      for (const auto &var : env) {
+        for (char c : var) env_block.push_back(c);
+        env_block.push_back('\0');
+      }
+      env_block.push_back('\0');
+    }
+
     if (!CreateProcessW(
       NULL,
       buf_line.data(),
-      NULL, NULL, TRUE, 0, NULL, NULL,
+      NULL, NULL,
+      TRUE, 0,
+      env_block.size() > 0 ? env_block.data() : NULL,
+      NULL,
       &si, &pif
     )) {
       throw std::runtime_error(
