@@ -50,10 +50,7 @@ public:
 
   void on_start(pjs::Object *starting_events);
   void on_end(pjs::Function *handler);
-
-  void to(pjs::Str *name);
   void to(PipelineLayout *layout);
-
   void close();
 
   void accept_http_tunnel(pjs::Function *handler);

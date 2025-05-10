@@ -30,7 +30,6 @@
 #include "listener.hpp"
 #include "message.hpp"
 #include "signal.hpp"
-#include "nmi.hpp"
 
 #include <list>
 #include <memory>
@@ -41,9 +40,6 @@ namespace pipy {
 
 class Thread;
 class PipelineLayout;
-class PipelineLoadBalancer;
-class Task;
-class Watch;
 
 //
 // Worker
@@ -51,129 +47,45 @@ class Watch;
 
 class Worker : public pjs::RefCount<Worker>, public pjs::Instance {
 public:
-  static auto make(pjs::Promise::Period *period, PipelineLoadBalancer *plb, bool is_graph_enabled = false) -> Worker* {
-    return new Worker(period, plb, is_graph_enabled);
+  static auto make(pjs::Promise::Period *period, bool is_graph_enabled = false) -> Worker* {
+    return new Worker(period, is_graph_enabled);
   }
 
   static auto current() -> Worker* {
     return s_current;
   }
 
-  auto root() const -> Module* { return m_root; }
   auto root_fiber() const -> pjs::Fiber* { return m_root_fiber; }
   bool handling_signal(int sig);
-  auto find_js_module(const std::string &path) -> JSModule*;
-  auto load_js_module(const std::string &path) -> JSModule*;
-  auto load_js_module(const std::string &path, pjs::Value &result) -> JSModule*;
-  auto load_native_module(const std::string &path) -> nmi::NativeModule*;
+  auto load_module(pjs::Module *referer, const std::string &path, pjs::Value &result) -> pjs::Module*;
   auto load_module(pjs::Module *referer, const std::string &path) -> pjs::Module*;
-  void add_listener_array(ListenerArray *la);
+  auto load_module(const std::string &path, pjs::Value &result) -> pjs::Module*;
   void add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options);
   void remove_listener(Listener *listener);
   bool update_listeners(bool force);
-  void add_task(Task *task);
-  void add_watch(Watch *watch);
-  void add_exit(PipelineLayout *layout);
-  void add_admin(const std::string &path, PipelineLayout *layout);
-  void add_export(pjs::Str *ns, pjs::Str *name, Module *module);
-  auto get_export(pjs::Str *ns, pjs::Str *name) -> int;
   auto new_loading_context() -> Context*;
   auto new_runtime_context(Context *base = nullptr) -> Context*;
   auto new_context(Context *base = nullptr) -> Context*;
-  bool solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result);
-  bool bind();
   void set_forced() { m_forced = true; }
   bool forced() const { return m_forced; }
   bool started() const { return m_started; }
   bool start(bool force);
   void stop(bool force);
-  bool admin(Message *request, const std::function<void(Message*)> &respond);
 
 private:
-  Worker(pjs::Promise::Period *period, PipelineLoadBalancer *plb, bool is_graph_enabled);
+  Worker(pjs::Promise::Period *period, bool is_graph_enabled);
   ~Worker();
-
-  typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
-  typedef std::map<pjs::Ref<pjs::Str>, Module*> Namespace;
 
   struct ListeningPipeline {
     PipelineLayout* pipeline_layout;
     Listener::Options options;
   };
 
-  class Exit : public EventTarget {
-  public:
-    Exit(Worker *worker, PipelineLayout *pipeline_layout)
-      : m_worker(worker)
-      , m_pipeline_layout(pipeline_layout) {}
-    bool done() const { return m_stream_end; }
-    void start();
-    void end();
-    virtual void on_event(Event *evt) override;
-  private:
-    Worker* m_worker;
-    pjs::Ref<PipelineLayout> m_pipeline_layout;
-    pjs::Ref<Pipeline> m_pipeline;
-    bool m_stream_end = false;
-  };
-
-  class Admin : public EventTarget {
-  public:
-    Admin(const std::string &path, PipelineLayout *pipeline_layout)
-      : m_path(path)
-      , m_pipeline_layout(pipeline_layout) {}
-
-    ~Admin();
-
-    bool handle(Message *request, const std::function<void(Message*)> &respond);
-    void end();
-
-  private:
-    class Handler : public pjs::Pooled<Handler>, public List<Handler>::Item, public EventTarget {
-    public:
-      Handler(Admin *admin, Message *request, const std::function<void(Message*)> &respond);
-      ~Handler();
-
-      virtual void on_event(Event *evt) override;
-
-    private:
-      Admin* m_admin;
-      const std::function<void(Message*)> m_respond;
-      pjs::Ref<Pipeline> m_pipeline;
-      MessageReader m_response_reader;
-    };
-
-    std::string m_path;
-    pjs::Ref<PipelineLayout> m_pipeline_layout;
-    List<Handler> m_handlers;
-  };
-
-  struct SolvedFile {
-    int index;
-    pjs::Ref<pjs::Str> filename;
-    pjs::Source source;
-    std::unique_ptr<pjs::Expr> expr;
-    pjs::Value result;
-    bool solving = false;
-  };
-
-  Module* m_root = nullptr;
   pjs::Ref<pjs::Promise::Period> m_period;
   pjs::Ref<pjs::Fiber> m_root_fiber;
-  pjs::Ref<PipelineLoadBalancer> m_pipeline_lb;
   std::set<PipelineLayout*> m_pipeline_templates;
-  std::vector<Module*> m_legacy_modules;
-  std::map<std::string, JSModule*> m_js_module_map;
-  std::map<std::string, nmi::NativeModule*> m_native_module_map;
   std::map<std::string, std::unique_ptr<pjs::Module>> m_module_map;
   std::map<Listener*, ListeningPipeline> m_listeners;
-  std::set<Task*> m_tasks;
-  std::set<Watch*> m_watches;
-  std::list<Exit*> m_exits;
-  std::list<Admin*> m_admins;
-  std::list<pjs::Ref<ListenerArray>> m_listener_arrays;
-  std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
-  std::map<pjs::Ref<pjs::Str>, SolvedFile> m_solved_files;
   std::unique_ptr<Signal> m_exit_signal;
   bool m_forced = false;
   bool m_started = false;
@@ -181,10 +93,7 @@ private:
   bool m_unloading = false;
   bool m_waiting_for_exit_callbacks = false;
 
-  auto new_module_index() -> int;
-  void add_module(Module *m);
-  void remove_module(int i);
-  void on_exit(Exit *exit);
+  void on_exit();
   void end_all();
 
   void append_pipeline_template(PipelineLayout *pt);

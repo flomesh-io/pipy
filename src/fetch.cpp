@@ -66,10 +66,7 @@ void Fetch::Receiver::dump(Dump &d) {
   d.name = "Fetch::Receiver";
 }
 
-Fetch::Fetch(pjs::Str *host, const Options &options)
-  : m_module(new Module())
-  , m_host(host)
-{
+Fetch::Fetch(pjs::Str *host, const Options &options) : m_host(host) {
   m_mux_grouper = pjs::Method::make(
     "", [this](pjs::Context &, pjs::Object *, pjs::Value &ret) {
       ret.set(m_mux_group);
@@ -81,7 +78,7 @@ Fetch::Fetch(pjs::Str *host, const Options &options)
     m_outbound = ob;
   };
 
-  auto *ppl_connect = PipelineLayout::make(m_module);
+  auto *ppl_connect = PipelineLayout::make();
   ppl_connect->append(new Connect(m_host.get(), connect_options));
 
   if (options.tls) {
@@ -96,12 +93,12 @@ Fetch::Fetch(pjs::Str *host, const Options &options)
     int port;
     utils::get_host_port(host->str(), sni, port);
     opts.sni = pjs::Str::make(sni);
-    auto *ppl_tls = PipelineLayout::make(m_module);
+    auto *ppl_tls = PipelineLayout::make();
     ppl_tls->append(new tls::Client(opts))->add_sub_pipeline(ppl_connect);
     ppl_connect = ppl_tls;
   }
 
-  m_ppl = PipelineLayout::make(m_module);
+  m_ppl = PipelineLayout::make();
   m_ppl->append(new http::Mux(pjs::Function::make(m_mux_grouper)))->add_sub_pipeline(ppl_connect);
   m_ppl->append(new Receiver(this));
 }
@@ -112,7 +109,7 @@ Fetch::Fetch(const std::string &host, const Options &options)
 }
 
 Fetch::~Fetch() {
-  m_module->shutdown();
+  m_ppl->shutdown();
 }
 
 static const pjs::Ref<pjs::Str> s_HEAD(pjs::Str::make("HEAD"));

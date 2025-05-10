@@ -26,21 +26,16 @@
 #include "worker.hpp"
 #include "worker-thread.hpp"
 #include "thread.hpp"
-#include "module.hpp"
 #include "listener.hpp"
 #include "inbound.hpp"
-#include "task.hpp"
-#include "watch.hpp"
 #include "event.hpp"
 #include "message.hpp"
 #include "pipeline.hpp"
-#include "pipeline-lb.hpp"
 #include "codebase.hpp"
 #include "status.hpp"
 #include "api/algo.hpp"
 #include "api/bgp.hpp"
 #include "api/bpf.hpp"
-#include "api/configuration.hpp"
 #include "api/console.hpp"
 #include "api/crypto.hpp"
 #include "api/c-struct.hpp"
@@ -170,9 +165,6 @@ template<> void ClassDef<pipy::Global>::init() {
   // StreamEnd
   variable("StreamEnd", class_of<Constructor<StreamEnd>>());
 
-  // ListenerArray
-  variable("ListenerArray", class_of<Constructor<ListenerArray>>());
-
   // Swap
   variable("Swap", class_of<Constructor<LegacySwap>>());
 
@@ -229,11 +221,10 @@ namespace pipy {
 
 thread_local pjs::Ref<Worker> Worker::s_current;
 
-Worker::Worker(pjs::Promise::Period *period, PipelineLoadBalancer *plb, bool is_graph_enabled)
+Worker::Worker(pjs::Promise::Period *period, bool is_graph_enabled)
   : pjs::Instance(Global::make(this))
   , m_period(period)
   , m_root_fiber(new_fiber())
-  , m_pipeline_lb(plb)
   , m_graph_enabled(is_graph_enabled)
 {
   Log::debug(Log::ALLOC, "[worker   %p] ++", this);
@@ -243,54 +234,15 @@ Worker::~Worker() {
   Log::debug(Log::ALLOC, "[worker   %p] --", this);
 }
 
-bool Worker::handling_signal(int signal) {
-  for (auto task : m_tasks) {
-    if (task->type() == Task::SIGNAL && task->signal() == signal) {
-      return true;
-    }
-  }
-  return false;
-}
-
-auto Worker::find_js_module(const std::string &path) -> JSModule* {
-  auto i = m_js_module_map.find(path);
-  if (i == m_js_module_map.end()) return nullptr;
-  return i->second;
-}
-
-auto Worker::load_js_module(const std::string &path) -> JSModule* {
-  pjs::Value result;
-  return load_js_module(path, result);
-}
-
-auto Worker::load_js_module(const std::string &path, pjs::Value &result) -> JSModule* {
-  auto i = m_js_module_map.find(path);
-  if (i != m_js_module_map.end()) return i->second;
-  auto m = new JSModule(this, new_module_index());
-  add_module(m);
-  m_js_module_map[path] = m;
-  if (!m_root) m_root = m;
-  if (!m->load(path, result)) return nullptr;
-  return m;
-}
-
-auto Worker::load_native_module(const std::string &path) -> nmi::NativeModule* {
-  auto i = m_native_module_map.find(path);
-  if (i != m_native_module_map.end()) return i->second;
-  auto m = nmi::NativeModule::find(path);
-  if (!m) m = nmi::NativeModule::load(path, new_module_index());
-  add_module(m);
-  m_native_module_map[path] = m;
-  return m;
-}
-
-auto Worker::load_module(pjs::Module *referer, const std::string &path) -> pjs::Module* {
+auto Worker::load_module(pjs::Module *referer, const std::string &path, pjs::Value &result) -> pjs::Module* {
   std::string name;
 
-  if (path[0] == '/') {
+  if (path.empty() && !referer) {
+    name = path;
+  } else if (path[0] == '/') {
     name = utils::path_normalize(path);
-  } else if (path[0] == '.') {
-    auto base = utils::path_dirname(referer->name());
+  } else if (path[0] == '.' && path[1] == '/') {
+    auto base = referer ? utils::path_dirname(referer->name()) : std::string("/");
     name = utils::path_normalize(utils::path_join(base, path));
   } else {
     return nullptr;
@@ -331,8 +283,7 @@ auto Worker::load_module(pjs::Module *referer, const std::string &path) -> pjs::
   );
 
   pjs::Ref<Context> ctx = new_loading_context();
-  pjs::Value result;
-  mod->execute(*ctx, -1, nullptr, result);
+  mod->execute(*ctx, nullptr, result);
   if (!ctx->ok()) {
     Log::pjs_error(ctx->error());
     return nullptr;
@@ -341,8 +292,13 @@ auto Worker::load_module(pjs::Module *referer, const std::string &path) -> pjs::
   return mod;
 }
 
-void Worker::add_listener_array(ListenerArray *la) {
-  m_listener_arrays.push_back(la);
+auto Worker::load_module(pjs::Module *referer, const std::string &path) -> pjs::Module* {
+  pjs::Value result;
+  return load_module(referer, path, result);
+}
+
+auto Worker::load_module(const std::string &path, pjs::Value &result) -> pjs::Module* {
+  return load_module(nullptr, path, result);
 }
 
 void Worker::add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options) {
@@ -403,59 +359,12 @@ bool Worker::update_listeners(bool force) {
   return true;
 }
 
-void Worker::add_task(Task *task) {
-  m_tasks.insert(task);
-}
-
-void Worker::add_watch(Watch *watch) {
-  m_watches.insert(watch);
-}
-
-void Worker::add_exit(PipelineLayout *layout) {
-  m_exits.emplace_back();
-  m_exits.back() = new Exit(this, layout);
-}
-
-void Worker::add_admin(const std::string &path, PipelineLayout *layout) {
-  m_admins.emplace_back();
-  m_admins.back() = new Admin(path, layout);
-}
-
-void Worker::add_export(pjs::Str *ns, pjs::Str *name, Module *module) {
-  auto &names = m_namespaces[ns];
-  auto i = names.find(name);
-  if (i != names.end()) {
-    std::string msg("duplicated variable exporting name ");
-    msg += name->str();
-    msg += " from ";
-    msg += module->filename()->str();
-    throw std::runtime_error(msg);
-  }
-  names[name] = module;
-}
-
-auto Worker::get_export(pjs::Str *ns, pjs::Str *name) -> int {
-  auto i = m_namespaces.find(ns);
-  if (i == m_namespaces.end()) return -1;
-  auto j = i->second.find(name);
-  if (j == i->second.end()) return -1;
-  return j->second->m_index;
-}
-
 auto Worker::new_loading_context() -> Context* {
   return Context::make(this, m_root_fiber);
 }
 
 auto Worker::new_runtime_context(Context *base) -> Context* {
-  auto data = ContextData::make(m_legacy_modules.size());
-  for (size_t i = 0; i < m_legacy_modules.size(); i++) {
-    if (auto mod = m_legacy_modules[i]) {
-      pjs::Object *proto = nullptr;
-      if (base) proto = base->data(i);
-      data->at(i) = mod->new_context_data(proto);
-    }
-  }
-  return Context::make(this, nullptr, base, data);
+  return Context::make(this, nullptr, base);
 }
 
 auto Worker::new_context(Context *base) -> Context* {
@@ -463,104 +372,12 @@ auto Worker::new_context(Context *base) -> Context* {
   return Context::make(this, fiber, base);
 }
 
-bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {
-  auto i = m_solved_files.find(filename);
-  if (i != m_solved_files.end()) {
-    auto &f = i->second;
-    if (f.solving) {
-      std::string msg("recursive sovling file: ");
-      ctx.error(msg + filename->str());
-      return false;
-    } else {
-      result = f.result;
-      return true;
-    }
-  }
-
-  auto sd = Codebase::current()->get(filename->str());
-  if (!sd) {
-    std::string msg("Cannot open script to solve: ");
-    ctx.error(msg + filename->str());
-    return false;
-  }
-
-  Data data(*sd);
-  sd->release();
-  auto &f = m_solved_files[filename];
-  f.source.filename = filename->str();
-  f.source.content = data.to_string();
-  std::string error;
-  char error_msg[1000];
-  int error_line, error_column;
-  auto expr = pjs::Parser::parse_expr(&f.source, error, error_line, error_column);
-  if (!expr) {
-    std::snprintf(
-      error_msg, sizeof(error_msg), "Syntax error: %s at line %d column %d in %s",
-      error.c_str(),
-      error_line,
-      error_column,
-      filename->c_str()
-    );
-    Log::pjs_location(f.source.content, filename->str(), error_line, error_column);
-    Log::error("[pjs] %s", error_msg);
-    std::snprintf(error_msg, sizeof(error_msg), "Cannot solve script: %s", filename->c_str());
-    ctx.error(error_msg);
-    m_solved_files.erase(filename);
-    return false;
-  }
-
-  f.index = m_solved_files.size();
-  f.filename = filename;
-  f.expr = std::unique_ptr<pjs::Expr>(expr);
-  f.solving = true;
-  expr->resolve(nullptr, ctx, -f.index);
-  auto ret = expr->eval(ctx, result);
-  if (!ctx.ok()) {
-    Log::pjs_error(ctx.error());
-    std::snprintf(error_msg, sizeof(error_msg), "Cannot solve script: %s", filename->c_str());
-    ctx.reset();
-    ctx.error(error_msg);
-  }
-  f.result = result;
-  f.solving = false;
-
-  return ret;
-}
-
-bool Worker::bind() {
-  try {
-    for (auto i : m_legacy_modules) if (i) i->bind_exports(this);
-    for (auto i : m_legacy_modules) if (i) i->bind_imports(this);
-    for (auto i : m_legacy_modules) if (i) i->make_pipelines();
-    for (auto i : m_legacy_modules) if (i) i->bind_pipelines();
-  } catch (std::runtime_error &err) {
-    Log::error("%s", err.what());
-    return false;
-  }
-  return true;
-}
-
 bool Worker::start(bool force) {
   m_forced = force;
-
-  // Register pipelines to the pipeline load balancer
-  for (const auto &p : m_js_module_map) {
-    p.second->setup_pipeline_lb(m_pipeline_lb);
-  }
 
   // Update listening ports
   if (!update_listeners(force)) {
     return false;
-  }
-
-  // Start tasks
-  for (auto *task : m_tasks) {
-    task->start();
-  }
-
-  // Start watches
-  for (auto *watch : m_watches) {
-    watch->start();
   }
 
   m_started = true;
@@ -570,7 +387,7 @@ bool Worker::start(bool force) {
 }
 
 void Worker::stop(bool force) {
-  if (force || (!Pipy::has_exit_callbacks() && m_exits.empty())) {
+  if (force || !Pipy::has_exit_callbacks()) {
     end_all();
   } else if (!m_exit_signal) {
     m_exit_signal = std::unique_ptr<Signal>(new Signal);
@@ -578,59 +395,18 @@ void Worker::stop(bool force) {
       pjs::Ref<Context> ctx = new_context();
       m_waiting_for_exit_callbacks = Pipy::start_exiting(*ctx, [this]() {
         m_waiting_for_exit_callbacks = false;
-        on_exit(nullptr);
+        on_exit();
       });
     }
-    if (m_exits.size() > 0) {
-      std::list<Exit*> exits = m_exits;
-      for (auto *exit : exits) {
-        exit->start();
-      }
-    } else if (!m_waiting_for_exit_callbacks) {
+    if (!m_waiting_for_exit_callbacks) {
       m_exit_signal->fire();
       end_all();
     }
   }
 }
 
-bool Worker::admin(Message *request, const std::function<void(Message*)> &respond) {
-  for (auto *admin : m_admins) {
-    if (admin->handle(request, respond)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-auto Worker::new_module_index() -> int {
-  int index = 0;
-  while (index < m_legacy_modules.size() && m_legacy_modules[index]) index++;
-  return index;
-}
-
-void Worker::add_module(Module *m) {
-  auto i = m->index();
-  if (i >= m_legacy_modules.size()) {
-    m_legacy_modules.resize(i + 1);
-  }
-  m_legacy_modules[i] = m;
-}
-
-void Worker::remove_module(int i) {
-  auto mod = m_legacy_modules[i];
-  m_legacy_modules[i] = nullptr;
-  m_js_module_map.erase(mod->filename()->str());
-}
-
-void Worker::on_exit(Exit *exit) {
-  bool done = true;
-  for (auto *exit : m_exits) {
-    if (!exit->done()) {
-      done = false;
-      break;
-    }
-  }
-  if (done && !m_waiting_for_exit_callbacks) {
+void Worker::on_exit() {
+  if (!m_waiting_for_exit_callbacks) {
     if (m_exit_signal) m_exit_signal->fire();
     end_all();
   }
@@ -641,17 +417,9 @@ void Worker::end_all() {
   if (s_current == this) s_current = nullptr;
 
   for (auto *pt : m_pipeline_templates) pt->shutdown();
-  for (auto *task : m_tasks) task->end();
-  for (auto *watch : m_watches) watch->end();
-  for (auto *exit : m_exits) exit->end();
-  for (auto *admin : m_admins) admin->end();
-
-  for (const auto &la : m_listener_arrays) la->close();
-  m_listener_arrays.clear();
-  m_pipeline_lb = nullptr;
 
   if (m_pipeline_templates.empty()) {
-    for (auto *mod : m_legacy_modules) if (mod) mod->unload();
+
   } else {
     m_unloading = true;
   }
@@ -665,86 +433,6 @@ void Worker::remove_pipeline_template(PipelineLayout *pt) {
   m_pipeline_templates.erase(pt);
   if (m_pipeline_templates.empty() && m_unloading) {
     m_unloading = false;
-    for (auto *mod : m_legacy_modules) if (mod) mod->unload();
-  }
-}
-
-//
-// Worker::Exit
-//
-
-void Worker::Exit::start() {
-  InputContext ic;
-  m_stream_end = false;
-  m_pipeline = Pipeline::make(
-    m_pipeline_layout,
-    m_pipeline_layout->new_context()
-  );
-  m_pipeline->chain(EventTarget::input());
-  m_pipeline->start();
-}
-
-void Worker::Exit::end() {
-  delete this;
-}
-
-void Worker::Exit::on_event(Event *evt) {
-  if (evt->is<StreamEnd>()) {
-    m_stream_end = true;
-    m_worker->on_exit(this);
-  }
-}
-
-//
-// Worker::Admin
-//
-
-Worker::Admin::~Admin() {
-  while (auto h = m_handlers.head()) {
-    delete h;
-  }
-}
-
-bool Worker::Admin::handle(Message *request, const std::function<void(Message*)> &respond) {
-  pjs::Ref<http::RequestHead> head = pjs::coerce<http::RequestHead>(request->head());
-  if (!utils::starts_with(head->path->str(), m_path)) return false;
-  new Handler(this, request, respond);
-  return true;
-}
-
-void Worker::Admin::end() {
-  delete this;
-}
-
-//
-// Worker::Admin::Handler
-//
-
-Worker::Admin::Handler::Handler(Admin *admin, Message *message, const std::function<void(Message*)> &respond)
-  : m_admin(admin)
-  , m_respond(respond)
-{
-  InputContext ic;
-  admin->m_handlers.push(this);
-  auto pl = admin->m_pipeline_layout.get();
-  auto *p = Pipeline::make(pl, pl->new_context());
-  m_pipeline = p;
-  p->chain(EventTarget::input());
-  p->start();
-  message->write(p->input());
-}
-
-Worker::Admin::Handler::~Handler() {
-  m_admin->m_handlers.remove(this);
-}
-
-void Worker::Admin::Handler::on_event(Event *evt) {
-  if (auto m = m_response_reader.read(evt)) {
-    if (m_respond) {
-      m_respond(m);
-    }
-    m->release();
-    delete this;
   }
 }
 

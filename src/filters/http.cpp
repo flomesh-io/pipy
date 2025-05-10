@@ -28,7 +28,6 @@
 #include "api/console.hpp"
 #include "context.hpp"
 #include "pipeline.hpp"
-#include "module.hpp"
 #include "inbound.hpp"
 #include "str-map.hpp"
 #include "utils.hpp"

@@ -70,9 +70,9 @@ bool Block::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void Block::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
+void Block::resolve(Module *module, Context &ctx, Tree::LegacyImports *imports) {
   for (const auto &p : m_stmts) {
-    p->resolve(module, ctx, l, imports);
+    p->resolve(module, ctx, imports);
   }
 }
 
@@ -106,8 +106,8 @@ bool Label::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return m_stmt->declare(module, s, error);
 }
 
-void Label::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
-  m_stmt->resolve(module, ctx, l, imports);
+void Label::resolve(Module *module, Context &ctx, Tree::LegacyImports *imports) {
+  m_stmt->resolve(module, ctx, imports);
 }
 
 void Label::execute(Context &ctx, Result &result) {
@@ -130,8 +130,8 @@ bool Evaluate::declare(Module *module, Scope &scope, Error &error, bool is_lval)
   return m_expr->declare(module, scope, error);
 }
 
-void Evaluate::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
-  m_expr->resolve(module, ctx, l, imports);
+void Evaluate::resolve(Module *module, Context &ctx, Tree::LegacyImports *imports) {
+  m_expr->resolve(module, ctx, imports);
 }
 
 void Evaluate::execute(Context &ctx, Result &result) {
@@ -205,9 +205,9 @@ bool Var::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void Var::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
+void Var::resolve(Module *module, Context &ctx, Tree::LegacyImports *imports) {
   for (auto e : m_assignments) {
-    e->resolve(module, ctx, l, imports);
+    e->resolve(module, ctx, imports);
   }
 }
 
@@ -305,9 +305,9 @@ bool Function::declare(Module *module, Scope &scope, Error &error, bool is_lval)
   }
 }
 
-void Function::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
-  m_identifier->resolve(module, ctx, l, imports);
-  m_expr->resolve(module, ctx, l, imports);
+void Function::resolve(Module *module, Context &ctx, Tree::LegacyImports *imports) {
+  m_identifier->resolve(module, ctx, imports);
+  m_expr->resolve(module, ctx, imports);
 }
 
 void Function::execute(Context &ctx, Result &result) {
@@ -351,10 +351,10 @@ bool If::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void If::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
-  m_cond->resolve(module, ctx, l, imports);
-  m_then->resolve(module, ctx, l, imports);
-  if (m_else) m_else->resolve(module, ctx, l, imports);
+void If::resolve(Module *module, Context &ctx, Tree::LegacyImports *imports) {
+  m_cond->resolve(module, ctx, imports);
+  m_then->resolve(module, ctx, imports);
+  if (m_else) m_else->resolve(module, ctx, imports);
 }
 
 void If::execute(Context &ctx, Result &result) {
@@ -394,11 +394,11 @@ bool Switch::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void Switch::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
-  m_cond->resolve(module, ctx, l, imports);
+void Switch::resolve(Module *module, Context &ctx, Tree::LegacyImports *imports) {
+  m_cond->resolve(module, ctx, imports);
   for (const auto &p : m_cases) {
-    if (p.first) p.first->resolve(module, ctx, l, imports);
-    if (p.second) p.second->resolve(module, ctx, l, imports);
+    if (p.first) p.first->resolve(module, ctx, imports);
+    if (p.second) p.second->resolve(module, ctx, imports);
   }
 }
 
@@ -504,11 +504,11 @@ bool For::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void For::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
-  if (m_init) m_init->resolve(module, ctx, l, imports);
-  if (m_cond) m_cond->resolve(module, ctx, l, imports);
-  if (m_step) m_step->resolve(module, ctx, l, imports);
-  if (m_body) m_body->resolve(module, ctx, l, imports);
+void For::resolve(Module *module, Context &ctx, Tree::LegacyImports *imports) {
+  if (m_init) m_init->resolve(module, ctx, imports);
+  if (m_cond) m_cond->resolve(module, ctx, imports);
+  if (m_step) m_step->resolve(module, ctx, imports);
+  if (m_body) m_body->resolve(module, ctx, imports);
 }
 
 void For::execute(Context &ctx, Result &result) {
@@ -597,8 +597,8 @@ bool Return::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void Return::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
-  if (m_expr) m_expr->resolve(module, ctx, l, imports);
+void Return::resolve(Module *module, Context &ctx, Tree::LegacyImports *imports) {
+  if (m_expr) m_expr->resolve(module, ctx, imports);
 }
 
 void Return::execute(Context &ctx, Result &result) {
@@ -626,8 +626,8 @@ bool Throw::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void Throw::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
-  if (m_expr) m_expr->resolve(module, ctx, l, imports);
+void Throw::resolve(Module *module, Context &ctx, Tree::LegacyImports *imports) {
+  if (m_expr) m_expr->resolve(module, ctx, imports);
 }
 
 void Throw::execute(Context &ctx, Result &result) {
@@ -672,8 +672,8 @@ bool Try::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void Try::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
-  m_try->resolve(module, ctx, l, imports);
+void Try::resolve(Module *module, Context &ctx, Tree::LegacyImports *imports) {
+  m_try->resolve(module, ctx, imports);
   if (m_catch) {
     Context cctx(
       ctx, 0, nullptr,
@@ -684,9 +684,9 @@ void Try::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *impo
         m_catch_scope.variables()
       )
     );
-    m_catch->resolve(module, cctx, l, imports);
+    m_catch->resolve(module, cctx, imports);
   }
-  if (m_finally) m_finally->resolve(module, ctx, l, imports);
+  if (m_finally) m_finally->resolve(module, ctx, imports);
 }
 
 void Try::execute(Context &ctx, Result &result) {
@@ -803,9 +803,9 @@ bool Export::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   }
 }
 
-void Export::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
+void Export::resolve(Module *module, Context &ctx, Tree::LegacyImports *imports) {
   if (m_stmt) {
-    m_stmt->resolve(module, ctx, l, imports);
+    m_stmt->resolve(module, ctx, imports);
   }
 }
 

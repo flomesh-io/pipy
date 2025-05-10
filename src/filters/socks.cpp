@@ -26,7 +26,6 @@
 #include "socks.hpp"
 #include "data.hpp"
 #include "pipeline.hpp"
-#include "module.hpp"
 
 namespace pipy {
 namespace socks {

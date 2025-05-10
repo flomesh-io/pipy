@@ -36,7 +36,6 @@ namespace pipy {
 class Store {
 public:
   static Store* open_memory();
-  static Store* open_level_db(const std::string &path);
 
   class Batch {
   public:

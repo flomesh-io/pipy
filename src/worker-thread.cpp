@@ -26,9 +26,7 @@
 #include "worker-thread.hpp"
 #include "worker.hpp"
 #include "codebase.hpp"
-#include "pipeline-lb.hpp"
 #include "timer.hpp"
-#include "api/configuration.hpp"
 #include "api/console.hpp"
 #include "api/pipy.hpp"
 #include "net.hpp"
@@ -184,7 +182,7 @@ void WorkerThread::reload(const std::function<void(bool)> &cb) {
 
       m_new_version = codebase->version();
       m_new_period = pjs::Promise::Period::make();
-      m_new_worker = Worker::make(m_new_period, m_manager->loading_pipeline_lb());
+      m_new_worker = Worker::make(m_new_period);
       m_new_worker->set_forced();
 
       pjs::Ref<pjs::Promise::Period> old_period = pjs::Promise::Period::current();
@@ -192,10 +190,7 @@ void WorkerThread::reload(const std::function<void(bool)> &cb) {
       m_new_period->pause();
       m_new_period->set_current();
 
-      cb(
-        m_new_worker->load_js_module(entry) &&
-        m_new_worker->bind()
-      );
+      cb(m_new_worker->load_module(nullptr, entry));
 
       old_period->set_current();
       old_period->resume();
@@ -240,37 +235,6 @@ void WorkerThread::reload_done(bool ok) {
       }
     );
   }
-}
-
-void WorkerThread::admin(pjs::Str *path, SharedData *request, const std::function<void(SharedData*)> &respond) {
-  auto name = path->data()->retain();
-  request->retain();
-  m_net->post(
-    [=]() {
-      if (auto worker = Worker::current()) {
-        Data buf;
-        request->to_data(buf);
-        auto head = http::RequestHead::make();
-        head->path = pjs::Str::make(name);
-        pjs::Ref<Message> req = Message::make(head, Data::make(std::move(buf)));
-        if (!worker->admin(
-          req.get(),
-          [=](Message *response) {
-            auto body = response->body();
-            auto data = body ? SharedData::make(*body) : SharedData::make(Data());
-            data->retain();
-            Net::main().post([=]() { respond(data); data->release(); });
-          }
-        )) {
-          Net::main().post([=]() { respond(nullptr); });
-        }
-      } else {
-        Net::main().post([=]() { respond(nullptr); });
-      }
-      request->release();
-      name->release();
-    }
-  );
 }
 
 bool WorkerThread::stop(bool force) {
@@ -411,37 +375,6 @@ void WorkerThread::init_metrics() {
       gauge->set(total);
     }
   );
-
-  //
-  // Stats - # of pipelines
-  //
-
-  label_names->length(2);
-  label_names->set(0, "module");
-  label_names->set(1, "name");
-
-  stats::Gauge::make(
-    pjs::Str::make("pipy_pipeline_count"),
-    label_names,
-    [](stats::Gauge *gauge) {
-      double total = 0;
-      PipelineLayout::for_each(
-        [&](PipelineLayout *p) {
-          if (auto mod = dynamic_cast<JSModule*>(p->module())) {
-            if (auto n = p->active()) {
-              pjs::Str *labels[2];
-              labels[0] = mod ? mod->filename() : pjs::Str::empty.get();
-              labels[1] = p->name_or_label();
-              auto metric = gauge->with_labels(labels, 2);
-              metric->set(n);
-              total += n;
-            }
-          }
-        }
-      );
-      gauge->set(total);
-    }
-  );
 }
 
 void WorkerThread::shutdown_all(bool force) {
@@ -464,7 +397,6 @@ void WorkerThread::main() {
 
   m_new_worker = Worker::make(
     pjs::Promise::Period::current(),
-    m_manager->loading_pipeline_lb(),
     m_manager->is_graph_enabled() && m_index == 0
   );
 
@@ -474,10 +406,10 @@ void WorkerThread::main() {
 
   auto &entry = Codebase::current()->entry();
   auto result = pjs::Value::empty;
-  auto mod = m_new_worker->load_js_module(entry, result);
+  auto mod = m_new_worker->load_module(entry, result);
   bool failed = false;
 
-  if (mod && m_new_worker->bind() && m_new_worker->start(m_force_start)) {
+  if (mod && m_new_worker->start(m_force_start)) {
     Listener::commit_all();
   } else {
     Listener::rollback_all();
@@ -488,7 +420,7 @@ void WorkerThread::main() {
   bool started = !Net::context().stopped();
 
   if (!started) {
-    if (mod && mod->is_expression() && !result.is<Configuration>()) {
+    if (mod && mod->is_expression()) {
       if (result.is_string()) {
         std::cout << result.s()->str();
       } else {
@@ -575,7 +507,6 @@ bool WorkerManager::start(int concurrency, bool force) {
   if (started()) return false;
 
   m_concurrency = concurrency;
-  m_loading_pipeline_lb = PipelineLoadBalancer::make();
   m_stopping = false;
   m_stopped = false;
 
@@ -584,7 +515,6 @@ bool WorkerManager::start(int concurrency, bool force) {
     auto rollback = [&]() {
       delete wt;
       stop(true);
-      m_loading_pipeline_lb = nullptr;
     };
     try {
       if (!wt->start(force)) {
@@ -597,9 +527,6 @@ bool WorkerManager::start(int concurrency, bool force) {
     }
     m_worker_threads.push_back(wt);
   }
-
-  m_running_pipeline_lb = m_loading_pipeline_lb;
-  m_loading_pipeline_lb = nullptr;
 
   return true;
 }
@@ -791,19 +718,11 @@ void WorkerManager::recycle() {
 
 void WorkerManager::reload() {
   if (m_stopping) return;
-  if (m_reloading || m_querying_status || m_querying_stats || !m_admin_requests.empty()) {
+  if (m_reloading || m_querying_status || m_querying_stats) {
     m_reloading_requested = true;
   } else {
     start_reloading();
   }
-}
-
-bool WorkerManager::admin(pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond) {
-  if (m_reloading || m_stopping) return false;
-  if (m_worker_threads.empty()) return false;
-  new AdminRequest(this, path, request, respond);
-  next_admin_request();
-  return true;
 }
 
 void WorkerManager::check_reloading() {
@@ -816,7 +735,6 @@ void WorkerManager::check_reloading() {
 void WorkerManager::start_reloading() {
   if (auto n = m_worker_threads.size()) {
     m_reloading = true;
-    m_loading_pipeline_lb = PipelineLoadBalancer::make();
 
     std::mutex m;
     std::condition_variable cv;
@@ -840,11 +758,6 @@ void WorkerManager::start_reloading() {
       wt->reload_done(all_ok);
     }
 
-    if (all_ok) {
-      m_running_pipeline_lb = m_loading_pipeline_lb;
-    }
-
-    m_loading_pipeline_lb = nullptr;
     m_reloading = false;
   }
 }
@@ -852,8 +765,6 @@ void WorkerManager::start_reloading() {
 bool WorkerManager::stop(bool force) {
   if (m_stopped) return true;
   m_stopping = true;
-  m_loading_pipeline_lb = nullptr;
-  m_running_pipeline_lb = nullptr;
   bool pending = false;
   for (auto *wt : m_worker_threads) {
     if (wt) {
@@ -869,17 +780,6 @@ bool WorkerManager::stop(bool force) {
   m_metric_data_sum_counter = 0;
   m_stopped = true;
   return true;
-}
-
-void WorkerManager::next_admin_request() {
-  if (!m_current_admin_request) {
-    if (auto r = m_admin_requests.head()) {
-      m_current_admin_request = r;
-      r->start();
-    } else {
-      check_reloading();
-    }
-  }
 }
 
 void WorkerManager::on_thread_done(int index) {
@@ -955,55 +855,6 @@ void WorkerManager::StatsRequest::start() {
         stats::MetricDataSum sum;
         m_cb(sum);
         delete this;
-      }
-    );
-  }
-}
-
-//
-// WorkerManager::AdminRequest
-//
-
-WorkerManager::AdminRequest::AdminRequest(WorkerManager *manager, pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond)
-  : m_manager(manager)
-  , m_path(path)
-  , m_request(request)
-  , m_responses(manager->m_worker_threads.size())
-  , m_respond(respond)
-{
-  manager->m_admin_requests.push(this);
-}
-
-WorkerManager::AdminRequest::~AdminRequest() {
-  m_manager->m_admin_requests.remove(this);
-  m_manager->next_admin_request();
-}
-
-void WorkerManager::AdminRequest::start() {
-  pjs::Ref<SharedData> req = SharedData::make(m_request);
-  for (size_t i = 0; i < m_manager->m_worker_threads.size(); i++) {
-    m_manager->m_worker_threads[i]->admin(
-      m_path, req, [=](SharedData *res) {
-        auto &r = m_responses[i];
-        if (res) {
-          res->to_data(r.data);
-          r.successful = true;
-        } else {
-          r.successful = false;
-        }
-        if (++m_response_count == m_responses.size()) {
-          Data response;
-          bool successful = false;
-          for (const auto &r : m_responses) {
-            if (r.successful) {
-              successful = true;
-              response.push(r.data);
-            }
-          }
-          m_respond(successful ? &response : nullptr);
-          m_manager->m_current_admin_request = nullptr;
-          delete this;
-        }
       }
     );
   }

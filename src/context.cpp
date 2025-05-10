@@ -36,18 +36,10 @@ namespace pipy {
 
 std::atomic<uint64_t> Context::s_context_id(0);
 
-Context::Context(Worker *worker, pjs::Fiber *fiber, Context *base, ContextData *data)
-  : pjs::ContextTemplate<Context>(worker, data ? data->elements() : nullptr, fiber)
+Context::Context(Worker *worker, pjs::Fiber *fiber, Context *base)
+  : pjs::ContextTemplate<Context>(worker, fiber)
   , m_worker(worker)
-  , m_data(data)
 {
-  if (data) {
-    for (size_t i = 0, n = data->size(); i < n; i++) {
-      if (auto l = data->at(i)) {
-        l->as<ContextDataBase>()->m_context = this;
-      }
-    }
-  }
   if (base) m_inbound = base->m_inbound;
   for (;;) {
     if (auto id = s_context_id.fetch_add(1, std::memory_order_relaxed) + 1) {
@@ -59,19 +51,7 @@ Context::Context(Worker *worker, pjs::Fiber *fiber, Context *base, ContextData *
 }
 
 Context::~Context() {
-  if (m_data) m_data->free();
   Log::debug(Log::ALLOC, "[context  %p] -- id = %llu", this, m_id);
 }
 
 } // namespace pipy
-
-namespace pjs {
-
-using namespace pipy;
-
-template<> void ClassDef<ContextDataBase>::init() {
-  accessor("__filename", [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->filename()); });
-  accessor("__inbound" , [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->inbound()); });
-}
-
-} // namespace pjs

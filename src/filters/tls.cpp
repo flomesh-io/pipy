@@ -25,7 +25,6 @@
 
 #include "tls.hpp"
 #include "context.hpp"
-#include "module.hpp"
 #include "pipeline.hpp"
 #include "api/crypto.hpp"
 #include "log.hpp"

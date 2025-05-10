@@ -28,7 +28,6 @@
 
 #include "pjs/pjs.hpp"
 #include "options.hpp"
-#include "module.hpp"
 #include "fstream.hpp"
 #include "filters/pack.hpp"
 #include "filters/tee.hpp"
@@ -108,21 +107,8 @@ public:
   private:
     virtual void write(const Data &msg) override;
 
-    //
-    // Logger::FileTarget::Module
-    //
-
-    class Module : public ModuleBase {
-    public:
-      Module() : ModuleBase("Logger::FileTarget") {}
-      virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
-        return Context::make();
-      }
-    };
-
     pjs::Ref<pjs::Str> m_filename;
     Options m_options;
-    pjs::Ref<Module> m_module;
     pjs::Ref<PipelineLayout> m_pipeline_layout;
     pjs::Ref<Pipeline> m_pipeline;
   };
@@ -173,20 +159,6 @@ public:
     HTTPTarget(pjs::Str *url, const Options &options);
 
   private:
-
-    //
-    // Logger::HTTPTarget::Module
-    //
-
-    class Module : public ModuleBase {
-    public:
-      Module() : ModuleBase("Logger::HTTPTarget") {}
-      virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
-        return Context::make();
-      }
-    };
-
-    pjs::Ref<Module> m_module;
     pjs::Ref<pjs::Method> m_mux_grouper;
     pjs::Ref<PipelineLayout> m_ppl;
     pjs::Ref<Pipeline> m_pipeline;

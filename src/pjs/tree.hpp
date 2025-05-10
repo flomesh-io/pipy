@@ -183,7 +183,7 @@ public:
   //
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval = false) { return true; }
-  virtual void resolve(Module *module, Context &ctx, int l = -1, LegacyImports *imports = nullptr) {}
+  virtual void resolve(Module *module, Context &ctx, LegacyImports *imports = nullptr) {}
 
 private:
   const Source* m_source = nullptr;

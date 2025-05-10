@@ -34,7 +34,6 @@
 
 namespace pipy {
 
-class ContextDataBase;
 class Worker;
 
 //
@@ -44,7 +43,6 @@ class Worker;
 class Context : public pjs::ContextTemplate<Context> {
 public:
   auto id() const -> uint64_t { return m_id; }
-  auto data(int i) const -> ContextDataBase* { return m_data->at(i)->as<ContextDataBase>(); }
   auto worker() const -> Worker* { return m_worker; }
   auto inbound() const -> Inbound* { return m_inbound; }
 
@@ -55,18 +53,14 @@ protected:
   virtual void finalize() { delete this; }
 
 private:
-  typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
-
   Context(
     Worker *worker,
     pjs::Fiber *fiber = nullptr,
-    Context *base = nullptr,
-    ContextData *data = nullptr
+    Context *base = nullptr
   );
 
   uint64_t m_id;
   Worker* m_worker;
-  ContextData* m_data;
   pjs::WeakRef<Inbound> m_inbound;
 
   static std::atomic<uint64_t> s_context_id;
@@ -74,25 +68,6 @@ private:
   friend class pjs::ContextTemplate<Context>;
   friend class Waiter;
   friend class Inbound;
-};
-
-//
-// ContextDataBase
-//
-
-class ContextDataBase : public pjs::ObjectTemplate<ContextDataBase> {
-public:
-  ContextDataBase(pjs::Str *filename)
-    : m_filename(filename) {}
-
-  auto filename() const -> pjs::Str* { return m_filename; }
-  auto inbound() const -> Inbound* { return m_context->inbound(); }
-
-protected:
-  Context* m_context;
-  pjs::Ref<pjs::Str> m_filename;
-
-  friend class Context;
 };
 
 } // namespace pipy

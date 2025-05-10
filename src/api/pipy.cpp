@@ -25,7 +25,6 @@
 
 #include "pipy.hpp"
 #include "codebase.hpp"
-#include "configuration.hpp"
 #include "context.hpp"
 #include "worker.hpp"
 #include "worker-thread.hpp"
@@ -568,28 +567,6 @@ bool Pipy::start_exiting(pjs::Context &ctx, const std::function<void()> &on_done
   return s_exit_callbacks_counter > 0;
 }
 
-void Pipy::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
-  pjs::Value ret_obj;
-  pjs::Object *context_prototype = nullptr;
-  if (!ctx.arguments(0, &context_prototype)) return;
-  if (context_prototype && context_prototype->is_function()) {
-    auto *f = context_prototype->as<pjs::Function>();
-    (*f)(ctx, 0, nullptr, ret_obj);
-    if (!ctx.ok()) return;
-    if (!ret_obj.is_object()) {
-      ctx.error("function did not return an object");
-      return;
-    }
-    context_prototype = ret_obj.o();
-  }
-  try {
-    auto config = Configuration::make(context_prototype);
-    ret.set(config);
-  } catch (std::runtime_error &err) {
-    ctx.error(err);
-  }
-}
-
 //
 // Pipy::FileReader
 //
@@ -855,13 +832,6 @@ template<> void ClassDef<Pipy>::init() {
     } else {
       ctx.error("cannot import module: " + path->str());
     }
-  });
-
-  method("solve", [](Context &ctx, Object*, Value &ret) {
-    Str *filename;
-    if (!ctx.arguments(1, &filename)) return;
-    auto worker = static_cast<pipy::Context*>(ctx.root())->worker();
-    worker->solve(ctx, filename, ret);
   });
 
   method("restart", [](Context&, Object*, Value&) {

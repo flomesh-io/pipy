@@ -2263,13 +2263,12 @@ public:
 
   static auto current() -> Context* { return s_current; }
 
-  Context(Instance *instance, Ref<Object> *l = nullptr, Fiber *fiber = nullptr)
+  Context(Instance *instance, Fiber *fiber = nullptr)
     : m_instance(instance)
     , m_parent(nullptr)
     , m_root(this)
     , m_caller(nullptr)
     , m_g(instance ? instance->global() : nullptr)
-    , m_l(l)
     , m_fiber(fiber)
     , m_level(0)
     , m_argc(0)
@@ -2282,7 +2281,6 @@ public:
     , m_root(ctx.m_root)
     , m_caller(&ctx)
     , m_g(ctx.m_g)
-    , m_l(ctx.m_l)
     , m_scope(scope)
     , m_level(ctx.m_level + 1)
     , m_argc(argc)
@@ -2295,7 +2293,6 @@ public:
   auto root() const -> Context* { return m_root; }
   auto caller() const -> Context* { return m_caller; }
   auto g() const -> Object* { return m_g; }
-  auto l(int i) const -> Object* { return i >= 0 && m_l ? m_l[i].get() : nullptr; }
   auto fiber() const -> Fiber* { return m_fiber; }
   auto scope() const -> Scope* { return m_scope; }
   void scope(Scope *scope) { m_scope = scope; }
@@ -2530,7 +2527,7 @@ private:
   Context* m_caller;
   Context* m_prev;
   Context* m_next;
-  Ref<Object> m_g, *m_l;
+  Ref<Object> m_g;
   Ref<Fiber> m_fiber;
   Ref<Scope> m_scope;
   int m_level;

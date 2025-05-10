@@ -46,16 +46,6 @@ option(BUILD_shared "build a shared expat library" OFF)
 option(BUILD_doc "build man page for xmlwf" OFF)
 add_subdirectory(deps/libexpat-R_2_2_6/expat)
 
-option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" OFF)
-option(LEVELDB_BUILD_BENCHMARKS "Build LevelDB's benchmarks" OFF)
-option(LEVELDB_INSTALL "Install LevelDB's header and library" OFF)
-add_subdirectory(deps/leveldb-1.23)
-
-if(PIPY_SHARED AND UNIX AND NOT APPLE)
-  # Ensure position-independent code for static leveldb
-  set_target_properties(leveldb PROPERTIES POSITION_INDEPENDENT_CODE ON)
-endif()
-
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
@@ -239,7 +229,6 @@ include_directories(
   "${CMAKE_BINARY_DIR}/deps/libyaml-0.2.5/include"
   "${CMAKE_BINARY_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/libexpat-R_2_2_6/expat/lib"
-  "${CMAKE_SOURCE_DIR}/deps/leveldb-1.23/include"
   "${CMAKE_SOURCE_DIR}/deps/sqlite-3.43.2"
   "${OPENSSL_INC_DIR}"
   "${BROTLI_INC_DIR}"
@@ -252,13 +241,9 @@ endif()
 add_subdirectory(test/benchmark/baseline)
 
 SET(PIPY_SRC
-  src/admin-link.cpp
-  src/admin-proxy.cpp
-  src/admin-service.cpp
   src/api/algo.cpp
   src/api/bgp.cpp
   src/api/bpf.cpp
-  src/api/configuration.cpp
   src/api/console.cpp
   src/api/crypto.cpp
   src/api/c-struct.cpp
@@ -297,14 +282,11 @@ SET(PIPY_SRC
   src/file.cpp
   src/filter.cpp
   src/filters/bgp.cpp
-  src/filters/branch.cpp
-  src/filters/chain.cpp
   src/filters/compress.cpp
   src/filters/connect.cpp
   src/filters/decompress.cpp
   src/filters/deframe.cpp
   src/filters/demux.cpp
-  src/filters/deposit-message.cpp
   src/filters/detect-protocol.cpp
   src/filters/dubbo.cpp
   src/filters/dummy.cpp
@@ -316,8 +298,6 @@ SET(PIPY_SRC
   src/filters/http.cpp
   src/filters/http2.cpp
   src/filters/insert.cpp
-  src/filters/link.cpp
-  src/filters/link-async.cpp
   src/filters/loop.cpp
   src/filters/mime.cpp
   src/filters/mqtt.cpp
@@ -330,7 +310,6 @@ SET(PIPY_SRC
   src/filters/pack.cpp
   src/filters/pipe.cpp
   src/filters/print.cpp
-  src/filters/produce.cpp
   src/filters/proxy-protocol.cpp
   src/filters/read.cpp
   src/filters/repeat.cpp
@@ -348,12 +327,10 @@ SET(PIPY_SRC
   src/filters/thrift.cpp
   src/filters/throttle.cpp
   src/filters/tls.cpp
-  src/filters/use.cpp
   src/filters/wait.cpp
   src/filters/websocket.cpp
   src/fs.cpp
   src/fstream.cpp
-  src/graph.cpp
   src/gui-tarball.cpp
   src/inbound.cpp
   src/input.cpp
@@ -363,14 +340,11 @@ SET(PIPY_SRC
   src/main.cpp
   src/main-options.cpp
   src/message.cpp
-  src/module.cpp
   src/net.cpp
-  src/nmi.cpp
   src/options.cpp
   src/os-platform.cpp
   src/outbound.cpp
   src/pipeline.cpp
-  src/pipeline-lb.cpp
   src/pjs/builtin.cpp
   src/pjs/expr.cpp
   src/pjs/module.cpp
@@ -385,11 +359,9 @@ SET(PIPY_SRC
   src/str-map.cpp
   src/table.cpp
   src/tar.cpp
-  src/task.cpp
   src/thread.cpp
   src/timer.cpp
   src/utils.cpp
-  src/watch.cpp
   src/worker.cpp
   src/worker-thread.cpp
   deps/sqlite-3.43.2/sqlite3.c
@@ -498,14 +470,6 @@ if(PIPY_RFC8998)
   add_definitions(-DPIPY_USE_RFC8998)
 endif(PIPY_RFC8998)
 
-if(APPLE)
-  set(CMAKE_EXE_LINKER_FLAGS "-Wl,-exported_symbols_list ${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.lst")
-elseif(WIN32)
-  set(CMAKE_EXE_LINKER_FLAGS "/DEF:${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.def")
-else()
-  set(CMAKE_EXE_LINKER_FLAGS "-Wl,--dynamic-list ${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.txt")
-endif()
-
 if(PIPY_STATIC)
   target_link_options(pipy PRIVATE -static)
 endif()
@@ -517,7 +481,6 @@ target_link_libraries(
   expat
   ${ZLIB_LIB}
   ${BROTLI_LIB}
-  leveldb
 )
 
 if(PIPY_USE_SYSTEM_OPENSSL)

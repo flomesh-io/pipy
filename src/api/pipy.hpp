@@ -46,7 +46,7 @@ class Worker;
 // Pipy
 //
 
-class Pipy : public pjs::FunctionTemplate<Pipy> {
+class Pipy : public pjs::ObjectTemplate<Pipy> {
 public:
   struct ExecOptions : public Options {
     bool std_err = false;
@@ -121,8 +121,6 @@ public:
   static void exit(pjs::Function *cb);
   static bool has_exit_callbacks();
   static bool start_exiting(pjs::Context &ctx, const std::function<void()> &on_done);
-
-  void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
 
   //
   // Pipy::TTY

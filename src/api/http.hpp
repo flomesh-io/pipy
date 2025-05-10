@@ -28,7 +28,6 @@
 
 #include "pjs/pjs.hpp"
 #include "pipeline.hpp"
-#include "module.hpp"
 #include "message.hpp"
 #include "tar.hpp"
 #include "options.hpp"
@@ -126,18 +125,6 @@ private:
   Agent(pjs::Str *host, pjs::Object *options = nullptr);
 
   //
-  // Agent::Module
-  //
-
-  class Module : public ModuleBase {
-  public:
-    Module() : ModuleBase("HTTP Agent") {}
-    virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
-      return Context::make();
-    }
-  };
-
-  //
   // Agent::Request
   //
 
@@ -158,7 +145,6 @@ private:
     virtual void on_reply(Event *evt) override;
   };
 
-  pjs::Ref<Module> m_module;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
   pjs::Ref<pjs::Str> m_host;
 

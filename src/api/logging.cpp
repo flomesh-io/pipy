@@ -31,8 +31,6 @@
 #include "input.hpp"
 #include "fs.hpp"
 #include "fstream.hpp"
-#include "admin-service.hpp"
-#include "admin-link.hpp"
 #include "api/json.hpp"
 #include "api/url.hpp"
 #include "filters/tee.hpp"
@@ -66,43 +64,6 @@ std::atomic<int> Logger::s_history_sending_size(0);
 
 void Logger::set_admin_service(AdminService *admin_service) {
   s_admin_service = admin_service;
-}
-
-void Logger::set_admin_link(AdminLink *admin_link) {
-  static const std::string s_tail("log/tail/");
-  static const std::string s_on("log/on/");
-  static const std::string s_off("log/off/");
-  s_admin_link = admin_link;
-  s_admin_link->add_handler(
-    [](const std::string &command, const Data &payload) {
-      if (utils::starts_with(command, s_tail)) {
-        static const std::string s_prefix("log-tail/");
-        auto name = command.substr(s_tail.length());
-        Data buf;
-        Data::Builder db(buf, &s_dp);
-        db.push(s_prefix);
-        db.push(name);
-        db.push('\n');
-        db.flush();
-        History::tail(name, buf);
-        s_admin_link->send(buf);
-        return true;
-      } else {
-        std::string name;
-        bool enabled;
-        if (utils::starts_with(command, s_on)) {
-          name = command.substr(s_on.length());
-          enabled = true;
-        } else if (utils::starts_with(command, s_off)) {
-          name = command.substr(s_off.length());
-          enabled = false;
-        }
-        if (name.empty()) return false;
-        History::enable_streaming(name, enabled);
-        return true;
-      }
-    }
-  );
 }
 
 void Logger::get_names(const std::function<void(const std::string &)> &cb) {
@@ -233,10 +194,6 @@ void Logger::History::write_message(const Data &msg) {
     s_dp.pack(&msg_endl, &msg);
     s_dp.push(&msg_endl, '\n');
 
-    if (s_admin_service) {
-      s_admin_service->write_log(m_name, msg_endl);
-    }
-
     if (s_admin_link && m_streaming_enabled) {
       static const std::string s_prefix("log/");
       Data buf;
@@ -246,7 +203,6 @@ void Logger::History::write_message(const Data &msg) {
       db.push('\n');
       db.flush();
       buf.push(msg_endl);
-      s_admin_link->send(buf);
     }
   }
 }
@@ -308,7 +264,6 @@ void Logger::StdoutTarget::write(const Data &msg) {
 Logger::FileTarget::FileTarget(pjs::Str *filename, const Options &options)
   : m_filename(pjs::Str::make(fs::abs_path(filename->str())))
   , m_options(options)
-  , m_module(new Module)
 {
   PipelineLayout *ppl = PipelineLayout::make();
   ppl->append(new Tee(filename, options));
@@ -382,9 +337,7 @@ Logger::HTTPTarget::Options::Options(pjs::Object *options) {
     .check_nullable();
 }
 
-Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
-  : m_module(new Module)
-{
+Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options) {
   thread_local static pjs::ConstStr s_host("host");
   thread_local static pjs::ConstStr s_POST("POST");
 
@@ -397,8 +350,8 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
     }
   );
 
-  PipelineLayout *ppl = PipelineLayout::make(m_module);
-  PipelineLayout *ppl_pack = PipelineLayout::make(m_module);
+  PipelineLayout *ppl = PipelineLayout::make();
+  PipelineLayout *ppl_pack = PipelineLayout::make();
 
   Mux::Options mux_opts;
   mux_opts.output_count = 0;
@@ -407,7 +360,7 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
   ppl_pack->append(new http::RequestEncoder(http::RequestEncoder::Options()));
 
   if (is_tls) {
-    PipelineLayout *ppl_connect = PipelineLayout::make(m_module);
+    PipelineLayout *ppl_connect = PipelineLayout::make();
     ppl_pack->append(new tls::Client(options.tls))->add_sub_pipeline(ppl_connect);
     ppl_pack = ppl_connect;
   }
@@ -448,7 +401,6 @@ void Logger::HTTPTarget::write(const Data &msg) {
 }
 
 void Logger::HTTPTarget::shutdown() {
-  m_module->shutdown();
   m_pipeline = nullptr;
 }
 

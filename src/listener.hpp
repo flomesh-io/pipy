@@ -257,34 +257,6 @@ private:
   friend class pjs::RefCount<Listener>;
 };
 
-//
-// ListenerArray
-//
-
-class ListenerArray : public pjs::ObjectTemplate<ListenerArray> {
-public:
-  auto add_listener(int port, pjs::Object *options = nullptr) -> Listener*;
-  auto add_listener(pjs::Str *port, pjs::Object *options = nullptr) -> Listener*;
-  auto remove_listener(int port, pjs::Object *options = nullptr) -> Listener*;
-  auto remove_listener(pjs::Str *port, pjs::Object *options = nullptr) -> Listener*;
-  void set_listeners(pjs::Array *array);
-  void apply(Worker *worker, PipelineLayout *layout);
-  void close();
-
-private:
-  ListenerArray(pjs::Object *options = nullptr)
-    : m_default_options(options) {}
-
-  void get_ip_port(const std::string &ip_port, std::string &ip, int &port);
-
-  Worker* m_worker = nullptr;
-  pjs::Ref<PipelineLayout> m_pipeline_layout;
-  pjs::Ref<pjs::Object> m_default_options;
-  std::map<Listener*, Listener::Options> m_listeners;
-
-  friend class pjs::ObjectTemplate<ListenerArray>;
-};
-
 } // namespace pipy
 
 #endif // LISTENER_HPP

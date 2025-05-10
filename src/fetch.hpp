@@ -31,7 +31,6 @@
 #include "api/crypto.hpp"
 #include "filters/connect.hpp"
 #include "filter.hpp"
-#include "module.hpp"
 #include "outbound.hpp"
 
 #include <functional>
@@ -93,19 +92,6 @@ public:
   void close();
 
 private:
-
-  //
-  // Fetch::Module
-  //
-
-  class Module : public ModuleBase {
-  public:
-    Module() : ModuleBase("Fetch") {}
-    virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
-      return Context::make();
-    }
-  };
-
   //
   // Fetch::Request
   //
@@ -135,7 +121,6 @@ private:
     pjs::Ref<pipy::Data> m_body;
   };
 
-  pjs::Ref<Module> m_module;
   pjs::Ref<pjs::Method> m_mux_grouper;
   pjs::Ref<pjs::Object> m_mux_group;
   pjs::Ref<pjs::Str> m_host;

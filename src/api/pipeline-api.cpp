@@ -119,14 +119,6 @@ void PipelineDesigner::on_end(pjs::Function *handler) {
   m_has_on_end = true;
 }
 
-void PipelineDesigner::to(pjs::Str *name) {
-  if (!m_current_joint_filter) {
-    throw std::runtime_error("calling to() without a joint-filter");
-  }
-  m_current_joint_filter->add_sub_pipeline(name);
-  m_current_joint_filter = nullptr;
-}
-
 void PipelineDesigner::to(PipelineLayout *layout) {
   if (!m_current_joint_filter) {
     throw std::runtime_error("calling to() without a joint-filter");

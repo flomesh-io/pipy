@@ -28,7 +28,6 @@
 #include "context.hpp"
 #include "message.hpp"
 #include "worker.hpp"
-#include "module.hpp"
 #include "log.hpp"
 
 namespace pipy {
@@ -40,17 +39,14 @@ namespace pipy {
 thread_local List<PipelineLayout> PipelineLayout::s_all_pipeline_layouts;
 thread_local size_t PipelineLayout::s_active_pipeline_count = 0;
 
-PipelineLayout::PipelineLayout(Worker *worker, ModuleBase *module, int index, const std::string &name, const std::string &label)
+PipelineLayout::PipelineLayout(Worker *worker, int index, const std::string &name, const std::string &label)
   : m_index(index)
   , m_name(pjs::Str::make(name))
   , m_label(pjs::Str::make(label))
   , m_worker(worker)
-  , m_module(module)
 {
   s_all_pipeline_layouts.push(this);
-  if (module) {
-    module->m_pipelines.push_back(this);
-  } else if (worker) {
+  if (worker) {
     worker->append_pipeline_template(this);
   }
   Log::debug(Log::PIPELINE, "[pipeline] create layout: %s", name_or_label()->c_str());
@@ -68,12 +64,6 @@ PipelineLayout::~PipelineLayout() {
   if (m_worker) m_worker->remove_pipeline_template(this);
 }
 
-void PipelineLayout::bind() {
-  for (const auto &f : m_filters) {
-    f->bind();
-  }
-}
-
 void PipelineLayout::shutdown() {
   auto *p = m_pipelines.head();
   while (p) {
@@ -87,7 +77,7 @@ void PipelineLayout::shutdown() {
 }
 
 auto PipelineLayout::new_context() -> Context* {
-  return m_module ? m_module->new_context() : m_worker->new_context();
+  return m_worker->new_context();
 }
 
 auto PipelineLayout::name_or_label() const -> pjs::Str* {

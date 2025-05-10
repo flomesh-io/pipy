@@ -24,7 +24,6 @@
  */
 
 #include "fork.hpp"
-#include "module.hpp"
 #include "pipeline.hpp"
 #include "context.hpp"
 #include "log.hpp"

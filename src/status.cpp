@@ -27,9 +27,7 @@
 #include "buffer.hpp"
 #include "worker.hpp"
 #include "worker-thread.hpp"
-#include "module.hpp"
 #include "pipeline.hpp"
-#include "graph.hpp"
 #include "listener.hpp"
 #include "outbound.hpp"
 #include "pjs/pjs.hpp"
@@ -204,14 +202,7 @@ private:
     if (m_capturing) {
       m_capture.push('}');
       m_capturing_list_start = false;
-      if (is_at(Key::modules, Key::unknown, Key::graph)) {
-        m_capture.flush();
-        m_capturing = false;
-        m_status.modules.insert({
-          m_current_module,
-          m_capture_buffer.to_string(),
-        });
-      } else if (is_at(Key::metrics)) {
+      if (is_at(Key::metrics)) {
         m_capture.flush();
         m_capturing = false;
         metrics = Data::make(std::move(m_capture_buffer));
@@ -300,33 +291,12 @@ void Status::update_global() {
 }
 
 void Status::update_local() {
-  modules.clear();
   pools.clear();
   objects.clear();
   chunks.clear();
-  pipelines.clear();
   buffers.clear();
   inbounds.clear();
   outbounds.clear();
-
-  std::map<std::string, std::set<PipelineLayout*>> all_modules;
-  PipelineLayout::for_each([&](PipelineLayout *p) {
-    if (auto mod = dynamic_cast<JSModule*>(p->module())) {
-      if (mod->worker() == Worker::current()) {
-        auto &set = all_modules[mod->filename()->str()];
-        set.insert(p);
-      }
-    }
-  });
-
-  for (const auto &i : all_modules) {
-    Graph g;
-    Graph::from_pipelines(g, i.second);
-    std::string error;
-    std::stringstream ss;
-    g.to_json(error, ss);
-    modules.insert({ i.first, ss.str() });
-  }
 
   for (const auto &p : pjs::Pool::all()) {
     auto *c = p.second;
@@ -370,18 +340,6 @@ void Status::update_local() {
       }
     }
   );
-
-  PipelineLayout::for_each([&](PipelineLayout *p) {
-    if (auto mod = dynamic_cast<JSModule*>(p->module())) {
-      pipelines.insert({
-        mod->filename()->str(),
-        p->name_or_label()->str(),
-        mod->worker() != Worker::current(),
-        (int)p->active(),
-        (int)p->allocated(),
-      });
-    }
-  });
 
   Listener::for_each([&](Listener *listener) {
     auto protocol = Protocol::UNKNOWN;
@@ -455,11 +413,9 @@ inline static void merge_sets(std::set<T> &a, const std::set<T> &b) {
 }
 
 void Status::merge(const Status &other) {
-  merge_sets(modules, other.modules);
   merge_sets(pools, other.pools);
   merge_sets(objects, other.objects);
   merge_sets(chunks, other.chunks);
-  merge_sets(pipelines, other.pipelines);
   merge_sets(buffers, other.buffers);
   merge_sets(inbounds, other.inbounds);
   merge_sets(outbounds, other.outbounds);
@@ -495,16 +451,6 @@ void Status::to_json(Data::Builder &db, Data *metrics) const {
   db.push(",\"name\":"); push_str(name);
   db.push(",\"ip\":"); push_str(ip);
   db.push(",\"version\":"); push_str(version);
-
-  db.push(",\"modules\":{"); first = true;
-  for (const auto &mod : modules) {
-    if (first) first = false; else db.push(',');
-    push_str(mod.filename);
-    db.push(":{\"graph\":");
-    db.push(mod.graph);
-    db.push('}');
-  }
-  db.push('}');
 
   if (metrics) {
     db.push(",\"metrics\":");
@@ -609,22 +555,6 @@ void Status::dump_buffers(Data::Builder &db) {
   print_table(db, { "BUFFER", "SIZE(KB)" }, rows);
 }
 
-void Status::dump_pipelines(Data::Builder &db) {
-  static const std::string s_draining("Draining");
-  static const std::string s_running("Running");
-  std::list<std::array<std::string, 5>> rows;
-  for (const auto &i : pipelines) {
-    rows.push_back({
-      i.module,
-      i.name,
-      i.stale ? s_draining : s_running,
-      std::to_string(i.allocated),
-      std::to_string(i.active),
-    });
-  }
-  print_table(db, { "MODULE", "PIPELINE", "STATE", "#ALLOCATED", "#ACTIVE" }, rows);
-}
-
 void Status::dump_inbound(Data::Builder &db) {
   static const std::string s_tcp("TCP");
   static const std::string s_udp("UDP");
@@ -713,22 +643,6 @@ void Status::dump_json(Data::Builder &db) {
     db.push(i.name);
     db.push("\":");
     db.push(std::to_string(i.count));
-  }
-  db.push("},\"pipelines\":[");
-  first = true;
-  for (const auto &i : pipelines) {
-    if (first) first = false; else db.push(',');
-    db.push("{\"module\":\"");
-    db.push(utils::escape(i.module));
-    db.push("\",\"name\":\"");
-    db.push(utils::escape(i.name));
-    db.push("\",\"allocated\":");
-    db.push(std::to_string(i.allocated));
-    db.push(",\"active\":");
-    db.push(std::to_string(i.active));
-    db.push(",\"stale\":");
-    db.push(i.stale ? "true" : "false");
-    db.push('}');
   }
   db.push("],\"inbound\":[");
   first = true;

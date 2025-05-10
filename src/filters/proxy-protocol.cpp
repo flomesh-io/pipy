@@ -26,7 +26,6 @@
 #include "proxy-protocol.hpp"
 #include "data.hpp"
 #include "pipeline.hpp"
-#include "module.hpp"
 
 #define ASIO_STANDALONE
 #include <asio.hpp>

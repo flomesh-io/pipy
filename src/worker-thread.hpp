@@ -75,7 +75,6 @@ public:
   void recycle();
   void reload(const std::function<void(bool)> &cb);
   void reload_done(bool ok);
-  void admin(pjs::Str *path, SharedData *request, const std::function<void(SharedData*)> &respond);
   void exit(const std::function<void()> &cb);
   bool stop(bool force = false);
 
@@ -118,8 +117,6 @@ class WorkerManager {
 public:
   static auto get() -> WorkerManager&;
 
-  auto running_pipeline_lb() const -> PipelineLoadBalancer* { return m_running_pipeline_lb; }
-  auto loading_pipeline_lb() const -> PipelineLoadBalancer* { return m_loading_pipeline_lb; }
   bool is_graph_enabled() const { return m_graph_enabled; }
   void enable_graph(bool b) { m_graph_enabled = b; }
   void on_done(const std::function<void()> &cb) { m_on_done = cb; }
@@ -162,28 +159,8 @@ private:
     std::function<void(stats::MetricDataSum&)> m_cb;
   };
 
-  class AdminRequest : public List<AdminRequest>::Item {
-  public:
-    AdminRequest(WorkerManager *manager, pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond);
-    ~AdminRequest();
-    void start();
-  private:
-    struct Response {
-      Data data;
-      bool successful = false;
-    };
-    WorkerManager* m_manager;
-    pjs::Ref<pjs::Str> m_path;
-    Data m_request;
-    std::vector<Response> m_responses;
-    size_t m_response_count = 0;
-    const std::function<void(const Data *)> m_respond;
-  };
-
   std::vector<WorkerThread*> m_worker_threads;
   std::vector<std::string> m_argv;
-  pjs::Ref<PipelineLoadBalancer> m_running_pipeline_lb;
-  pjs::Ref<PipelineLoadBalancer> m_loading_pipeline_lb;
   Status m_status;
   int m_status_counter = -1;
   stats::MetricDataSum m_metric_data_sum;
@@ -196,8 +173,6 @@ private:
   bool m_querying_stats = false;
   bool m_stopping = false;
   bool m_stopped = false;
-  List<AdminRequest> m_admin_requests;
-  AdminRequest* m_current_admin_request = nullptr;
   std::function<void()> m_on_done;
   std::function<void()> m_on_ended;
 

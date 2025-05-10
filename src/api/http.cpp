@@ -268,10 +268,7 @@ void Match::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
 
 Data::Producer Agent::s_dp("http.Agent");
 
-Agent::Agent(pjs::Str *host, pjs::Object *options)
-  : m_module(new Module)
-  , m_host(host)
-{
+Agent::Agent(pjs::Str *host, pjs::Object *options) : m_host(host) {
   pjs::Ref<pjs::Object> tls;
   pipy::Options::Value(options, "tls").get(tls).check_nullable();
 
@@ -287,16 +284,16 @@ Agent::Agent(pjs::Str *host, pjs::Object *options)
     target = host->str() + (tls ? ":443" : ":80");
   }
 
-  auto pl_connect = PipelineLayout::make(m_module);
+  auto pl_connect = PipelineLayout::make();
   pl_connect->append(new Connect(target, options));
 
   if (tls) {
-    auto pl_tls = PipelineLayout::make(m_module);
+    auto pl_tls = PipelineLayout::make();
     pl_tls->append(new tls::Client(tls.get()))->add_sub_pipeline(pl_connect);
     pl_connect = pl_tls;
   }
 
-  m_pipeline_layout = PipelineLayout::make(m_module);
+  m_pipeline_layout = PipelineLayout::make();
   m_pipeline_layout->append(new http::Mux(nullptr, options))->add_sub_pipeline(pl_connect);
 }
 

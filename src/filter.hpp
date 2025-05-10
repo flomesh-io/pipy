@@ -38,7 +38,7 @@
 namespace pipy {
 
 class Context;
-class ModuleBase;
+// class ModuleBase;
 class Message;
 
 //
@@ -83,16 +83,12 @@ public:
 
   virtual ~Filter() {}
 
-  auto module_legacy() const -> ModuleBase*;
   auto context() const -> Context*;
   auto location() const -> const pjs::Location& { return m_location; }
   auto buffer_stats() const -> std::shared_ptr<BufferStats> { return m_buffer_stats; }
 
   void set_location(const pjs::Location &loc);
   void add_sub_pipeline(PipelineLayout *layout);
-  void add_sub_pipeline(pjs::Str *name);
-  void add_sub_pipeline(int index);
-  void add_sub_pipeline(const pjs::Value &name);
   auto num_sub_pipelines() const -> int { return m_subs->size(); }
 
   auto sub_pipeline(
@@ -107,7 +103,6 @@ public:
     Input *chain_to = nullptr
   ) -> Pipeline*;
 
-  virtual void bind();
   virtual auto clone() -> Filter* = 0;
   virtual void chain();
   virtual void reset();
@@ -137,8 +132,6 @@ protected:
 
 private:
   struct Sub {
-    int index = -1;
-    pjs::Ref<pjs::Str> name;
     pjs::Ref<PipelineLayout> layout;
   };
 

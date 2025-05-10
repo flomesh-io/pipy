@@ -25,14 +25,12 @@
 
 #include "version.h"
 
-#include "admin-link.hpp"
-#include "admin-service.hpp"
-#include "admin-proxy.hpp"
 #include "api/crypto.hpp"
 #include "api/logging.hpp"
 #include "api/pipy.hpp"
 #include "api/stats.hpp"
 #include "codebase.hpp"
+#include "codebase-store.hpp"
 #include "fs.hpp"
 #include "filters/tls.hpp"
 #include "input.hpp"
@@ -57,14 +55,6 @@
 
 using namespace pipy;
 
-static AdminService *s_admin = nullptr;
-static AdminProxy *s_admin_proxy = nullptr;
-static AdminLink *s_admin_link = nullptr;
-static std::string s_admin_ip;
-static int s_admin_port = 0;
-static AdminService::Options s_admin_options;
-static std::string s_admin_log_file;
-static std::string s_admin_gui;
 static bool s_has_shutdown = false;
 
 //
@@ -118,49 +108,6 @@ static void reload_codebase(bool force, const std::function<void()> &cb = nullpt
 }
 
 //
-// Establish admin link
-//
-
-static void start_admin_link(const std::string &url, const AdminLink::TLSSettings *tls_settings) {
-  std::string url_path = url;
-  if (url_path.back() != '/') url_path += '/';
-  url_path += Status::LocalInstance::uuid;
-  s_admin_link = new AdminLink(url_path, tls_settings);
-  s_admin_link->add_handler(
-    [](const std::string &command, const Data &) {
-      if (command == "reload") {
-        reload_codebase(true);
-        return true;
-      } else {
-        return false;
-      }
-    }
-  );
-  logging::Logger::set_admin_link(s_admin_link);
-}
-
-//
-// Open/close admin port
-//
-
-static void toggle_admin_port() {
-  if (s_admin_port) {
-    if (s_admin) {
-      logging::Logger::set_admin_service(nullptr);
-      s_admin->close();
-      s_admin->release();
-      s_admin = nullptr;
-      Log::info("[admin] Admin service stopped on port %d", s_admin_port);
-    } else {
-      s_admin = new AdminService(nullptr, 1, s_admin_log_file, s_admin_gui);
-      s_admin->retain();
-      s_admin->open(s_admin_ip, s_admin_port, s_admin_options);
-      logging::Logger::set_admin_service(s_admin);
-    }
-  }
-}
-
-//
 // Periodic job base
 //
 
@@ -210,106 +157,6 @@ class CodeUpdater : public PeriodicJob {
 static CodeUpdater s_code_updater;
 
 //
-// Periodically report status & metrics
-//
-
-class StatusReporter : public PeriodicJob {
-public:
-  void init(const std::string &address, const Fetch::Options &options, bool send_metrics) {
-    m_url = URL::make(pjs::Value(address).s());
-    m_headers = pjs::Object::make();
-    m_headers->set("content-type", "application/json");
-    m_fetch = new Fetch(m_url->hostname()->str() + ':' + m_url->port()->str(), options);
-    m_send_metrics = send_metrics;
-  }
-
-  void reset() {
-    m_initial_metrics = true;
-  }
-
-private:
-  virtual void run() override {
-    static Data::Producer s_dp("Status Reports");
-    if (s_has_shutdown) return;
-    if (!m_fetch->busy()) {
-      Log::debug(Log::CODEBASE, "[codebase] Start collecting status");
-
-      WorkerManager::get().status(
-        [this](Status &status) {
-          if (m_send_metrics) {
-            Log::debug(Log::CODEBASE, "[codebase] Start collecting metrics");
-            WorkerManager::get().stats(
-              [&](stats::MetricDataSum &metric_data_sum) {
-                Log::debug(Log::CODEBASE, "[codebase] Start sending status report");
-                send(status, &metric_data_sum);
-              }
-            );
-          } else {
-            Log::debug(Log::CODEBASE, "[codebase] Start sending status report");
-            send(status, nullptr);
-          }
-        }
-      );
-    }
-    if (s_admin_link) s_admin_link->connect();
-    next();
-  }
-
-  void send(Status &status, stats::MetricDataSum *metrics) {
-    Data buffer_metrics;
-    if (metrics) {
-      Data::Builder db(buffer_metrics);
-      metrics->serialize(db, m_initial_metrics);
-      db.flush();
-      m_initial_metrics = false;
-    }
-
-    Data buffer;
-    Data::Builder db(buffer);
-    status.ip = m_local_ip;
-    status.to_json(db, metrics ? &buffer_metrics : nullptr);
-    db.flush();
-
-    auto time = utils::now();
-    auto size = buffer.size();
-
-    InputContext ic;
-    (*m_fetch)(
-      Fetch::POST,
-      m_url->path(),
-      m_headers,
-      Data::make(std::move(buffer)),
-      [=](http::ResponseHead *head, Data *) {
-        m_local_ip = m_fetch->outbound()->local_address()->str();
-
-        auto status = head ? head->status : 0;
-
-        // "206 Partial Content" is used by a "smart" repo
-        // to indicate that subsequent metric reports can be incremental
-        if (status != 206) {
-          m_initial_metrics = true;
-        }
-
-        Log::debug(
-          Log::CODEBASE,
-          "[codebase] Sent status report in %dms (size = %d, response = %d)",
-          int(utils::now() - time), size, status
-        );
-      }
-    );
-  }
-
-  Fetch *m_fetch = nullptr;
-  std::string m_local_ip;
-  pjs::Ref<URL> m_url;
-  pjs::Ref<pjs::Object> m_headers;
-  bool m_send_metrics = true;
-  bool m_initial_metrics = true;
-};
-
-static StatusReporter s_status_reporter;
-
-//
 // Handle signals
 //
 
@@ -326,7 +173,6 @@ public:
 
 private:
   asio::signal_set m_signals;
-  bool m_admin_closed = false;
   std::unique_ptr<Timer> m_timer;
 
   void wait() {
@@ -340,12 +186,6 @@ private:
   }
 
   void handle(int sig) {
-    if (auto worker = Worker::current()) {
-      if (worker->handling_signal(sig)) {
-        return;
-      }
-    }
-
     switch (sig) {
       case SIGNAL_STOP: {
         exit_process(false);
@@ -355,7 +195,7 @@ private:
         reload_codebase(true);
         break;
       case SIGNAL_ADMIN:
-        toggle_admin_port();
+        // toggle_admin_port(); // TODO
         break;
     }
   }
@@ -374,18 +214,11 @@ private:
     Net::current().stop();
     s_pool_cleaner.stop();
     s_code_updater.stop();
-    s_status_reporter.stop();
     stop();
   }
 
 public:
   void exit_process(bool force) {
-    if (!m_admin_closed) {
-      if (s_admin_link) s_admin_link->close();
-      if (s_admin) s_admin->close();
-      m_admin_closed = true;
-    }
-
     if (WorkerManager::get().started()) {
       if (force || s_has_shutdown) {
         Log::info("[shutdown] Forcing to shut down...");
@@ -453,12 +286,6 @@ int pipy_main(int argc, char *argv[]) {
     pjs::Math::init();
     crypto::Crypto::init(opts.openssl_engine);
     tls::TLSSession::init();
-
-    s_admin_options.cert = opts.admin_tls_cert;
-    s_admin_options.key = opts.admin_tls_key;
-    s_admin_options.trusted = opts.admin_tls_trusted;
-    s_admin_log_file = opts.admin_log_file;
-    s_admin_gui = opts.admin_gui;
 
     std::string admin_ip("::");
     int admin_port = 6060; // default repo port
@@ -535,12 +362,8 @@ int pipy_main(int argc, char *argv[]) {
     if (is_repo) {
       store = opts.filename.empty()
         ? Store::open_memory()
-        : Store::open_level_db(opts.filename);
+        : Store::open_memory(); // TODO: Sqlite store
       repo = new CodebaseStore(store, opts.init_repo);
-      s_admin = new AdminService(repo, opts.threads, s_admin_log_file, s_admin_gui);
-      s_admin->retain();
-      s_admin->open(admin_ip, admin_port, s_admin_options);
-      logging::Logger::set_admin_service(s_admin);
 
 #ifdef PIPY_USE_GUI
       std::cout << std::endl;
@@ -554,22 +377,12 @@ int pipy_main(int argc, char *argv[]) {
       std::cout << std::endl;
 #endif
 
-      if (!opts.init_code.empty()) {
-        s_admin->start(opts.init_code, opts.arguments);
-      }
+      throw std::string("TODO");
 
     // Start as codebase repo proxy
     } else if (is_repo_proxy) {
-      AdminProxy::Options options;
-      options.cert = opts.admin_tls_cert;
-      options.key = opts.admin_tls_key;
-      options.trusted = opts.admin_tls_trusted;
-      options.fetch_options.tls = is_tls;
-      options.fetch_options.cert = opts.tls_cert;
-      options.fetch_options.key = opts.tls_key;
-      options.fetch_options.trusted = opts.tls_trusted;
-      s_admin_proxy = new AdminProxy(opts.filename, opts.admin_gui);
-      s_admin_proxy->open(admin_ip, admin_port, options);
+
+      throw std::string("TODO");
 
     // Start as a static codebase
     } else {
@@ -585,7 +398,7 @@ int pipy_main(int argc, char *argv[]) {
         options.key = opts.tls_key;
         options.trusted = opts.tls_trusted;
         codebase = Codebase::from_http(opts.filename, options);
-        s_status_reporter.init(opts.filename, options, !opts.no_metrics);
+        throw std::string("TODO");
       } else if (is_file_found) {
         codebase = Codebase::from_fs(opts.filename);
       } else {
@@ -597,13 +410,6 @@ int pipy_main(int argc, char *argv[]) {
 
       codebase = Codebase::from_root(codebase);
       codebase->set_current();
-
-      s_admin_ip = admin_ip;
-      s_admin_port = admin_port;
-
-      if (!opts.admin_port.empty() && !opts.admin_port_off) {
-        toggle_admin_port();
-      }
 
       bool started = false, start_error = false;
 
@@ -638,15 +444,6 @@ int pipy_main(int argc, char *argv[]) {
 
             if (!opts.no_reload) {
               s_code_updater.start();
-            }
-
-            if (is_remote) {
-              AdminLink::TLSSettings tls_settings;
-              tls_settings.cert = opts.tls_cert;
-              tls_settings.key = opts.tls_key;
-              tls_settings.trusted = opts.tls_trusted;
-              start_admin_link(opts.filename, is_tls ? &tls_settings : nullptr);
-              if (!opts.no_status) s_status_reporter.start();
             }
 
             Pipy::on_exit(
@@ -692,13 +489,6 @@ int pipy_main(int argc, char *argv[]) {
 
     Net::current().run();
 
-    if (s_admin) {
-      s_admin->close();
-      s_admin->release();
-    }
-
-    delete s_admin_link;
-    delete s_admin_proxy;
     delete repo;
 
     if (store) store->close();

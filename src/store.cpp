@@ -25,12 +25,7 @@
 
 #include "store.hpp"
 
-#include <leveldb/db.h>
-#include <leveldb/write_batch.h>
-
 namespace pipy {
-
-static Data::Producer s_dp("LevelDB");
 
 //
 // MemoryStore
@@ -131,109 +126,6 @@ void MemoryStoreBatch::cancel() {
 
 Store* Store::open_memory() {
   return new MemoryStore();
-}
-
-//
-// LevelDBStore
-//
-
-class LevelDBStore : public Store {
-public:
-  LevelDBStore(const std::string &path);
-
-private:
-  virtual void keys(const std::string &base_key, std::set<std::string> &keys) override;
-  virtual bool get(const std::string &key, Data &data) override;
-  virtual void set(const std::string &key, const Data &data) override;
-  virtual void erase(const std::string &key) override;
-  virtual auto batch() -> Batch* override;
-  virtual void close() override;
-  virtual void dump(std::ostream &out) override;
-
-  leveldb::DB* m_db = nullptr;
-};
-
-class LevelDBStoreBatch : public Store::Batch {
-  LevelDBStoreBatch(leveldb::DB *db)
-    : m_db(db) {}
-
-  virtual void set(const std::string &key, const Data &data) override;
-  virtual void erase(const std::string &key) override;
-  virtual void commit() override;
-  virtual void cancel() override;
-
-  leveldb::DB* m_db;
-  leveldb::WriteBatch m_batch;
-
-  friend class LevelDBStore;
-};
-
-LevelDBStore::LevelDBStore(const std::string &path) {
-  leveldb::Options options;
-  options.create_if_missing = true;
-  auto status = leveldb::DB::Open(options, path, &m_db);
-  if (!status.ok()) throw std::runtime_error(status.ToString());
-}
-
-void LevelDBStore::keys(const std::string &base_key, std::set<std::string> &keys) {
-  leveldb::Iterator* it = m_db->NewIterator(leveldb::ReadOptions());
-  for (it->SeekToFirst(); it->Valid(); it->Next()) {
-    auto key = it->key().ToString();
-    if (utils::starts_with(key, base_key)) {
-      keys.insert(key);
-    }
-  }
-  delete it;
-}
-
-bool LevelDBStore::get(const std::string &key, Data &data) {
-  std::string value;
-  auto status = m_db->Get(leveldb::ReadOptions(), key, &value);
-  if (status.IsNotFound()) return false;
-  data.clear();
-  data.push(value, &s_dp);
-  return true;
-}
-
-void LevelDBStore::set(const std::string &key, const Data &data) {
-  m_db->Put(leveldb::WriteOptions(), key, data.to_string());
-}
-
-void LevelDBStore::erase(const std::string &key) {
-  m_db->Delete(leveldb::WriteOptions(), key);
-}
-
-auto LevelDBStore::batch() -> Batch* {
-  return new LevelDBStoreBatch(m_db);
-}
-
-void LevelDBStore::close() {
-  delete m_db;
-  m_db = nullptr;
-}
-
-void LevelDBStore::dump(std::ostream &out) {
-}
-
-void LevelDBStoreBatch::set(const std::string &key, const Data &data) {
-  m_batch.Put(key, data.to_string());
-}
-
-void LevelDBStoreBatch::erase(const std::string &key) {
-  m_batch.Delete(key);
-}
-
-void LevelDBStoreBatch::commit() {
-  m_db->Write(leveldb::WriteOptions(), &m_batch);
-  delete this;
-}
-
-void LevelDBStoreBatch::cancel() {
-  delete this;
-}
-
-Store* Store::open_level_db(const std::string &path) {
-  return new LevelDBStore(path);
 }
 
 } // namespace pipy

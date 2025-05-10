@@ -25,7 +25,6 @@
 
 #include "filter.hpp"
 #include "pipeline.hpp"
-#include "module.hpp"
 #include "worker.hpp"
 #include "message.hpp"
 #include "log.hpp"
@@ -45,14 +44,6 @@ Filter::Filter(const Filter &r)
   , m_buffer_stats(r.m_buffer_stats)
   , m_location(r.m_location)
 {
-}
-
-auto Filter::module_legacy() const -> ModuleBase* {
-  if (m_pipeline_layout) {
-    return m_pipeline_layout->module();
-  } else {
-    return nullptr;
-  }
 }
 
 auto Filter::context() const -> Context* {
@@ -79,64 +70,6 @@ void Filter::add_sub_pipeline(PipelineLayout *layout) {
   m_subs->back().layout = layout;
 }
 
-void Filter::add_sub_pipeline(pjs::Str *name) {
-  m_subs->emplace_back();
-  m_subs->back().name = name;
-}
-
-void Filter::add_sub_pipeline(int index) {
-  m_subs->emplace_back();
-  m_subs->back().index = index;
-}
-
-void Filter::add_sub_pipeline(const pjs::Value &name) {
-  if (name.is_number()) {
-    add_sub_pipeline(name.n());
-  } else if (name.is_string()) {
-    add_sub_pipeline(name.s());
-  } else {
-    add_sub_pipeline(pjs::Str::empty);
-  }
-}
-
-void Filter::bind() {
-  for (auto &sub : *m_subs) {
-    if (!sub.layout) {
-      if (sub.name) {
-        if (sub.name == pjs::Str::empty) {
-          char loc[1000];
-          std::string msg(loc, error_location(loc, sizeof(loc)));
-          throw std::runtime_error(msg + ": empty pipeline name");
-        } else {
-          if (auto mod = dynamic_cast<JSModule*>(module_legacy())) {
-            if (auto p = mod->find_named_pipeline(sub.name)) {
-              sub.layout = p;
-              continue;
-            }
-          }
-          char loc[1000];
-          std::string msg(loc, error_location(loc, sizeof(loc)));
-          msg += ": pipeline not found with name: ";
-          msg += sub.name->str();
-          throw std::runtime_error(msg);
-        }
-      } else {
-        if (auto mod = dynamic_cast<JSModule*>(module_legacy())) {
-          if (auto p = mod->find_indexed_pipeline(sub.index)) {
-            sub.layout = p;
-            continue;
-          }
-        }
-        char loc[1000];
-        std::string msg(loc, error_location(loc, sizeof(loc)));
-        msg += ": pipeline not found with index: ";
-        msg += std::to_string(sub.index);
-        throw std::runtime_error(msg);
-      }
-    }
-  }
-}
-
 void Filter::chain()
 {
 }
@@ -149,22 +82,8 @@ void Filter::shutdown()
 {
 }
 
-void Filter::dump(Dump &d) {
-  d.subs.resize(m_subs->size());
-  for (size_t i = 0; i < d.subs.size(); i++) {
-    auto &s = m_subs->at(i);
-    auto &t = d.subs[i];
-    t.index = s.index;
-    if (s.name) {
-      t.name = s.name->str();
-    } else if (s.layout) {
-      t.name = s.layout->name()->str();
-    } else {
-      t.name.clear();
-    }
-  }
-  d.sub_type = d.subs.empty() ? Dump::NO_SUBS : Dump::BRANCH;
-  d.out_type = d.subs.empty() ? Dump::OUTPUT_FROM_SELF : Dump::OUTPUT_FROM_SUBS;
+void Filter::dump(Dump &d)
+{
 }
 
 auto Filter::sub_pipeline(
@@ -186,11 +105,7 @@ auto Filter::sub_pipeline(
 
   auto ctx = m_pipeline->m_context.get();
   if (clone_context) {
-    if (auto mod = module_legacy()) {
-      ctx = mod->new_context(ctx);
-    } else {
-      ctx = layout->worker()->new_context(ctx);
-    }
+    ctx = layout->worker()->new_context(ctx);
   }
 
   auto *p = Pipeline::make(layout, ctx);

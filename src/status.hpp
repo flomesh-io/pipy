@@ -193,11 +193,9 @@ public:
   std::string name;
   std::string ip;
   std::string version;
-  std::set<ModuleInfo> modules;
   std::set<PoolInfo> pools;
   std::set<ObjectInfo> objects;
   std::set<ChunkInfo> chunks;
-  std::set<PipelineInfo> pipelines;
   std::set<BufferInfo> buffers;
   std::set<InboundInfo> inbounds;
   std::set<OutboundInfo> outbounds;
@@ -212,7 +210,6 @@ public:
   void dump_objects(Data::Builder &db);
   void dump_chunks(Data::Builder &db);
   void dump_buffers(Data::Builder &db);
-  void dump_pipelines(Data::Builder &db);
   void dump_inbound(Data::Builder &db);
   void dump_outbound(Data::Builder &db);
   void dump_json(Data::Builder &db);

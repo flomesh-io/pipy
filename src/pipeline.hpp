@@ -65,27 +65,11 @@ public:
   };
 
   static auto make() -> PipelineLayout* {
-    return new PipelineLayout(nullptr, nullptr, -1, std::string(), std::string());
+    return new PipelineLayout(nullptr, -1, std::string(), std::string());
   }
 
   static auto make(Worker *worker) -> PipelineLayout* {
-    return new PipelineLayout(worker, nullptr, -1, std::string(), std::string());
-  }
-
-  static auto make(ModuleBase *module) -> PipelineLayout* {
-    return new PipelineLayout(nullptr, module, -1, std::string(), std::string());
-  }
-
-  static auto make(ModuleBase *module, const std::string &name, const std::string &label = std::string()) -> PipelineLayout* {
-    return new PipelineLayout(nullptr, module, -1, name, label);
-  }
-
-  static auto make(ModuleBase *module, int index) -> PipelineLayout* {
-    return new PipelineLayout(nullptr, module, index, std::string(), std::string());
-  }
-
-  static auto make(ModuleBase *module, int index, const std::string &name, const std::string &label = std::string()) -> PipelineLayout* {
-    return new PipelineLayout(nullptr, module, index, name, label);
+    return new PipelineLayout(worker, -1, std::string(), std::string());
   }
 
   static auto active_pipeline_count() -> size_t {
@@ -99,7 +83,6 @@ public:
   }
 
   auto worker() const -> Worker* { return m_worker; }
-  auto module() const -> ModuleBase* { return m_module; }
   auto index() const -> int { return m_index; }
   auto name() const -> pjs::Str* { return m_name; }
   auto label() const -> pjs::Str* { return m_label; }
@@ -110,13 +93,12 @@ public:
   void on_start(pjs::Object *e) { m_on_start = e; }
   void on_end(pjs::Function *f) { m_on_end = f; }
   auto append(Filter *filter) -> Filter*;
-  void bind();
   void shutdown();
 
   auto new_context() -> Context*;
 
 private:
-  PipelineLayout(Worker *worker, ModuleBase *module, int index, const std::string &name, const std::string &label);
+  PipelineLayout(Worker *worker, int index, const std::string &name, const std::string &label);
   ~PipelineLayout();
 
   auto alloc(Context *ctx) -> Pipeline*;
@@ -127,7 +109,6 @@ private:
   pjs::Ref<pjs::Str> m_name;
   pjs::Ref<pjs::Str> m_label;
   pjs::Ref<Worker> m_worker;
-  pjs::Ref<ModuleBase> m_module;
   pjs::Ref<pjs::Object> m_on_start;
   pjs::Ref<pjs::Function> m_on_end;
   pjs::Location m_on_start_location;

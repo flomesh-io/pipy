@@ -58,7 +58,7 @@ public:
   auto find_export(Str *name) -> int;
   bool compile(std::string &error, int &error_line, int &error_column);
   void resolve(const std::function<Module*(Module*, Str*)> &resolver);
-  void execute(Context &ctx, int l, Tree::LegacyImports *imports, Value &result);
+  void execute(Context &ctx, Tree::LegacyImports *imports, Value &result);
 
 private:
   Instance* m_instance;
