@@ -511,7 +511,7 @@ void Pipy::listen(pjs::Context &ctx) {
   }
 
   auto l = Listener::get(proto, ip, port);
-  if (!l->set_next_state(pl, options) && worker && !worker->started() && !worker->forced()) {
+  if (!l->set_next_state(pl, options) && worker && !worker->started()) {
     l->rollback();
     ctx.error("unable to listen on [" + ip + "]:" + std::to_string(port));
     return;
@@ -530,7 +530,11 @@ auto Pipy::watch(pjs::Str *pathname) -> pjs::Promise* {
 void Pipy::exit(int code) {
   Net::main().post(
     [=]() {
-      WorkerManager::get().stop(true);
+      if (auto wm = WorkerManager::current()) {
+        wm->stop(true);
+      } else if (auto wt = WorkerThread::current()) {
+        wt->stop(true);
+      }
       if (s_on_exit) s_on_exit(code);
     }
   );
@@ -832,21 +836,6 @@ template<> void ClassDef<Pipy>::init() {
     } else {
       ctx.error("cannot import module: " + path->str());
     }
-  });
-
-  method("restart", [](Context&, Object*, Value&) {
-    Net::main().post(
-      []() {
-        InputContext ic;
-        Codebase::current()->sync(
-          true, [](bool ok) {
-            if (ok) {
-              WorkerManager::get().reload();
-            }
-          }
-        );
-      }
-    );
   });
 
   method("exit", [](Context &ctx, Object*, Value&) {

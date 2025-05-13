@@ -43,8 +43,11 @@ auto Thread::index() const -> int {
 }
 
 auto Thread::concurrency() const -> int {
-  auto &wm = WorkerManager::get();
-  return wm.concurrency();
+  if (auto wm = WorkerManager::current()) {
+    return wm->concurrency();
+  } else {
+    return 0;
+  }
 }
 
 } // namespace pipy

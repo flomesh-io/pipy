@@ -82,20 +82,24 @@ static void logf(Log::Level level, const char *fmt, va_list ap) {
 }
 
 void Log::init() {
-  s_logger = logging::TextLogger::make(pjs::Str::make("pipy_log"));
-  s_logger->retain();
-  if (s_log_local_output != OUTPUT_NULL) {
-    s_logger->add_target(new logging::Logger::StdoutTarget(s_log_local_output == OUTPUT_STDERR));
-  }
-  if (!s_log_filename.empty()) {
-    pjs::Ref<pjs::Str> s(pjs::Str::make(s_log_filename));
-    s_logger->add_target(new logging::Logger::FileTarget(s, s_logger_options));
+  if (!s_logger) {
+    s_logger = logging::TextLogger::make(pjs::Str::make("pipy_log"));
+    s_logger->retain();
+    if (s_log_local_output != OUTPUT_NULL) {
+      s_logger->add_target(new logging::Logger::StdoutTarget(s_log_local_output == OUTPUT_STDERR));
+    }
+    if (!s_log_filename.empty()) {
+      pjs::Ref<pjs::Str> s(pjs::Str::make(s_log_filename));
+      s_logger->add_target(new logging::Logger::FileTarget(s, s_logger_options));
+    }
   }
 }
 
 void Log::shutdown() {
-  s_logger->release();
-  s_logger = nullptr;
+  if (s_logger) {
+    s_logger->release();
+    s_logger = nullptr;
+  }
 }
 
 void Log::set_filename(const std::string &filename) {

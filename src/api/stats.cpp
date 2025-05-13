@@ -1309,13 +1309,26 @@ auto MetricSumRequest::start() -> pjs::Promise* {
   auto promise = pjs::Promise::make();
   auto settler = pjs::Promise::Settler::make(promise);
   m_settler = settler;
-  WorkerManager::get().stats(
-    [this](MetricDataSum &sum) {
-      m_metrics = sum.to_object();
-      m_signal.fire();
-    },
-    m_names
-  );
+  if (auto wm = WorkerManager::current()) {
+    wm->stats(
+      m_names,
+      [this](MetricDataSum &sum) {
+        m_metrics = sum.to_object();
+        m_signal.fire();
+      }
+    );
+  } else if (auto wt = WorkerThread::current()) {
+    wt->stats(
+      m_metric_data,
+      m_names,
+      [this]() {
+        MetricDataSum sum;
+        sum.sum(m_metric_data, true);
+        m_metrics = sum.to_object();
+        m_signal.fire();
+      }
+    );
+  }
   return promise;
 }
 

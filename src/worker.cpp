@@ -221,17 +221,21 @@ namespace pipy {
 
 thread_local pjs::Ref<Worker> Worker::s_current;
 
-Worker::Worker(pjs::Promise::Period *period, bool is_graph_enabled)
+Worker::Worker(pjs::Promise::Period *period)
   : pjs::Instance(Global::make(this))
   , m_period(period)
   , m_root_fiber(new_fiber())
-  , m_graph_enabled(is_graph_enabled)
 {
   Log::debug(Log::ALLOC, "[worker   %p] ++", this);
 }
 
 Worker::~Worker() {
   Log::debug(Log::ALLOC, "[worker   %p] --", this);
+}
+
+auto Worker::new_context(Context *base) -> Context* {
+  auto fiber = (base && base->fiber() ? base->fiber()->clone() : m_root_fiber->clone());
+  return Context::make(this, fiber, base);
 }
 
 auto Worker::load_module(pjs::Module *referer, const std::string &path, pjs::Value &result) -> pjs::Module* {
@@ -282,7 +286,7 @@ auto Worker::load_module(pjs::Module *referer, const std::string &path, pjs::Val
     }
   );
 
-  pjs::Ref<Context> ctx = new_loading_context();
+  pjs::Ref<Context> ctx = new_context();
   mod->execute(*ctx, nullptr, result);
   if (!ctx->ok()) {
     Log::pjs_error(ctx->error());
@@ -359,30 +363,12 @@ bool Worker::update_listeners(bool force) {
   return true;
 }
 
-auto Worker::new_loading_context() -> Context* {
-  return Context::make(this, m_root_fiber);
-}
-
-auto Worker::new_runtime_context(Context *base) -> Context* {
-  return Context::make(this, nullptr, base);
-}
-
-auto Worker::new_context(Context *base) -> Context* {
-  auto fiber = (base && base->fiber() ? base->fiber()->clone() : m_root_fiber->clone());
-  return Context::make(this, fiber, base);
-}
-
-bool Worker::start(bool force) {
-  m_forced = force;
-
-  // Update listening ports
-  if (!update_listeners(force)) {
+bool Worker::start() {
+  if (!update_listeners(false)) {
     return false;
   }
-
   m_started = true;
   s_current = this;
-
   return true;
 }
 

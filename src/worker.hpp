@@ -47,8 +47,8 @@ class PipelineLayout;
 
 class Worker : public pjs::RefCount<Worker>, public pjs::Instance {
 public:
-  static auto make(pjs::Promise::Period *period, bool is_graph_enabled = false) -> Worker* {
-    return new Worker(period, is_graph_enabled);
+  static auto make(pjs::Promise::Period *period) -> Worker* {
+    return new Worker(period);
   }
 
   static auto current() -> Worker* {
@@ -56,24 +56,19 @@ public:
   }
 
   auto root_fiber() const -> pjs::Fiber* { return m_root_fiber; }
-  bool handling_signal(int sig);
+  auto new_context(Context *base = nullptr) -> Context*;
   auto load_module(pjs::Module *referer, const std::string &path, pjs::Value &result) -> pjs::Module*;
   auto load_module(pjs::Module *referer, const std::string &path) -> pjs::Module*;
   auto load_module(const std::string &path, pjs::Value &result) -> pjs::Module*;
   void add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options);
   void remove_listener(Listener *listener);
   bool update_listeners(bool force);
-  auto new_loading_context() -> Context*;
-  auto new_runtime_context(Context *base = nullptr) -> Context*;
-  auto new_context(Context *base = nullptr) -> Context*;
-  void set_forced() { m_forced = true; }
-  bool forced() const { return m_forced; }
   bool started() const { return m_started; }
-  bool start(bool force);
+  bool start();
   void stop(bool force);
 
 private:
-  Worker(pjs::Promise::Period *period, bool is_graph_enabled);
+  Worker(pjs::Promise::Period *period);
   ~Worker();
 
   struct ListeningPipeline {
@@ -89,7 +84,6 @@ private:
   std::unique_ptr<Signal> m_exit_signal;
   bool m_forced = false;
   bool m_started = false;
-  bool m_graph_enabled = false;
   bool m_unloading = false;
   bool m_waiting_for_exit_callbacks = false;
 
@@ -102,7 +96,6 @@ private:
   thread_local static pjs::Ref<Worker> s_current;
 
   friend class pjs::RefCount<Worker>;
-  friend class JSModule;
   friend class PipelineLayout;
 };
 

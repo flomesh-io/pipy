@@ -28,6 +28,7 @@
 
 #include "net.hpp"
 #include "list.hpp"
+#include "codebase.hpp"
 #include "status.hpp"
 #include "api/stats.hpp"
 #include "signal.hpp"
@@ -38,6 +39,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <functional>
 #include <vector>
@@ -46,7 +48,6 @@ namespace pipy {
 
 class Worker;
 class WorkerManager;
-class PipelineLoadBalancer;
 
 //
 // WorkerThread
@@ -54,57 +55,38 @@ class PipelineLoadBalancer;
 
 class WorkerThread {
 public:
-  WorkerThread(WorkerManager *manager, int index);
+  WorkerThread(Codebase *codebase, int index = 0, const std::function<void()> &on_end = nullptr);
   ~WorkerThread();
 
   static auto current() -> WorkerThread* { return s_current; }
 
-  auto manager() const -> WorkerManager* { return m_manager; }
   auto index() const -> int { return m_index; }
-  bool done() const { return m_done; }
-  bool ended() const { return m_ended; }
+  bool ended() const { return m_ended.load(); }
 
-  bool start(bool force);
+  void main(const std::vector<std::string> &argv);
+  void start(const std::vector<std::string> &argv);
   void status(Status &status, const std::function<void()> &cb);
-  void status(const std::function<void(Status&)> &cb);
-  void stats(stats::MetricData &metric_data, const std::vector<std::string> &names, const std::function<void()> &cb);
   void stats(stats::MetricData &metric_data, const std::function<void()> &cb);
-  void stats(const std::function<void(stats::MetricData&)> &cb);
-  void stats(const std::vector<std::string> &names, const std::function<void(stats::MetricData&)> &cb);
+  void stats(stats::MetricData &metric_data, const std::vector<std::string> &names, const std::function<void()> &cb);
   void dump_objects(const std::string &class_name, std::map<std::string, size_t> &counts, const std::function<void()> &cb);
   void recycle();
-  void reload(const std::function<void(bool)> &cb);
-  void reload_done(bool ok);
-  void exit(const std::function<void()> &cb);
-  bool stop(bool force = false);
+  bool signal(int sig);
+  void stop(bool force = false);
 
 private:
-  WorkerManager* m_manager;
   int m_index;
   Net* m_net = nullptr;
+  pjs::Ref<Worker> m_worker;
+  Codebase* m_codebase;
   std::string m_version;
-  std::string m_new_version;
-  pjs::Ref<Worker> m_new_worker;
-  Status m_status;
-  stats::MetricData m_metric_data;
-  std::atomic<bool> m_working;
   std::atomic<bool> m_recycling;
-  std::atomic<bool> m_shutdown;
-  std::atomic<bool> m_done;
   std::atomic<bool> m_ended;
   std::thread m_thread;
-  std::condition_variable m_start_cv;
-  std::mutex m_start_cv_mutex;
-  std::unique_ptr<Signal> m_workload_signal;
-  pjs::Ref<pjs::Promise::Period> m_new_period;
-  bool m_force_start = false;
-  bool m_started = false;
-  bool m_failed = false;
+  std::function<void()> m_on_end;
+  bool m_has_shutdown = false;
 
   static void init_metrics();
   static void shutdown_all(bool force);
-
-  void main();
 
   thread_local static WorkerThread* s_current;
 };
@@ -115,74 +97,102 @@ private:
 
 class WorkerManager {
 public:
-  static auto get() -> WorkerManager&;
+  static auto current() -> WorkerManager* { return s_current; }
 
-  bool is_graph_enabled() const { return m_graph_enabled; }
-  void enable_graph(bool b) { m_graph_enabled = b; }
-  void on_done(const std::function<void()> &cb) { m_on_done = cb; }
-  void on_ended(const std::function<void()> &cb) { m_on_ended = cb; }
-  void argv(const std::vector<std::string> &argv);
-  bool started() const { return !m_worker_threads.empty(); }
-  bool start(int concurrency = 1, bool force = false);
-  auto status() -> Status&;
-  bool status(const std::function<void(Status&)> &cb);
-  auto stats() -> stats::MetricDataSum&;
-  bool stats(const std::function<void(stats::MetricDataSum&)> &cb);
-  void stats(const std::function<void(stats::MetricDataSum&)> &cb, const std::vector<std::string> &names);
-  auto dump_objects(const std::string &class_name) -> std::map<std::string, size_t>;
-  void recycle();
-  void reload();
-  bool admin(pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond);
+  static auto make(Codebase *codebase, int concurrency = 1) -> WorkerManager* {
+    return new WorkerManager(codebase, concurrency);
+  }
+
+  void set_current() { s_current = this; }
+  void start(const std::vector<std::string> &argv);
+  void status(const std::function<void(Status&)> &cb);
+  void stats(const std::function<void(stats::MetricDataSum&)> &cb);
+  void stats(const std::vector<std::string> &names, const std::function<void(stats::MetricDataSum&)> &cb);
+  void dump_objects(const std::string &class_name, const std::function<void(const std::map<std::string, size_t> &)> &cb);
   auto concurrency() const -> int { return m_concurrency; }
-  bool stop(bool force = false);
+  void stop(bool force = false);
 
 private:
-  class StatsRequest {
+  WorkerManager(Codebase *codebase, int concurrency);
+
+  //
+  // WorkerManager::Request
+  //
+
+  class Request {
+  protected:
+    Request(WorkerManager *wm, const std::function<void()> &cb);
+    ~Request();
+    void broadcast(const std::function<void(WorkerThread*)> &send_one);
   public:
-    StatsRequest(
-      WorkerManager *manager,
-      const std::vector<std::string> &names,
-      const std::function<void(stats::MetricDataSum&)> &cb
-    ) : m_manager(manager)
-      , m_from(&Net::current())
-      , m_names(names)
-      , m_cb(cb) {}
-
-    void start();
-
+    void gather(WorkerThread *wt, const std::function<void()> &aggregate);
   private:
-    WorkerManager* m_manager;
-    Net* m_from;
-    std::vector<std::string> m_names;
-    std::vector<stats::MetricData> m_threads;
-    int m_counter = 0;
-    std::function<void(stats::MetricDataSum&)> m_cb;
+    WorkerManager* m_worker_manager;
+    Net* m_net;
+    std::function<void()> m_callback;
+    std::set<WorkerThread*> m_threads;
   };
 
-  std::vector<WorkerThread*> m_worker_threads;
-  std::vector<std::string> m_argv;
-  Status m_status;
-  int m_status_counter = -1;
-  stats::MetricDataSum m_metric_data_sum;
-  int m_metric_data_sum_counter = -1;
-  int m_concurrency = 0;
-  bool m_graph_enabled = false;
-  bool m_reloading_requested = false;
-  bool m_reloading = false;
-  bool m_querying_status = false;
-  bool m_querying_stats = false;
-  bool m_stopping = false;
-  bool m_stopped = false;
-  std::function<void()> m_on_done;
-  std::function<void()> m_on_ended;
+  //
+  // WorkerManager::StatusRequest
+  //
 
-  void check_reloading();
-  void start_reloading();
-  void next_admin_request();
-  void on_thread_done(int index);
+  class StatusRequest : public Request {
+  public:
+    StatusRequest(
+      WorkerManager *wm,
+      const std::function<void(Status &)> &cb
+    );
+  private:
+    std::vector<std::unique_ptr<Status>> m_status_list;
+    Status m_status;
+    bool m_initial = true;
+  };
+
+  //
+  // WorkerManager::StatsRequest
+  //
+
+  class StatsRequest : public Request {
+  public:
+    StatsRequest(
+      WorkerManager *wm,
+      const std::vector<std::string> &names,
+      const std::function<void(stats::MetricDataSum &)> &cb
+    );
+  private:
+    std::vector<std::string> m_names;
+    std::vector<std::unique_ptr<stats::MetricData>> m_metric_data;
+    stats::MetricDataSum m_metric_data_sum;
+    bool m_initial = true;
+  };
+
+  //
+  // WorkerManager::ObjectDumpRequest
+  //
+
+  class ObjectDumpRequest : public Request {
+  public:
+    ObjectDumpRequest(
+      WorkerManager *wm,
+      const std::string &class_name,
+      const std::function<void(const std::map<std::string, size_t> &)> &cb
+    );
+  private:
+    std::string m_class_name;
+    std::vector<std::unique_ptr<std::map<std::string, size_t>>> m_counts;
+    std::map<std::string, size_t> m_sum;
+  };
+
+  Net* m_net;
+  Codebase* m_codebase;
+  std::vector<WorkerThread*> m_worker_threads;
+  std::set<Request*> m_requests;
+  int m_concurrency = 0;
+
   void on_thread_ended(int index);
 
-  friend class WorkerThread;
+  thread_local static WorkerManager* s_current;
 };
 
 } // namespace pipy

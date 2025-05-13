@@ -124,7 +124,7 @@ protected:
   auto normalize_path(const std::string &path) -> std::string;
 
 private:
-  static Codebase* s_current;
+  thread_local static Codebase* s_current;
 };
 
 } // namespace pipy

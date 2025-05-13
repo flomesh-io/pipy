@@ -55,8 +55,6 @@
 
 using namespace pipy;
 
-static bool s_has_shutdown = false;
-
 //
 // Show version
 //
@@ -91,23 +89,6 @@ static void show_version() {
 }
 
 //
-// Reload codebase
-//
-
-static void reload_codebase(bool force, const std::function<void()> &cb = nullptr) {
-  if (auto *codebase = Codebase::current()) {
-    Log::debug(Log::CODEBASE, "[codebase] Start syncing codebase");
-    codebase->sync(
-      force, [=](bool ok) {
-        Log::debug(Log::CODEBASE, "[codebase] Codebase synced (updated = %d)", ok);
-        if (ok) WorkerManager::get().reload();
-        if (cb) cb();
-      }
-    );
-  }
-}
-
-//
 // Periodic job base
 //
 
@@ -127,116 +108,62 @@ private:
 };
 
 //
-// Periodically clean up pools
-//
-
-class PoolCleaner : public PeriodicJob {
-  virtual void run() override {
-    for (const auto &p : pjs::Pool::all()) {
-      p.second->clean();
-    }
-    WorkerManager::get().recycle();
-    next();
-  }
-};
-
-static PoolCleaner s_pool_cleaner;
-
-//
-// Periodically check codebase updates
-//
-
-class CodeUpdater : public PeriodicJob {
-  virtual void run() override {
-    if (!s_has_shutdown) {
-      reload_codebase(false, [=]() { next(); });
-    }
-  }
-};
-
-static CodeUpdater s_code_updater;
-
-//
 // Handle signals
 //
 
 class SignalHandler {
 public:
-  SignalHandler() : m_signals(Net::context()) {
-    m_signals.add(SIGNAL_STOP);
-    m_signals.add(SIGNAL_RELOAD);
-    m_signals.add(SIGNAL_ADMIN);
-  }
+  SignalHandler(WorkerThread *worker_thread)
+    : m_worker_thread(worker_thread)
+  {
+    bool started = false;
+    std::condition_variable start_cv;
+    std::mutex start_cv_mutex;
+    std::unique_lock<std::mutex> lock(start_cv_mutex);
 
-  void start() { wait(); }
-  void stop() { m_signals.cancel(); }
-
-private:
-  asio::signal_set m_signals;
-  std::unique_ptr<Timer> m_timer;
-
-  void wait() {
-    m_signals.async_wait(
-      [this](const std::error_code &ec, int sig) {
-        InputContext ic;
-        if (!ec) handle(sig);
-        if (ec != asio::error::operation_aborted) wait();
+    m_thread = std::thread(
+      [&]() {
+        m_net = &Net::current();
+        {
+          std::lock_guard<std::mutex> lock(start_cv_mutex);
+          started = true;
+          start_cv.notify_one();
+        }
+        asio::signal_set signals(Net::context());
+        signals.add(SIGNAL_STOP);
+        signals.add(SIGNAL_RELOAD);
+        signals.add(SIGNAL_ADMIN);
+        std::function<void()> wait;
+        wait = [&]() {
+          signals.async_wait(
+            [&](const std::error_code &ec, int sig) {
+              if (ec != asio::error::operation_aborted) {
+                if (!ec) {
+                  m_worker_thread->signal(sig);
+                }
+                wait();
+              }
+            }
+          );
+        };
+        wait();
+        m_net->run();
       }
     );
+
+    start_cv.wait(lock, [&]() { return started; });
   }
 
-  void handle(int sig) {
-    switch (sig) {
-      case SIGNAL_STOP: {
-        exit_process(false);
-        break;
-      }
-      case SIGNAL_RELOAD:
-        reload_codebase(true);
-        break;
-      case SIGNAL_ADMIN:
-        // toggle_admin_port(); // TODO
-        break;
-    }
+  ~SignalHandler() {
+    m_net->stop();
+    m_thread.join();
   }
 
-  void wait_workers() {
-    if (WorkerManager::get().stop()) {
-      stop_all();
-    } else {
-      Log::info("[shutdown] Waiting for workers to drain...");
-      if (!m_timer) m_timer = std::unique_ptr<Timer>(new Timer);
-      m_timer->schedule(1, [this]() { wait_workers(); });
-    }
-  }
-
-  void stop_all() {
-    Net::current().stop();
-    s_pool_cleaner.stop();
-    s_code_updater.stop();
-    stop();
-  }
-
-public:
-  void exit_process(bool force) {
-    if (WorkerManager::get().started()) {
-      if (force || s_has_shutdown) {
-        Log::info("[shutdown] Forcing to shut down...");
-        WorkerManager::get().stop(true);
-        stop_all();
-      } else {
-        Log::info("[shutdown] Shutting down...");
-        wait_workers();
-      }
-    } else {
-      stop_all();
-    }
-
-    s_has_shutdown = true;
-  }
+private:
+  std::thread m_thread;
+  WorkerThread* m_worker_thread;
+  Net* m_net;
 };
-
-static SignalHandler s_signal_handler;
 
 //
 // Program entrance
@@ -364,130 +291,43 @@ int pipy_main(int argc, char *argv[]) {
         ? Store::open_memory()
         : Store::open_memory(); // TODO: Sqlite store
       repo = new CodebaseStore(store, opts.init_repo);
-
-#ifdef PIPY_USE_GUI
-      std::cout << std::endl;
-      std::cout << "=============================================" << std::endl;
-      std::cout << std::endl;
-      std::cout << "  You can now view Pipy GUI in the browser:" << std::endl;
-      std::cout << std::endl;
-      std::cout << "    http://localhost:" << admin_port << '/' << std::endl;
-      std::cout << std::endl;
-      std::cout << "=============================================" << std::endl;
-      std::cout << std::endl;
-#endif
-
       throw std::string("TODO");
 
     // Start as codebase repo proxy
     } else if (is_repo_proxy) {
-
       throw std::string("TODO");
 
-    // Start as a static codebase
+    // Start using a builtin codebase
+    } else if (is_builtin) {
+      auto name = opts.filename.substr(6);
+      store = Store::open_memory();
+      repo = new CodebaseStore(store);
+      codebase = Codebase::from_store(repo, name);
+
+    // Start using a remote codebase
+    } else if (is_remote) {
+      Fetch::Options options;
+      options.tls = is_tls;
+      options.cert = opts.tls_cert;
+      options.key = opts.tls_key;
+      options.trusted = opts.tls_trusted;
+      codebase = Codebase::from_http(opts.filename, options);
+      throw std::string("TODO");
+
+    // Start using a local codebase
+    } else if (is_file_found) {
+      codebase = Codebase::from_fs(opts.filename);
+
+    // Start using a one-liner
     } else {
-      if (is_builtin) {
-        auto name = opts.filename.substr(6);
-        store = Store::open_memory();
-        repo = new CodebaseStore(store);
-        codebase = Codebase::from_store(repo, name);
-      } else if (is_remote) {
-        Fetch::Options options;
-        options.tls = is_tls;
-        options.cert = opts.tls_cert;
-        options.key = opts.tls_key;
-        options.trusted = opts.tls_trusted;
-        codebase = Codebase::from_http(opts.filename, options);
-        throw std::string("TODO");
-      } else if (is_file_found) {
-        codebase = Codebase::from_fs(opts.filename);
-      } else {
-        codebase = Codebase::from_fs(
-          fs::abs_path("."),
-          opts.filename
-        );
-      }
-
-      codebase = Codebase::from_root(codebase);
-      codebase->set_current();
-
-      bool started = false, start_error = false;
-
-      load = [&]() {
-        codebase->sync(
-          true, [&](bool ok) {
-            if (!ok) {
-              fail();
-              return;
-            }
-
-            auto &wm = WorkerManager::get();
-            wm.argv(opts.arguments);
-            wm.enable_graph(!opts.no_graph);
-
-            if ((is_repo || is_remote) && !opts.no_reload) {
-              wm.on_ended(exit);
-            } else {
-              wm.on_done(exit);
-            }
-
-            try {
-              started = wm.start(opts.threads, opts.force_start);
-            } catch (std::runtime_error &) {
-              start_error = true;
-            }
-
-            if (!started) {
-              fail();
-              return;
-            }
-
-            if (!opts.no_reload) {
-              s_code_updater.start();
-            }
-
-            Pipy::on_exit(
-              [&](int code) {
-                exit_code = code;
-                Net::current().stop();
-              }
-            );
-          }
-        );
-      };
-
-      exit = [&]() {
-        if (!is_remote || opts.no_reload) {
-          s_pool_cleaner.stop();
-          s_code_updater.stop();
-          s_signal_handler.stop();
-        }
-        exit_code = 0;
-      };
-
-      fail = [&]() {
-        if (is_remote && !opts.no_reload) {
-          retry_timer.schedule(5, load);
-        } else {
-          if (start_error) {
-            if (is_file && !is_file_found) {
-              std::cerr << "file or directory does not exist either with the input string as a pathname" << std::endl;
-            }
-            exit_code = -1;
-          } else {
-            exit_code = 0;
-          }
-          Net::main().stop();
-        }
-      };
-
-      load();
+      codebase = Codebase::from_fs(fs::abs_path("."), opts.filename);
     }
 
-    s_pool_cleaner.start();
-    s_signal_handler.start();
+    codebase = Codebase::from_root(codebase);
 
-    Net::current().run();
+    WorkerThread t(codebase);
+    SignalHandler sh(&t);
+    t.main(opts.arguments);
 
     delete repo;
 
@@ -512,7 +352,11 @@ int pipy_main(int argc, char *argv[]) {
 
 extern "C" PIPY_API
 void pipy_exit(int force) {
-  s_signal_handler.exit_process(force);
+  if (auto wt = WorkerThread::current()) {
+    wt->stop(force);
+  } else if (auto wm = WorkerManager::current()) {
+    wm->stop(force);
+  }
 }
 
 #else // !PIPY_SHARED

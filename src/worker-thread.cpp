@@ -37,14 +37,13 @@ namespace pipy {
 
 thread_local WorkerThread* WorkerThread::s_current = nullptr;
 
-WorkerThread::WorkerThread(WorkerManager *manager, int index)
-  : m_manager(manager)
-  , m_index(index)
-  , m_working(false)
+WorkerThread::WorkerThread(Codebase *codebase, int index, const std::function<void()> &on_end)
+  : m_index(index)
+  , m_codebase(codebase)
+  , m_version(codebase->version())
   , m_recycling(false)
-  , m_shutdown(false)
-  , m_done(false)
   , m_ended(false)
+  , m_on_end(on_end)
 {
 }
 
@@ -54,23 +53,66 @@ WorkerThread::~WorkerThread() {
   }
 }
 
-bool WorkerThread::start(bool force) {
-  std::unique_lock<std::mutex> lock(m_start_cv_mutex);
+void WorkerThread::main(const std::vector<std::string> &argv) {
+  m_net = &Net::current();
 
-  m_force_start = force;
+  Log::init();
+  Pipy::argv(argv);
 
-  m_thread = std::thread(
-    [this]() {
-      s_current = this;
-      main();
-      m_ended.store(true);
-      m_manager->on_thread_ended(m_index);
+  pjs::Promise::Period::set_uncaught_exception_handler(
+    [](const pjs::Value &value) {
+      Data buf;
+      Console::dump(value, buf);
+      Log::error("[pjs] Uncaught exception from promise: %s", buf.to_string().c_str());
     }
   );
 
-  m_start_cv.wait(lock, [this]() { return m_started || m_done || m_failed; });
-  if (m_failed) throw std::runtime_error("failed to start worker thread");
-  return m_started;
+  m_codebase->set_current();
+  m_worker = Worker::make(pjs::Promise::Period::current());
+
+  auto result = pjs::Value::empty;
+  auto mod = m_worker->load_module(m_codebase->entry(), result);
+
+  if (mod && m_worker->start()) {
+    Listener::commit_all();
+    Net::context().poll();
+
+    if (Net::context().stopped()) {
+      if (result.is_string()) {
+        std::cout << result.s()->str();
+      } else {
+        Data buf;
+        Console::dump(result, buf);
+        buf.to_chunks(
+          [&](const uint8_t *ptr, int len) {
+            std::cout.write((const char *)ptr, len);
+          }
+        );
+        std::cout << std::endl;
+      }
+
+    } else if (mod->is_expression()) {
+      init_metrics();
+      Net::current().run();
+    }
+
+  } else {
+    Listener::rollback_all();
+  }
+
+  Log::shutdown();
+  Listener::delete_all();
+  Timer::cancel_all();
+
+  m_ended.store(true);
+
+  if (m_on_end) m_on_end();
+}
+
+void WorkerThread::start(const std::vector<std::string> &argv) {
+  m_thread = std::thread([&]() {
+    main(argv);
+  });
 }
 
 void WorkerThread::status(Status &status, const std::function<void()> &cb) {
@@ -83,12 +125,12 @@ void WorkerThread::status(Status &status, const std::function<void()> &cb) {
   );
 }
 
-void WorkerThread::status(const std::function<void(Status&)> &cb) {
+void WorkerThread::stats(stats::MetricData &metric_data, const std::function<void()> &cb) {
   m_net->post(
-    [=]() {
-      m_status.update_local();
-      m_status.version = m_version;
-      cb(m_status);
+    [&, cb]() {
+      stats::Metric::local().collect();
+      metric_data.update(stats::Metric::local());
+      cb();
     }
   );
 }
@@ -106,26 +148,6 @@ void WorkerThread::stats(stats::MetricData &metric_data, const std::vector<std::
       ms.collect();
       metric_data.update(ms);
       cb();
-    }
-  );
-}
-
-void WorkerThread::stats(stats::MetricData &metric_data, const std::function<void()> &cb) {
-  m_net->post(
-    [&, cb]() {
-      stats::Metric::local().collect();
-      metric_data.update(stats::Metric::local());
-      cb();
-    }
-  );
-}
-
-void WorkerThread::stats(const std::function<void(stats::MetricData&)> &cb) {
-  m_net->post(
-    [=]() {
-      stats::Metric::local().collect();
-      m_metric_data.update(stats::Metric::local());
-      cb(m_metric_data);
     }
   );
 }
@@ -153,115 +175,44 @@ void WorkerThread::dump_objects(const std::string &class_name, std::map<std::str
 }
 
 void WorkerThread::recycle() {
-  if (m_working && !m_recycling) {
-    m_recycling = true;
+  if (!m_recycling.load()) {
+    m_recycling.store(true);
     m_net->post(
       [this]() {
         for (const auto &p : pjs::Pool::all()) {
           p.second->clean();
         }
-        m_recycling = false;
+        m_recycling.store(false);
       }
     );
   }
 }
 
-void WorkerThread::reload(const std::function<void(bool)> &cb) {
-  m_net->post(
-    [=]() {
-      auto codebase = Codebase::current();
-
-      auto &entry = codebase->entry();
-      if (entry.empty()) {
-        Log::error("[restart] Codebase has no entry point");
-        cb(false);
-        return;
-      }
-
-      Log::info("[restart] Reloading codebase on thread %d...", m_index);
-
-      m_new_version = codebase->version();
-      m_new_period = pjs::Promise::Period::make();
-      m_new_worker = Worker::make(m_new_period);
-      m_new_worker->set_forced();
-
-      pjs::Ref<pjs::Promise::Period> old_period = pjs::Promise::Period::current();
-      old_period->pause();
-      m_new_period->pause();
-      m_new_period->set_current();
-
-      cb(m_new_worker->load_module(nullptr, entry));
-
-      old_period->set_current();
-      old_period->resume();
-    }
-  );
-}
-
-void WorkerThread::reload_done(bool ok) {
-  if (ok) {
-    m_net->post(
-      [this]() {
-        Listener::commit_all();
-        if (m_new_worker) {
-          pjs::Ref<Worker> current_worker = Worker::current();
-          pjs::Ref<pjs::Promise::Period> current_period = pjs::Promise::Period::current();
-          m_new_worker->start(true);
-          current_worker->stop(true);
-          current_period->end();
-          m_new_period->set_current();
-          m_new_period->resume();
-          m_new_period = nullptr;
-          m_new_worker = nullptr;
-          m_version = m_new_version;
-          m_working = true;
-          if (m_workload_signal) m_workload_signal->fire();
-          Log::info("[restart] Codebase reloaded on thread %d", m_index);
-        }
-      }
-    );
-  } else {
-    m_net->post(
-      [this]() {
-        Listener::rollback_all();
-        if (m_new_worker) {
-          m_new_worker->stop(true);
-          m_new_period->end();
-          m_new_period = nullptr;
-          m_new_worker = nullptr;
-          m_new_version.clear();
-          Log::error("[restart] Failed reloading codebase %d", m_index);
-        }
-      }
-    );
+bool WorkerThread::signal(int sig) {
+  switch (sig) {
+    case SIGNAL_STOP:
+      stop(m_has_shutdown);
+      m_has_shutdown = true;
+      return true;
   }
+  return false;
 }
 
-bool WorkerThread::stop(bool force) {
+void WorkerThread::stop(bool force) {
   if (force) {
     m_net->post(
-      [this]() {
-        m_shutdown = true;
-        m_new_worker = nullptr;
+      []() {
         shutdown_all(true);
         Net::current().stop();
       }
     );
     m_thread.join();
-    return true;
-
   } else {
-    if (!m_shutdown) {
-      m_shutdown = true;
-      m_net->post(
-        [this]() {
-          m_new_worker = nullptr;
-          shutdown_all(false);
-        }
-      );
-      if (m_workload_signal) m_workload_signal->fire();
-    }
-    return m_ended.load();
+    m_net->post(
+      []() {
+        shutdown_all(false);
+      }
+    );
   }
 }
 
@@ -383,481 +334,179 @@ void WorkerThread::shutdown_all(bool force) {
   Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); return true; });
 }
 
-void WorkerThread::main() {
-  Log::init();
-  Pipy::argv(m_manager->m_argv);
-
-  pjs::Promise::Period::set_uncaught_exception_handler(
-    [](const pjs::Value &value) {
-      Data buf;
-      Console::dump(value, buf);
-      Log::error("[pjs] Uncaught exception from promise: %s", buf.to_string().c_str());
-    }
-  );
-
-  m_new_worker = Worker::make(
-    pjs::Promise::Period::current(),
-    m_manager->is_graph_enabled() && m_index == 0
-  );
-
-  if (m_force_start) {
-    m_new_worker->set_forced();
-  }
-
-  auto &entry = Codebase::current()->entry();
-  auto result = pjs::Value::empty;
-  auto mod = m_new_worker->load_module(entry, result);
-  bool failed = false;
-
-  if (mod && m_new_worker->start(m_force_start)) {
-    Listener::commit_all();
-  } else {
-    Listener::rollback_all();
-    failed = true;
-  }
-
-  Net::context().poll();
-  bool started = !Net::context().stopped();
-
-  if (!started) {
-    if (mod && mod->is_expression()) {
-      if (result.is_string()) {
-        std::cout << result.s()->str();
-      } else {
-        Data buf;
-        Console::dump(result, buf);
-        buf.to_chunks(
-          [&](const uint8_t *ptr, int len) {
-            std::cout.write((const char *)ptr, len);
-          }
-        );
-        std::cout << std::endl;
-      }
-    }
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(m_start_cv_mutex);
-    m_started = started;
-    m_failed = failed;
-    m_done = !started && !failed;
-    m_net = &Net::current();
-    m_start_cv.notify_one();
-  }
-
-  if (started && !failed) {
-    Log::debug(Log::THREAD, "[thread] Thread %d started", m_index);
-
-    init_metrics();
-
-    m_working = true;
-    while (m_working) {
-      Net::current().run();
-      m_working = false;
-      m_done = true;
-      m_manager->on_thread_done(m_index);
-
-      Log::debug(Log::THREAD, "[thread] Thread %d done", m_index);
-
-      if (m_shutdown) break;
-
-      m_workload_signal = std::unique_ptr<Signal>(
-        new Signal([]() { Net::current().stop(); })
-      );
-
-      Net::current().restart();
-      Net::current().run();
-
-      m_workload_signal = nullptr;
-
-      if (m_working) {
-        m_done = false;
-        Net::current().restart();
-        Log::debug(Log::THREAD, "[thread] Thread %d restarted", m_index);
-      }
-    }
-
-    Log::debug(Log::THREAD, "[thread] Thread %d ended", m_index);
-
-  } else {
-    m_new_worker->stop(true);
-    m_new_worker = nullptr;
-    m_manager->on_thread_done(m_index);
-  }
-
-  Log::shutdown();
-  Listener::delete_all();
-  Timer::cancel_all();
-}
-
 //
 // WorkerManager
 //
 
-auto WorkerManager::get() -> WorkerManager& {
-  static WorkerManager s_worker_manager;
-  return s_worker_manager;
+thread_local WorkerManager* WorkerManager::s_current = nullptr;
+
+WorkerManager::WorkerManager(Codebase *codebase, int concurrency)
+  : m_codebase(codebase)
+  , m_concurrency(concurrency)
+{
 }
 
-void WorkerManager::argv(const std::vector<std::string> &argv) {
-  m_argv = argv;
-}
-
-bool WorkerManager::start(int concurrency, bool force) {
-  if (started()) return false;
-
-  m_concurrency = concurrency;
-  m_stopping = false;
-  m_stopped = false;
-
-  for (int i = 0; i < concurrency; i++) {
-    auto wt = new WorkerThread(this, i);
-    auto rollback = [&]() {
-      delete wt;
-      stop(true);
-    };
-    try {
-      if (!wt->start(force)) {
-        rollback();
-        return false;
-      }
-    } catch (std::runtime_error &) {
-      rollback();
-      throw;
-    }
+void WorkerManager::start(const std::vector<std::string> &argv) {
+  for (int i = 0; i < m_concurrency; i++) {
+    auto wt = new WorkerThread(m_codebase, i, [=]() { on_thread_ended(i); });
     m_worker_threads.push_back(wt);
   }
-
-  return true;
-}
-
-auto WorkerManager::status() -> Status& {
-  if (!m_querying_status && !m_reloading && !m_stopping) {
-    m_querying_status = true;
-
-    if (auto n = m_worker_threads.size()) {
-      std::mutex m;
-      std::condition_variable cv;
-      pjs::vl_array<Status, 256> statuses(n);
-
-      for (auto *wt : m_worker_threads) {
-        auto i = wt->index();
-        wt->status(
-          statuses[i],
-          [&]() {
-            std::lock_guard<std::mutex> lock(m);
-            n--;
-            cv.notify_one();
-          }
-        );
-      }
-
-      std::unique_lock<std::mutex> lock(m);
-      cv.wait(lock, [&]{ return n == 0; });
-
-      m_status = std::move(statuses[0]);
-      for (auto i = 1; i < m_worker_threads.size(); i++) {
-        m_status.merge(statuses[i]);
-      }
-      m_status.update_global();
-    }
-
-    m_querying_status = false;
-    check_reloading();
+  for (size_t i = 0; i < m_worker_threads.size(); i++) {
+    m_worker_threads[i]->start(argv);
   }
-  return m_status;
 }
 
-bool WorkerManager::status(const std::function<void(Status&)> &cb) {
-  if (m_querying_status || m_reloading || m_stopping) return false;
-  if (m_worker_threads.empty()) return false;
+void WorkerManager::status(const std::function<void(Status&)> &cb) {
+  new StatusRequest(this, cb);
+}
 
-  m_querying_status = true;
+void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) {
+  new StatsRequest(this, std::vector<std::string>(), cb);
+}
 
-  auto &main = Net::current();
-  m_status_counter = 0;
+void WorkerManager::stats(const std::vector<std::string> &names, const std::function<void(stats::MetricDataSum&)> &cb) {
+  new StatsRequest(this, names, cb);
+}
 
+void WorkerManager::dump_objects(const std::string &class_name, const std::function<void(const std::map<std::string, size_t> &)> &cb) {
+  new ObjectDumpRequest(this, class_name, cb);
+}
+
+void WorkerManager::stop(bool force) {
   for (auto *wt : m_worker_threads) {
-    wt->status(
-      [&, cb](Status &s) {
-        main.post(
-          [&, cb]() {
-            if (m_status_counter == 0) {
-              m_status = std::move(s);
-            } else {
-              m_status.merge(s);
-            }
-            if (++m_status_counter == m_worker_threads.size()) {
-              m_status.update_global();
-              cb(m_status);
-              m_querying_status = false;
-              check_reloading();
-            }
-          }
-        );
-      }
-    );
-  }
-
-  return true;
-}
-
-auto WorkerManager::stats() -> stats::MetricDataSum& {
-  if (!m_querying_stats && !m_reloading && !m_stopping) {
-    m_querying_stats = true;
-
-    if (auto n = m_worker_threads.size()) {
-      std::mutex m;
-      std::condition_variable cv;
-      pjs::vl_array<stats::MetricData, 256> metric_data(n);
-
-      for (auto *wt : m_worker_threads) {
-        auto i = wt->index();
-        wt->stats(
-          metric_data[i],
-          [&]() {
-            std::lock_guard<std::mutex> lock(m);
-            n--;
-            cv.notify_one();
-          }
-        );
-      }
-
-      std::unique_lock<std::mutex> lock(m);
-      cv.wait(lock, [&]{ return n == 0; });
-
-      for (auto i = 0; i < m_worker_threads.size(); i++) {
-        m_metric_data_sum.sum(metric_data[i], i == 0);
-      }
+    if (!wt->ended()) {
+      wt->stop(force);
     }
-
-    m_querying_stats = false;
-    check_reloading();
-  }
-
-  return m_metric_data_sum;
-}
-
-bool WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) {
-  if (m_querying_stats || m_reloading || m_stopping) return false;
-  if (m_worker_threads.empty()) return false;
-
-  m_querying_stats = true;
-
-  auto &main = Net::current();
-  m_metric_data_sum_counter = 0;
-
-  for (auto *wt : m_worker_threads) {
-    wt->stats(
-      [&, cb](stats::MetricData &metric_data) {
-        main.post(
-          [&, cb]() {
-            m_metric_data_sum.sum(metric_data, m_metric_data_sum_counter == 0);
-            if (++m_metric_data_sum_counter == m_worker_threads.size()) {
-              cb(m_metric_data_sum);
-              m_querying_stats = false;
-              check_reloading();
-            }
-          }
-        );
-      }
-    );
-  }
-
-  return true;
-}
-
-void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb, const std::vector<std::string> &names) {
-  auto req = new StatsRequest(this, names, cb);
-  Net::main().post(
-    [=]() {
-      req->start();
-    }
-  );
-}
-
-auto WorkerManager::dump_objects(const std::string &class_name) -> std::map<std::string, size_t> {
-  std::map<std::string, size_t> all;
-
-  if (auto n = m_worker_threads.size()) {
-    std::mutex m;
-    std::condition_variable cv;
-    std::vector<std::map<std::string, size_t>> counts(n);
-
-    for (auto *wt : m_worker_threads) {
-      auto i = wt->index();
-      wt->dump_objects(
-        class_name,
-        counts[i],
-        [&]() {
-          std::lock_guard<std::mutex> lock(m);
-          n--;
-          cv.notify_one();
-        }
-      );
-    }
-
-    std::unique_lock<std::mutex> lock(m);
-    cv.wait(lock, [&]{ return n == 0; });
-
-    for (auto i = 0; i < m_worker_threads.size(); i++) {
-      for (const auto &p : counts[i]) {
-        all[p.first] += p.second;
-      }
-    }
-  }
-
-  return all;
-}
-
-void WorkerManager::recycle() {
-  for (auto *wt : m_worker_threads) {
-    wt->recycle();
-  }
-}
-
-void WorkerManager::reload() {
-  if (m_stopping) return;
-  if (m_reloading || m_querying_status || m_querying_stats) {
-    m_reloading_requested = true;
-  } else {
-    start_reloading();
-  }
-}
-
-void WorkerManager::check_reloading() {
-  if (m_reloading_requested) {
-    m_reloading_requested = false;
-    start_reloading();
-  }
-}
-
-void WorkerManager::start_reloading() {
-  if (auto n = m_worker_threads.size()) {
-    m_reloading = true;
-
-    std::mutex m;
-    std::condition_variable cv;
-    bool all_ok = true;
-
-    for (auto *wt : m_worker_threads) {
-      wt->reload(
-        [&](bool ok) {
-          std::lock_guard<std::mutex> lock(m);
-          if (!ok) all_ok = false;
-          n--;
-          cv.notify_one();
-        }
-      );
-    }
-
-    std::unique_lock<std::mutex> lock(m);
-    cv.wait(lock, [&]{ return n == 0; });
-
-    for (auto *wt : m_worker_threads) {
-      wt->reload_done(all_ok);
-    }
-
-    m_reloading = false;
-  }
-}
-
-bool WorkerManager::stop(bool force) {
-  if (m_stopped) return true;
-  m_stopping = true;
-  bool pending = false;
-  for (auto *wt : m_worker_threads) {
-    if (wt) {
-      if (!wt->stop(force)) pending = true;
-    }
-  }
-  if (pending) return false;
-  for (auto *wt : m_worker_threads) {
-    delete wt;
-  }
-  m_worker_threads.clear();
-  m_status_counter = 0;
-  m_metric_data_sum_counter = 0;
-  m_stopped = true;
-  return true;
-}
-
-void WorkerManager::on_thread_done(int index) {
-  if (m_on_done) {
-    Net::main().post(
-      [this]() {
-        for (auto *wt : m_worker_threads) {
-          if (wt && !wt->done()) return;
-        }
-        m_on_done();
-      }
-    );
   }
 }
 
 void WorkerManager::on_thread_ended(int index) {
-  if (m_on_ended) {
-    Net::main().post(
-      [this]() {
-        for (auto *wt : m_worker_threads) {
-          if (wt && !wt->ended()) return;
-        }
-        m_on_ended();
+  m_net->post([=]() {
+    if (auto wt = m_worker_threads[index]) {
+      for (auto *r : m_requests) {
+        r->gather(wt, nullptr);
       }
-    );
+    }
+  });
+}
+
+//
+// WorkerManager::Request
+//
+
+WorkerManager::Request::Request(WorkerManager *wm, const std::function<void()> &cb)
+  : m_worker_manager(wm)
+  , m_net(&Net::current())
+  , m_callback(cb)
+{
+  wm->m_requests.insert(this);
+}
+
+WorkerManager::Request::~Request() {
+  m_worker_manager->m_requests.erase(this);
+}
+
+void WorkerManager::Request::broadcast(const std::function<void(WorkerThread*)> &send_one) {
+  for (auto *wt : m_worker_manager->m_worker_threads) {
+    if (!wt->ended()) {
+      m_threads.insert(wt);
+      send_one(wt);
+    }
   }
+}
+
+void WorkerManager::Request::gather(WorkerThread *wt, const std::function<void()> &aggregate) {
+  m_net->post([=]() {
+    if (aggregate) {
+      aggregate();
+    }
+    m_threads.erase(wt);
+    if (m_threads.empty()) {
+      m_callback();
+    }
+  });
+}
+
+//
+// WorkerManager::StatusRequest
+//
+
+WorkerManager::StatusRequest::StatusRequest(
+  WorkerManager *wm,
+  const std::function<void(Status &)> &cb
+) : Request(wm, [=]() {
+  m_status.update_global();
+  cb(m_status);
+  delete this;
+}) {
+  broadcast([&](WorkerThread *wt) {
+    auto s = new Status;
+    m_status_list.push_back(std::unique_ptr<Status>(s));
+    wt->status(*s, [=]() {
+      gather(wt, [=]() {
+        if (m_initial) {
+          m_status = std::move(*s);
+          m_initial = false;
+        } else {
+          m_status.merge(*s);
+        }
+      });
+    });
+  });
 }
 
 //
 // WorkerManager::StatsRequest
 //
 
-void WorkerManager::StatsRequest::start() {
-  if (m_manager->m_querying_stats ||
-      m_manager->m_reloading ||
-      m_manager->m_worker_threads.empty()
-  ) {
-    m_from->post(
-      [this]() {
-        stats::MetricDataSum sum;
-        m_cb(sum);
-      }
-    );
-  } else if (auto thread_count = m_manager->m_worker_threads.size()) {
-    m_threads.resize(thread_count);
-    m_manager->m_querying_stats = true;
-    for (auto *wt : m_manager->m_worker_threads) {
-      wt->stats(
-        m_threads[wt->index()],
-        m_names,
-        [=]() {
-          m_from->post(
-            [=]() {
-              auto size = m_threads.size();
-              if (++m_counter == size) {
-                stats::MetricDataSum sum;
-                for (size_t i = 0; i < size; i++) {
-                  sum.sum(m_threads[i], i == 0);
-                }
-                m_cb(sum);
-                m_manager->m_querying_stats = false;
-                m_manager->check_reloading();
-                delete this;
-              }
-            }
-          );
-        }
-      );
+WorkerManager::StatsRequest::StatsRequest(
+  WorkerManager *wm,
+  const std::vector<std::string> &names,
+  const std::function<void(stats::MetricDataSum &)> &cb
+) : Request(wm, [=]() {
+  cb(m_metric_data_sum);
+  delete this;
+}), m_names(names) {
+  broadcast([&](WorkerThread *wt) {
+    auto md = new stats::MetricData;
+    m_metric_data.push_back(std::unique_ptr<stats::MetricData>(md));
+    auto cb = [=]() {
+      gather(wt, [=]() {
+        m_metric_data_sum.sum(*md, m_initial);
+        m_initial = false;
+      });
+    };
+    if (m_names.empty()) {
+      wt->stats(*md, cb);
+    } else {
+      wt->stats(*md, m_names, cb);
     }
-  } else {
-    m_from->post(
-      [=]() {
-        stats::MetricDataSum sum;
-        m_cb(sum);
-        delete this;
-      }
-    );
-  }
+  });
+}
+
+//
+// WorkerManager::ObjectDumpRequest
+//
+
+WorkerManager::ObjectDumpRequest::ObjectDumpRequest(
+  WorkerManager *wm,
+  const std::string &class_name,
+  const std::function<void(const std::map<std::string, size_t> &)> &cb
+) : Request(wm, [=]() {
+  cb(m_sum);
+  delete this;
+}), m_class_name(class_name) {
+  broadcast([&](WorkerThread *wt) {
+    auto c = new std::map<std::string, size_t>;
+    m_counts.push_back(std::unique_ptr<std::map<std::string, size_t>>(c));
+    wt->dump_objects(m_class_name, *c, [=]() {
+      gather(wt, [=]() {
+        for (const auto &p : *c) {
+          m_sum[p.first] += p.second;
+        }
+      });
+    });
+  });
 }
 
 } // namespace pipy

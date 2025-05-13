@@ -405,6 +405,7 @@ private:
   std::vector<std::string> m_names;
   pjs::Ref<pjs::Promise::Settler> m_settler;
   pjs::Ref<pjs::Object> m_metrics;
+  MetricData m_metric_data;
   Signal m_signal;
 
   void on_finish();
