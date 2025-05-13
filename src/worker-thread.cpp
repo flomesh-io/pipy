@@ -188,14 +188,14 @@ void WorkerThread::recycle() {
   }
 }
 
-bool WorkerThread::signal(int sig) {
+void WorkerThread::signal(int sig) {
   switch (sig) {
     case SIGNAL_STOP:
       stop(m_has_shutdown);
       m_has_shutdown = true;
-      return true;
+      break;
+    default: break;
   }
-  return false;
 }
 
 void WorkerThread::stop(bool force) {
@@ -340,13 +340,15 @@ void WorkerThread::shutdown_all(bool force) {
 
 thread_local WorkerManager* WorkerManager::s_current = nullptr;
 
-WorkerManager::WorkerManager(Codebase *codebase, int concurrency)
-  : m_codebase(codebase)
+WorkerManager::WorkerManager(Codebase *codebase, int concurrency, const std::function<void()> &on_end)
+  : m_net(&Net::current())
+  , m_codebase(codebase)
   , m_concurrency(concurrency)
+  , m_on_end(on_end)
 {
 }
 
-void WorkerManager::start(const std::vector<std::string> &argv) {
+auto WorkerManager::start(const std::vector<std::string> &argv) -> pjs::Promise* {
   for (int i = 0; i < m_concurrency; i++) {
     auto wt = new WorkerThread(m_codebase, i, [=]() { on_thread_ended(i); });
     m_worker_threads.push_back(wt);
@@ -354,6 +356,8 @@ void WorkerManager::start(const std::vector<std::string> &argv) {
   for (size_t i = 0; i < m_worker_threads.size(); i++) {
     m_worker_threads[i]->start(argv);
   }
+  m_end_promise = pjs::Promise::make();
+  return m_end_promise;
 }
 
 void WorkerManager::status(const std::function<void(Status&)> &cb) {
@@ -372,6 +376,14 @@ void WorkerManager::dump_objects(const std::string &class_name, const std::funct
   new ObjectDumpRequest(this, class_name, cb);
 }
 
+void WorkerManager::signal(int sig) {
+  for (auto *wt : m_worker_threads) {
+    if (!wt->ended()) {
+      wt->signal(sig);
+    }
+  }
+}
+
 void WorkerManager::stop(bool force) {
   for (auto *wt : m_worker_threads) {
     if (!wt->ended()) {
@@ -386,6 +398,17 @@ void WorkerManager::on_thread_ended(int index) {
       for (auto *r : m_requests) {
         r->gather(wt, nullptr);
       }
+    }
+    bool all_ended = true;
+    for (auto *wt : m_worker_threads) {
+      if (!wt->ended()) {
+        all_ended = false;
+      }
+    }
+    if (all_ended) {
+      m_ended = true;
+      m_end_promise->resolve(pjs::Value::undefined);
+      if (m_on_end) m_on_end();
     }
   });
 }
@@ -510,3 +533,12 @@ WorkerManager::ObjectDumpRequest::ObjectDumpRequest(
 }
 
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy;
+
+template<> void ClassDef<WorkerManager>::init() {
+}
+
+} // namespace pjs

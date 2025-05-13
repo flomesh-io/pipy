@@ -113,9 +113,9 @@ private:
 
 class SignalHandler {
 public:
-  SignalHandler(WorkerThread *worker_thread)
-    : m_worker_thread(worker_thread)
-  {
+  SignalHandler() {}
+
+  SignalHandler(WorkerThread *worker_thread) {
     bool started = false;
     std::condition_variable start_cv;
     std::mutex start_cv_mutex;
@@ -129,25 +129,7 @@ public:
           started = true;
           start_cv.notify_one();
         }
-        asio::signal_set signals(Net::context());
-        signals.add(SIGNAL_STOP);
-        signals.add(SIGNAL_RELOAD);
-        signals.add(SIGNAL_ADMIN);
-        std::function<void()> wait;
-        wait = [&]() {
-          signals.async_wait(
-            [&](const std::error_code &ec, int sig) {
-              if (ec != asio::error::operation_aborted) {
-                if (!ec) {
-                  m_worker_thread->signal(sig);
-                }
-                wait();
-              }
-            }
-          );
-        };
-        wait();
-        m_net->run();
+        run(m_net, [=](int sig) { worker_thread->signal(sig); });
       }
     );
 
@@ -155,14 +137,39 @@ public:
   }
 
   ~SignalHandler() {
-    m_net->stop();
-    m_thread.join();
+    if (m_net) m_net->stop();
+    if (m_thread.joinable()) m_thread.join();
+  }
+
+  void run(WorkerManager *worker_manager) {
+    run(&Net::current(), [=](int sig) { worker_manager->signal(sig); });
   }
 
 private:
   std::thread m_thread;
-  WorkerThread* m_worker_thread;
-  Net* m_net;
+  Net* m_net = nullptr;
+
+  void run(Net *net, const std::function<void(int)> &cb) {
+    asio::signal_set signals(Net::context());
+    signals.add(SIGNAL_STOP);
+    signals.add(SIGNAL_RELOAD);
+    signals.add(SIGNAL_ADMIN);
+    std::function<void()> wait;
+    wait = [&]() {
+      signals.async_wait(
+        [&](const std::error_code &ec, int sig) {
+          if (ec != asio::error::operation_aborted) {
+            if (!ec) {
+              cb(sig);
+            }
+            wait();
+          }
+        }
+      );
+    };
+    wait();
+    net->run();
+  }
 };
 
 //
@@ -325,9 +332,19 @@ int pipy_main(int argc, char *argv[]) {
 
     codebase = Codebase::from_root(codebase);
 
-    WorkerThread t(codebase);
-    SignalHandler sh(&t);
-    t.main(opts.arguments);
+    if (opts.threads > 1) {
+      pjs::Ref<WorkerManager> wm = WorkerManager::make(
+        codebase, opts.threads,
+        []() { Net::current().stop(); }
+      );
+      wm->start(opts.arguments);
+      SignalHandler().run(wm);
+
+    } else {
+      WorkerThread t(codebase);
+      SignalHandler sh(&t);
+      t.main(opts.arguments);
+    }
 
     delete repo;
 

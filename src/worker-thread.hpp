@@ -70,7 +70,7 @@ public:
   void stats(stats::MetricData &metric_data, const std::vector<std::string> &names, const std::function<void()> &cb);
   void dump_objects(const std::string &class_name, std::map<std::string, size_t> &counts, const std::function<void()> &cb);
   void recycle();
-  bool signal(int sig);
+  void signal(int sig);
   void stop(bool force = false);
 
 private:
@@ -95,25 +95,24 @@ private:
 // WorkerManager
 //
 
-class WorkerManager {
+class WorkerManager : public pjs::ObjectTemplate<WorkerManager> {
 public:
   static auto current() -> WorkerManager* { return s_current; }
 
-  static auto make(Codebase *codebase, int concurrency = 1) -> WorkerManager* {
-    return new WorkerManager(codebase, concurrency);
-  }
+  bool ended() const { return m_ended; }
 
   void set_current() { s_current = this; }
-  void start(const std::vector<std::string> &argv);
+  auto start(const std::vector<std::string> &argv) -> pjs::Promise*;
   void status(const std::function<void(Status&)> &cb);
   void stats(const std::function<void(stats::MetricDataSum&)> &cb);
   void stats(const std::vector<std::string> &names, const std::function<void(stats::MetricDataSum&)> &cb);
   void dump_objects(const std::string &class_name, const std::function<void(const std::map<std::string, size_t> &)> &cb);
   auto concurrency() const -> int { return m_concurrency; }
+  void signal(int sig);
   void stop(bool force = false);
 
 private:
-  WorkerManager(Codebase *codebase, int concurrency);
+  WorkerManager(Codebase *codebase, int concurrency, const std::function<void()> &on_end = nullptr);
 
   //
   // WorkerManager::Request
@@ -186,13 +185,18 @@ private:
 
   Net* m_net;
   Codebase* m_codebase;
+  int m_concurrency;
+  pjs::Ref<pjs::Promise> m_end_promise;
   std::vector<WorkerThread*> m_worker_threads;
   std::set<Request*> m_requests;
-  int m_concurrency = 0;
+  std::function<void()> m_on_end;
+  bool m_ended = false;
 
   void on_thread_ended(int index);
 
   thread_local static WorkerManager* s_current;
+
+  friend class pjs::ObjectTemplate<WorkerManager>;
 };
 
 } // namespace pipy
