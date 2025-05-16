@@ -114,7 +114,6 @@ auto get_last_error() -> std::string;
 #include <unistd.h>
 
 #define SIGNAL_STOP   SIGINT
-#define SIGNAL_RELOAD SIGHUP
 #define SIGNAL_ADMIN  SIGTSTP
 
 namespace pipy {

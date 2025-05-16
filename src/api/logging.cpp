@@ -57,14 +57,8 @@ static Data::Producer s_dp_binary("BinaryLogger");
 static Data::Producer s_dp_text("TextLogger");
 static Data::Producer s_dp_json("JSONLogger");
 
-AdminService* Logger::s_admin_service = nullptr;
-AdminLink* Logger::s_admin_link = nullptr;
 std::atomic<size_t> Logger::s_history_size(1024 * 1024);
 std::atomic<int> Logger::s_history_sending_size(0);
-
-void Logger::set_admin_service(AdminService *admin_service) {
-  s_admin_service = admin_service;
-}
 
 void Logger::get_names(const std::function<void(const std::string &)> &cb) {
   History::for_each(
@@ -185,25 +179,6 @@ void Logger::History::write_message(const Data &msg) {
 
   if (data.empty() && size() + 1 <= m_buffer.size()) {
     m_buffer[m_tail++ % m_buffer.size()] = '\n';
-  }
-
-  if (s_admin_service || (s_admin_link && m_streaming_enabled)) {
-    InputContext ic;
-
-    Data msg_endl;
-    s_dp.pack(&msg_endl, &msg);
-    s_dp.push(&msg_endl, '\n');
-
-    if (s_admin_link && m_streaming_enabled) {
-      static const std::string s_prefix("log/");
-      Data buf;
-      Data::Builder db(buf, &s_dp);
-      db.push(s_prefix);
-      db.push(m_name);
-      db.push('\n');
-      db.flush();
-      buf.push(msg_endl);
-    }
   }
 }
 

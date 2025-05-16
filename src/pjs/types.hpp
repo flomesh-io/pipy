@@ -3071,6 +3071,12 @@ public:
     Function *on_finally = nullptr
   ) -> Promise*;
 
+  void settle(bool resolved, const Value &result) {
+    settle(resolved ? State::RESOLVED : State::REJECTED, result);
+  }
+
+  void cancel();
+
 private:
 
   //
@@ -3112,7 +3118,6 @@ private:
   void add_then(Then *then);
   void clear_thens();
   void settle(State state, const Value &result);
-  void cancel();
   void enqueue();
   void dequeue(bool run);
 

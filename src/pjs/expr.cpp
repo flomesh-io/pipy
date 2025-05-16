@@ -1032,6 +1032,7 @@ bool Construction::eval(Context &ctx, Value &result) {
   for (size_t i = 0; i < argc; i++) {
     if (!m_argv[i]->eval(ctx, argv[i])) return false;
   }
+  ctx.trace(m_module, line(), column());
   result.set(f.as<Function>()->construct(ctx, argc, argv));
   if (ctx.ok()) return true;
   ctx.backtrace(source(), line(), column());
@@ -1047,6 +1048,7 @@ bool Construction::declare(Module *module, Scope &scope, Error &error, bool is_l
 }
 
 void Construction::resolve(Module *module, Context &ctx, LegacyImports *imports) {
+  m_module = module;
   m_func->resolve(module, ctx, imports);
   for (const auto &p : m_argv) {
     p->resolve(module, ctx, imports);
@@ -1127,6 +1129,7 @@ bool OptionalInvocation::eval(Context &ctx, Value &result) {
   for (size_t i = 0; i < argc; i++) {
     if (!m_argv[i]->eval(ctx, argv[i])) return false;
   }
+  ctx.trace(m_module, line(), column());
   (*f.as<Function>())(ctx, argc, argv, result);
   if (ctx.ok()) return true;
   ctx.backtrace(source(), line(), column());
@@ -1142,6 +1145,7 @@ bool OptionalInvocation::declare(Module *module, Scope &scope, Error &error, boo
 }
 
 void OptionalInvocation::resolve(Module *module, Context &ctx, LegacyImports *imports) {
+  m_module = module;
   m_func->resolve(module, ctx, imports);
   for (const auto &p : m_argv) {
     p->resolve(module, ctx, imports);

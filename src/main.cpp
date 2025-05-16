@@ -32,12 +32,14 @@
 #include "codebase.hpp"
 #include "codebase-store.hpp"
 #include "fs.hpp"
+#include "filters/http.hpp"
 #include "filters/tls.hpp"
 #include "input.hpp"
 #include "listener.hpp"
 #include "main-options.hpp"
 #include "net.hpp"
 #include "os-platform.hpp"
+#include "pipeline.hpp"
 #include "status.hpp"
 #include "timer.hpp"
 #include "utils.hpp"
@@ -89,23 +91,228 @@ static void show_version() {
 }
 
 //
-// Periodic job base
+// Admin service
 //
 
-class PeriodicJob {
+class AdminService {
 public:
-  void start() { run(); }
-  void stop() { if (m_timer) m_timer->cancel(); }
-protected:
-  virtual void run() = 0;
-  void next() {
-    if (!m_timer) m_timer = std::unique_ptr<Timer>(new Timer);
-    m_timer->schedule(5, [this]() { run(); });
-  }
+  bool is_open() const { return m_port > 0; }
+  void open(const std::string &ip, int port, WorkerThread *wt);
+  void open(const std::string &ip, int port, WorkerManager *wm);
+  void close();
 
 private:
-  std::unique_ptr<Timer> m_timer;
+  std::string m_ip;
+  int m_port = 0;
+
+  int open(const std::string &ip, int port, const std::function<pjs::Object*(const std::string &path)> &handler);
+
+  pjs::Object* respond_log(const std::string &path);
+  pjs::Object* respond_dump(const std::string &path, Status &status);
+  pjs::Object* respond_dump_objects(const std::map<std::string, size_t> &counts);
+
+  static const std::string s_path_log;
+  static const std::string s_path_dump;
+  static const std::string s_prefix_log;
+  static const std::string s_prefix_dump;
+  static const std::string s_prefix_dump_objects;
+
+  static Data::Producer s_dp;
 };
+
+const std::string AdminService::s_path_log("/log");
+const std::string AdminService::s_path_dump("/dump");
+const std::string AdminService::s_prefix_log("/log/");
+const std::string AdminService::s_prefix_dump("/dump/");
+const std::string AdminService::s_prefix_dump_objects("/dump/objects/");
+Data::Producer AdminService::s_dp("Admin");
+
+void AdminService::open(const std::string &ip, int port, WorkerThread *wt) {
+  if (!is_open()) {
+    m_ip = ip;
+    m_port = open(ip, port, [=](const std::string &path) -> pjs::Object* {
+      auto net = &Net::current();
+      if (path == s_path_log || utils::starts_with(path, s_prefix_log)) {
+        return respond_log(path);
+      } else if (utils::starts_with(path, s_prefix_dump_objects)) {
+        auto class_name = path.substr(s_prefix_dump_objects.length());
+        if (!class_name.empty()) {
+          auto promise = pjs::Promise::make();
+          auto counts = new std::map<std::string, size_t>;
+          wt->dump_objects(class_name, *counts, [=]() {
+            net->post([=]() {
+              InputContext ic;
+              promise->settle(true, respond_dump_objects(*counts));
+              promise->release();
+              delete counts;
+            });
+          });
+          promise->retain();
+          return promise;
+        }
+      } else if (path == s_path_dump || utils::starts_with(path, s_prefix_dump)) {
+        auto promise = pjs::Promise::make();
+        auto status = new Status;
+        wt->status(*status, [=]() {
+          net->post([=]() {
+            InputContext ic;
+            promise->settle(true, respond_dump(path, *status));
+            promise->release();
+            delete status;
+          });
+        });
+        promise->retain();
+        return promise;
+      }
+      return nullptr;
+    });
+  }
+}
+
+void AdminService::open(const std::string &ip, int port, WorkerManager *wm) {
+  if (!is_open()) {
+    m_ip = ip;
+    m_port = open(ip, port, [=](const std::string &path) -> pjs::Object* {
+      if (path == s_path_log || utils::starts_with(path, s_prefix_log)) {
+        return respond_log(path);
+      } else if (utils::starts_with(path, s_prefix_dump_objects)) {
+        auto class_name = path.substr(s_prefix_dump_objects.length());
+        if (!class_name.empty()) {
+          auto promise = pjs::Promise::make();
+          wm->dump_objects(class_name, [=](const std::map<std::string, size_t> &counts) {
+            InputContext ic;
+            promise->settle(true, respond_dump_objects(counts));
+            promise->release();
+          });
+          promise->retain();
+          return promise;
+        }
+      } else if (path == s_path_dump || utils::starts_with(path, s_prefix_dump)) {
+        auto promise = pjs::Promise::make();
+        wm->status([=](Status &status) {
+          InputContext ic;
+          promise->settle(true, respond_dump(path, status));
+          promise->release();
+        });
+        promise->retain();
+        return promise;
+      }
+      return nullptr;
+    });
+  }
+}
+
+int AdminService::open(const std::string &ip, int port, const std::function<pjs::Object*(const std::string &path)> &handler) {
+  PipelineLayout *ppl = PipelineLayout::make(Worker::current());
+  ppl->append(
+    new http::Server(
+      pjs::Function::make(pjs::Method::make(
+        "admin-handler",
+        [=](pjs::Context &context, pjs::Object*, pjs::Value &ret) {
+          auto req = context.arg(0).as<Message>();
+          auto res = handler(req->head()->as<http::RequestHead>()->path->str());
+          if (res) {
+            ret.set(res);
+          } else {
+            auto head = http::ResponseHead::make();
+            head->status = 404;
+            ret.set(Message::make(head, nullptr));
+          }
+        }
+      )),
+      http::Server::Options()
+    )
+  );
+
+  Log::info("[admin] Try to start admin on port [%s]:%d", ip.c_str(), port);
+
+  Listener::Options opts;
+  while (port < 65536) {
+    auto listener = Listener::get(Port::Protocol::TCP, ip, port);
+    if (!listener->is_open()) {
+      try {
+        listener->set_options(opts);
+        listener->pipeline_layout(ppl);
+        Log::info("[admin] Started admin on port [%s]:%d", ip.c_str(), port);
+        return port;
+      } catch (std::runtime_error &err) {
+        Log::error("[admin] Cannot start admin on port [%s]:%d: %s", ip.c_str(), port, err.what());
+      }
+    } else {
+      Log::error("[admin] Cannot start admin on port [%s]:%d because it's currenly busy", ip.c_str(), port);
+    }
+    port++;
+  }
+
+  Log::error("[admin] Unable to find any port for admin");
+  return 0;
+}
+
+void AdminService::close() {
+  if (is_open()) {
+    auto listener = Listener::get(Port::Protocol::TCP, m_ip, m_port);
+    listener->pipeline_layout(nullptr);
+    Log::info("[admin] Stopped admin on port [%s]:%d", m_ip.c_str(), m_port);
+    m_port = 0;
+  }
+}
+
+pjs::Object* AdminService::respond_log(const std::string &path) {
+  static const std::string s_pipy_log("pipy_log");
+  auto name = path == s_path_log ? s_pipy_log : path.substr(s_prefix_log.length());
+  Data buf;
+  logging::Logger::tail(s_pipy_log, buf);
+  return Message::make(Data::make(std::move(buf)));
+}
+
+pjs::Object* AdminService::respond_dump(const std::string &path, Status &status) {
+  Data buf;
+  Data::Builder db(buf, &s_dp);
+  if (path == s_path_dump) {
+    status.dump_pools(db);
+    status.dump_objects(db);
+    status.dump_chunks(db);
+    status.dump_buffers(db);
+    status.dump_inbound(db);
+    status.dump_outbound(db);
+  } else {
+    auto name = path.substr(s_prefix_dump.length());
+    if (name == "pools") {
+      status.dump_pools(db);
+    } else if (name == "objects") {
+      status.dump_objects(db);
+    } else if (name == "chunks") {
+      status.dump_chunks(db);
+    } else if (name == "buffers") {
+      status.dump_buffers(db);
+    } else if (name == "io") {
+      status.dump_inbound(db);
+      status.dump_outbound(db);
+    } else if (name == "in") {
+      status.dump_inbound(db);
+    } else if (name == "out") {
+      status.dump_outbound(db);
+    } else {
+      return nullptr;
+    }
+  }
+  db.flush();
+  return Message::make(Data::make(std::move(buf)));
+}
+
+pjs::Object* AdminService::respond_dump_objects(const std::map<std::string, size_t> &counts) {
+  Data buf;
+  Data::Builder db(buf, &s_dp);
+  for (const auto &p : counts) {
+    char str[100];
+    auto len = std::snprintf(str, sizeof(str), "%llu ", (unsigned long long)p.second);
+    db.push(str, len);
+    db.push(p.first);
+    db.push('\n');
+  }
+  db.flush();
+  return Message::make(Data::make(std::move(buf)));
+}
 
 //
 // Handle signals
@@ -115,21 +322,34 @@ class SignalHandler {
 public:
   SignalHandler() {}
 
-  SignalHandler(WorkerThread *worker_thread) {
+  SignalHandler(WorkerThread *worker_thread, const std::string &admin_ip = "", int admin_port = 0, bool admin_open = false) {
     bool started = false;
     std::condition_variable start_cv;
     std::mutex start_cv_mutex;
     std::unique_lock<std::mutex> lock(start_cv_mutex);
 
     m_thread = std::thread(
-      [&]() {
+      [=, &started, &start_cv, &start_cv_mutex]() {
         m_net = &Net::current();
         {
           std::lock_guard<std::mutex> lock(start_cv_mutex);
           started = true;
           start_cv.notify_one();
         }
-        run(m_net, [=](int sig) { worker_thread->signal(sig); });
+        run(
+          m_net, admin_ip, admin_port, admin_open,
+          [=](int sig) {
+            if (sig == SIGNAL_ADMIN && admin_port) {
+              if (m_admin.is_open()) {
+                m_admin.close();
+              } else {
+                m_admin.open(admin_ip, admin_port, worker_thread);
+              }
+            } else {
+              worker_thread->signal(sig);
+            }
+          }
+        );
       }
     );
 
@@ -141,18 +361,33 @@ public:
     if (m_thread.joinable()) m_thread.join();
   }
 
-  void run(WorkerManager *worker_manager) {
-    run(&Net::current(), [=](int sig) { worker_manager->signal(sig); });
+  void run(WorkerManager *worker_manager, const std::string &admin_ip = "", int admin_port = 0, bool admin_open = false) {
+    run(
+      &Net::current(), admin_ip, admin_port, admin_open,
+      [=](int sig) {
+        if (sig == SIGNAL_ADMIN && admin_port) {
+          if (m_admin.is_open()) {
+            m_admin.close();
+          } else {
+            m_admin.open(admin_ip, admin_port, worker_manager);
+          }
+        } else {
+          worker_manager->signal(sig);
+        }
+      }
+    );
   }
 
 private:
   std::thread m_thread;
   Net* m_net = nullptr;
+  AdminService m_admin;
 
-  void run(Net *net, const std::function<void(int)> &cb) {
+  void run(Net *net, const std::string &admin_ip, int admin_port, bool admin_open, const std::function<void(int)> &cb) {
+    Log::init();
+    pjs::Ref<Worker> worker = Worker::make(pjs::Promise::Period::current());
     asio::signal_set signals(Net::context());
     signals.add(SIGNAL_STOP);
-    signals.add(SIGNAL_RELOAD);
     signals.add(SIGNAL_ADMIN);
     std::function<void()> wait;
     wait = [&]() {
@@ -168,7 +403,14 @@ private:
       );
     };
     wait();
+    worker->start();
+    if (admin_open) cb(SIGNAL_ADMIN);
     net->run();
+    worker->stop(true);
+    worker = nullptr;
+    Log::shutdown();
+    Listener::delete_all();
+    Timer::cancel_all();
   }
 };
 
@@ -223,6 +465,7 @@ int pipy_main(int argc, char *argv[]) {
 
     std::string admin_ip("::");
     int admin_port = 6060; // default repo port
+    bool admin_open = (!opts.admin_port.empty() && !opts.admin_port_off);
     auto admin_ip_port = opts.admin_port;
     if (!admin_ip_port.empty()) {
       if (!utils::get_host_port(admin_ip_port, admin_ip, admin_port)) {
@@ -338,11 +581,11 @@ int pipy_main(int argc, char *argv[]) {
         []() { Net::current().stop(); }
       );
       wm->start(opts.arguments);
-      SignalHandler().run(wm);
+      SignalHandler().run(wm, admin_ip, admin_port, admin_open);
 
     } else {
       WorkerThread t(codebase);
-      SignalHandler sh(&t);
+      SignalHandler sh(&t, admin_ip, admin_port, admin_open);
       t.main(opts.arguments);
     }
 

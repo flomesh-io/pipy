@@ -54,6 +54,7 @@ WorkerThread::~WorkerThread() {
 }
 
 void WorkerThread::main(const std::vector<std::string> &argv) {
+  s_current = this;
   m_net = &Net::current();
 
   Log::init();
@@ -78,20 +79,22 @@ void WorkerThread::main(const std::vector<std::string> &argv) {
     Net::context().poll();
 
     if (Net::context().stopped()) {
-      if (result.is_string()) {
-        std::cout << result.s()->str();
-      } else {
-        Data buf;
-        Console::dump(result, buf);
-        buf.to_chunks(
-          [&](const uint8_t *ptr, int len) {
-            std::cout.write((const char *)ptr, len);
-          }
-        );
-        std::cout << std::endl;
+      if (mod->is_expression()) {
+        if (result.is_string()) {
+          std::cout << result.s()->str();
+        } else {
+          Data buf;
+          Console::dump(result, buf);
+          buf.to_chunks(
+            [&](const uint8_t *ptr, int len) {
+              std::cout.write((const char *)ptr, len);
+            }
+          );
+          std::cout << std::endl;
+        }
       }
 
-    } else if (mod->is_expression()) {
+    } else {
       init_metrics();
       Net::current().run();
     }
@@ -154,7 +157,7 @@ void WorkerThread::stats(stats::MetricData &metric_data, const std::vector<std::
 
 void WorkerThread::dump_objects(const std::string &class_name, std::map<std::string, size_t> &counts, const std::function<void()> &cb) {
   m_net->post(
-    [&, cb]() {
+    [&, class_name, cb]() {
       if (auto c = pjs::Class::get(class_name)) {
         c->iterate(
           [&](pjs::Object *obj) {

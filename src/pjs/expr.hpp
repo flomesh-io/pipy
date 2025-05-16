@@ -612,6 +612,7 @@ public:
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
+  Module* m_module = nullptr;
   std::unique_ptr<Expr> m_func;
   std::vector<std::unique_ptr<Expr>> m_argv;
 };
@@ -650,6 +651,7 @@ public:
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
+  Module* m_module = nullptr;
   std::unique_ptr<Expr> m_func;
   std::vector<std::unique_ptr<Expr>> m_argv;
 };
