@@ -92,7 +92,6 @@ public:
   static Codebase* from_fs(const std::string &path);
   static Codebase* from_fs(const std::string &path, const std::string &script);
   static Codebase* from_store(CodebaseStore *store, const std::string &name);
-  static Codebase* from_http(const std::string &url, const Fetch::Options &options);
 
   void set_current() {
     if (s_current) s_current->deactivate();
@@ -110,9 +109,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> = 0;
   virtual auto get(const std::string &path) -> SharedData* = 0;
   virtual void set(const std::string &path, SharedData *data) = 0;
-  virtual void patch(const std::string &path, SharedData *data) = 0;
   virtual auto watch(const std::string &path, const std::function<void(const std::list<std::string> &)> &on_update) -> Watch* = 0;
-  virtual void sync(bool force, const std::function<void(bool)> &on_update) = 0;
 
 protected:
   virtual void activate() {};

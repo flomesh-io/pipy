@@ -556,12 +556,6 @@ int pipy_main(int argc, char *argv[]) {
 
     // Start using a remote codebase
     } else if (is_remote) {
-      Fetch::Options options;
-      options.tls = is_tls;
-      options.cert = opts.tls_cert;
-      options.key = opts.tls_key;
-      options.trusted = opts.tls_trusted;
-      codebase = Codebase::from_http(opts.filename, options);
       throw std::string("TODO");
 
     // Start using a local codebase
