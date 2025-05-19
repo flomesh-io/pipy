@@ -73,21 +73,14 @@ static void show_version() {
   std::cout << "OpenSSL Conf     : " << CONF_get1_default_config_file() << std::endl;
 #endif
 
-#ifdef PIPY_USE_GUI
-  std::cout << "Builtin GUI      : " << "Yes" << std::endl;
-#else
-  std::cout << "Builtin GUI      : " << "No" << std::endl;
-#endif
-
-#ifdef PIPY_USE_CODEBASES
-  std::cout << "Builtin Codebases: " << "Yes" << std::endl;
-#else
-  std::cout << "Builtin Codebases: " << "No" << std::endl;
-#endif
-
 #ifdef PIPY_DEFAULT_OPTIONS
   std::cout << "Default Options  : " << PIPY_DEFAULT_OPTIONS << std::endl;
 #endif
+
+  std::cout << "Builtin Codebases: " << std::endl;
+  for (const auto &name : Codebase::list_builtin()) {
+    std::cout << "  " << name << std::endl;
+  }
 }
 
 //
@@ -552,7 +545,7 @@ int pipy_main(int argc, char *argv[]) {
       auto name = opts.filename.substr(6);
       store = Store::open_memory();
       repo = new CodebaseStore(store);
-      codebase = Codebase::from_store(repo, name);
+      codebase = Codebase::from_builtin(name);
 
     // Start using a remote codebase
     } else if (is_remote) {

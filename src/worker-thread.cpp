@@ -40,7 +40,6 @@ thread_local WorkerThread* WorkerThread::s_current = nullptr;
 WorkerThread::WorkerThread(Codebase *codebase, int index, const std::function<void()> &on_end)
   : m_index(index)
   , m_codebase(codebase)
-  , m_version(codebase->version())
   , m_recycling(false)
   , m_ended(false)
   , m_on_end(on_end)

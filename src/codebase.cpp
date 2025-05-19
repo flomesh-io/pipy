@@ -24,15 +24,11 @@
  */
 
 #include "codebase.hpp"
-#include "codebase-store.hpp"
-#include "context.hpp"
-#include "pipeline.hpp"
-#include "api/http.hpp"
-#include "api/url.hpp"
-#include "fetch.hpp"
+#include "compressor.hpp"
+#include "data.hpp"
 #include "fs.hpp"
+#include "timer.hpp"
 #include "utils.hpp"
-#include "log.hpp"
 
 #include <limits.h>
 #include <fstream>
@@ -40,11 +36,11 @@
 #include <thread>
 #include <mutex>
 
+#include "codebases.br.h"
+
 namespace pipy {
 
 static Data::Producer s_dp("Codebase");
-static const pjs::Ref<pjs::Str> s_etag(pjs::Str::make("etag"));
-static const pjs::Ref<pjs::Str> s_date(pjs::Str::make("last-modified"));
 
 thread_local Codebase* Codebase::s_current = nullptr;
 
@@ -57,7 +53,6 @@ public:
   CodebaseFromRoot(Codebase *root);
   ~CodebaseFromRoot();
 
-  virtual auto version() const -> const std::string& override { return m_root->version(); }
   virtual bool writable() const override { return m_root->writable(); }
   virtual auto entry() const -> const std::string& override { return m_root->entry(); }
   virtual void entry(const std::string &path) override { m_root->entry(path); }
@@ -179,7 +174,6 @@ public:
   CodebaseFromFS(const std::string &path, const std::string &script);
   virtual ~CodebaseFromFS() override;
 
-  virtual auto version() const -> const std::string& override { return m_version; }
   virtual bool writable() const override { return true; }
   virtual auto entry() const -> const std::string& override { return m_entry; }
   virtual void entry(const std::string &path) override { m_entry = path; }
@@ -440,21 +434,20 @@ void CodebaseFromFS::list_file_times(const std::string &path, std::map<std::stri
 }
 
 //
-// CodebaseFromStore
+// CodebaseFromMemory
 //
 
-class CodebaseFromStore : public Codebase {
+class CodebaseFromMemory : public Codebase {
 public:
-  CodebaseFromStore(CodebaseStore *store, const std::string &name);
+  CodebaseFromMemory(const std::string &entry);
 
-  virtual auto version() const -> const std::string& override { return m_version; }
   virtual bool writable() const override { return false; }
   virtual auto entry() const -> const std::string& override { return m_entry; }
   virtual void entry(const std::string &path) override {}
   virtual void mount(const std::string &path, Codebase *codebase) override;
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
-  virtual void set(const std::string &path, SharedData *data) override {}
+  virtual void set(const std::string &path, SharedData *data) override;
   virtual auto watch(const std::string &path, const std::function<void(const std::list<std::string> &)> &on_update) -> Watch* override;
 
 private:
@@ -464,34 +457,16 @@ private:
   std::map<std::string, pjs::Ref<SharedData>> m_files;
 };
 
-CodebaseFromStore::CodebaseFromStore(CodebaseStore *store, const std::string &name) {
-  auto codebase = store->find_codebase(name);
-  if (!codebase) {
-    std::string msg("Codebase not found: ");
-    throw std::runtime_error(msg + name);
-  }
-
-  CodebaseStore::Codebase::Info info;
-  codebase->get_info(info);
-  m_version = info.version;
-  m_entry = info.main;
-
-  std::set<std::string> paths;
-  codebase->list_files(true, paths);
-  codebase->list_edit(paths);
-
-  for (const auto &path : paths) {
-    Data buf;
-    codebase->get_file(path, buf);
-    m_files[path] = SharedData::make(buf);
-  }
+CodebaseFromMemory::CodebaseFromMemory(const std::string &entry)
+  : m_entry(entry)
+{
 }
 
-void CodebaseFromStore::mount(const std::string &, Codebase *) {
+void CodebaseFromMemory::mount(const std::string &, Codebase *) {
   throw std::runtime_error("mounting unsupported");
 }
 
-auto CodebaseFromStore::list(const std::string &path) -> std::list<std::string> {
+auto CodebaseFromMemory::list(const std::string &path) -> std::list<std::string> {
   std::lock_guard<std::mutex> lock(m_mutex);
   std::set<std::string> names;
   auto n = path.length();
@@ -511,7 +486,7 @@ auto CodebaseFromStore::list(const std::string &path) -> std::list<std::string> 
   return list;
 }
 
-auto CodebaseFromStore::get(const std::string &path) -> SharedData* {
+auto CodebaseFromMemory::get(const std::string &path) -> SharedData* {
   std::string k = normalize_path(path);
   std::lock_guard<std::mutex> lock(m_mutex);
   auto i = m_files.find(k);
@@ -519,13 +494,30 @@ auto CodebaseFromStore::get(const std::string &path) -> SharedData* {
   return i->second->retain();
 }
 
-auto CodebaseFromStore::watch(const std::string &path, const std::function<void(const std::list<std::string> &)> &on_update) -> Watch* {
+void CodebaseFromMemory::set(const std::string &path, SharedData *data) {
+  std::string k = normalize_path(path);
+  std::lock_guard<std::mutex> lock(m_mutex);
+  m_files[k] = data;
+}
+
+auto CodebaseFromMemory::watch(const std::string &path, const std::function<void(const std::list<std::string> &)> &on_update) -> Watch* {
   return new Watch(on_update);
 }
 
 //
 // Codebase
 //
+
+std::map<std::string, Codebase*> Codebase::s_builtin_codebases;
+
+auto Codebase::list_builtin() -> std::vector<std::string> {
+  std::vector<std::string> list;
+  load_builtin_codebases();
+  for (const auto &p : s_builtin_codebases) {
+    list.push_back(p.first);
+  }
+  return list;
+}
 
 Codebase* Codebase::from_root(Codebase *root) {
   return new CodebaseFromRoot(root);
@@ -539,8 +531,69 @@ Codebase* Codebase::from_fs(const std::string &path, const std::string &script) 
   return new CodebaseFromFS(path, script);
 }
 
-Codebase* Codebase::from_store(CodebaseStore *store, const std::string &name) {
-  return new CodebaseFromStore(store, name);
+Codebase* Codebase::from_builtin(const std::string &path) {
+  load_builtin_codebases();
+  auto i = s_builtin_codebases.find(path);
+  if (i == s_builtin_codebases.end()) return nullptr;
+  return i->second;
+}
+
+void Codebase::load_builtin_codebases() {
+  if (s_builtin_codebases.size() > 0) return;
+
+  Data out;
+  auto *decompressor = Decompressor::brotli(
+    [&](Data &data) {
+      out.push(std::move(data));
+    }
+  );
+
+  decompressor->input(Data(s_codebases_br, sizeof(s_codebases_br), &s_dp));
+  decompressor->finalize();
+
+  size_t p = 0, size = out.size();
+  auto buffer = new uint8_t[size];
+  out.to_bytes((uint8_t *)buffer);
+
+  auto eof = [&]() -> bool {
+    return p >= size;
+  };
+
+  auto read_string = [&]() -> std::string {
+    std::string s;
+    while (!eof() && buffer[p]) {
+      s += (char)buffer[p++];
+    }
+    p++;
+    return s;
+  };
+
+  auto read_bytes = [&](size_t n) -> std::vector<uint8_t> {
+    if (p + n > size) n = size - p;
+    auto s = p; p += n;
+    return std::vector<uint8_t>(buffer + s, buffer + p);
+  };
+
+  while (!eof()) {
+    auto filename = read_string();
+    auto size = std::stoi(read_string());
+    auto data = read_bytes(size);
+    auto i = filename.find('/', 1);
+    if (i != std::string::npos) {
+      i = filename.find('/', i + 1);
+      if (i != std::string::npos) {
+        auto codebase_name = filename.substr(0, i);
+        auto codebase = s_builtin_codebases[codebase_name];
+        if (!codebase) {
+          codebase = new CodebaseFromMemory("main.js");
+          s_builtin_codebases[codebase_name] = codebase;
+        }
+        codebase->set(filename.substr(i), SharedData::make(Data(data, &s_dp)));
+      }
+    }
+  }
+
+  delete [] buffer;
 }
 
 auto Codebase::normalize_path(const std::string &path) -> std::string {

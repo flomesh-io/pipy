@@ -9,7 +9,7 @@ project(pipy)
 option(PIPY_STATICLIB "Build Pipy as static library" OFF)
 option(PIPY_SHARED "Build Pipy as dynamic library" OFF)
 option(PIPY_GUI "include builtin GUI" OFF)
-option(PIPY_CODEBASES "include builtin codebases in the executable" OFF)
+option(PIPY_SAMPLE_CODEBASES "include sample codebases in the executable" ON)
 option(PIPY_CUSTOM_CODEBASES "include custom codebases in the executable (<group>/<name>:<path>,<group>/<name>:<path>,...)" "")
 option(PIPY_DEFAULT_OPTIONS "fixed command line options to insert before user options" OFF)
 option(PIPY_BPF "enable eBPF support" ON)
@@ -185,13 +185,14 @@ if(NOT PIPY_USE_SYSTEM_OPENSSL)
   add_custom_target(OpenSSL DEPENDS ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL})
 endif()
 
+set(BROTLI_BUNDLED_MODE ON CACHE BOOL "" FORCE)
+set(BROTLI_DISABLE_TESTS ON CACHE BOOL "" FORCE)
+add_subdirectory(deps/brotli-1.0.9)
+
 if(PIPY_BROTLI)
   set(BROTLI_INC_DIR ${PIPY_BROTLI}/include)
   set(BROTLI_LIB ${PIPY_BROTLI}/lib/${LIB_BROTLI})
 else()
-  set(BROTLI_BUNDLED_MODE ON CACHE BOOL "" FORCE)
-  set(BROTLI_DISABLE_TESTS ON CACHE BOOL "" FORCE)
-  add_subdirectory(deps/brotli-1.0.9)
   set(BROTLI_INC_DIR "${CMAKE_SOURCE_DIR}/deps/brotli-1.0.9/c/include")
   set(BROTLI_LIB brotlidec-static)
 endif(PIPY_BROTLI)
@@ -240,7 +241,7 @@ endif()
 
 add_subdirectory(test/benchmark/baseline)
 
-SET(PIPY_SRC
+set(PIPY_SRC
   src/api/algo.cpp
   src/api/bgp.cpp
   src/api/bpf.cpp
@@ -387,8 +388,9 @@ execute_process(
 )
 
 add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
+add_custom_target(BuiltinCodebases DEPENDS ${CMAKE_BINARY_DIR}/deps/codebases.br.h)
 
-add_dependencies(pipy yajl_s expat ${BROTLI_LIB} GenVer)
+add_dependencies(pipy yajl_s expat ${BROTLI_LIB} GenVer BuiltinCodebases)
 
 if(NOT PIPY_USE_SYSTEM_OPENSSL)
   add_dependencies(pipy OpenSSL)
@@ -398,52 +400,23 @@ if(NOT PIPY_USE_SYSTEM_ZLIB)
   add_dependencies(pipy ${ZLIB_LIB})
 endif()
 
-find_program(NODEJS_EXECUTABLE NAMES node nodejs
-  HINTS
-  $ENV{NODE_DIR}
-  PATH_SUFFIXES bin $ENV{HOMEBREW_PREFIX}
-  DOC "Node.js interpreter")
+add_subdirectory(tools/pack)
 
-if(NODEJS_EXECUTABLE)
-  message("NodeJS found at: ${NODEJS_EXECUTABLE}")
+set(CODEBASES "pipy/repo:${CMAKE_SOURCE_DIR}/src/scripts/repo,pipy/worker:${CMAKE_SOURCE_DIR}/src/scripts/worker")
+if(PIPY_SAMPLE_CODEBASES)
+  set(CODEBASES "${CODEBASES},samples:${CMAKE_SOURCE_DIR}/samples,tutorial:${CMAKE_SOURCE_DIR}/tutorial")
+endif()
+if(PIPY_CUSTOM_CODEBASES)
+  set(CODEBASES "${CODEBASES},${PIPY_CUSTOM_CODEBASES}")
 endif()
 
-if(PIPY_GUI)
-  add_definitions(-DPIPY_USE_GUI)
-
-  if(NOT NODEJS_EXECUTABLE)
-    message(FATAL_ERROR "Nodejs installation not found.")
-  endif()
-
-  add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/deps/gui.tar.h
-    COMMAND ${NODEJS_EXECUTABLE}
-    ARGS pack-gui.js ${CMAKE_BINARY_DIR}/deps/gui.tar.h
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
-    DEPENDS gui/pack-gui.js ${CMAKE_SOURCE_DIR}/public/index.html
-  )
-  add_custom_target(PackGui DEPENDS ${CMAKE_BINARY_DIR}/deps/gui.tar.h)
-  add_dependencies(pipy PackGui)
-endif()
-
-if(PIPY_CODEBASES)
-  add_definitions(-DPIPY_USE_CODEBASES)
-
-  if(NOT NODEJS_EXECUTABLE)
-    message(FATAL_ERROR "Nodejs installation not found.")
-  endif()
-
-  add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/deps/codebases.tar.gz.h
-    COMMAND ${NODEJS_EXECUTABLE}
-    ARGS pack-codebases.js ${CMAKE_BINARY_DIR}/deps/codebases.tar.gz.h ${PIPY_CUSTOM_CODEBASES}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
-    DEPENDS gui/pack-codebases.js ${CMAKE_SOURCE_DIR}/tutorial ${CMAKE_SOURCE_DIR}/samples
-  )
-
-  add_custom_target(PackCodebases DEPENDS ${CMAKE_BINARY_DIR}/deps/codebases.tar.gz.h)
-  add_dependencies(pipy PackCodebases)
-endif()
+add_custom_command(
+  OUTPUT ${CMAKE_BINARY_DIR}/deps/codebases.br.h
+  COMMAND ${CMAKE_BINARY_DIR}/pack
+  ARGS ${CMAKE_BINARY_DIR}/deps/codebases.br.h ${CODEBASES} /samples/nmi/,/samples/bpf/
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
+  DEPENDS pack ${CMAKE_SOURCE_DIR}/tutorial ${CMAKE_SOURCE_DIR}/samples
+)
 
 if(PIPY_DEFAULT_OPTIONS)
   add_definitions(-DPIPY_DEFAULT_OPTIONS="${PIPY_DEFAULT_OPTIONS}")

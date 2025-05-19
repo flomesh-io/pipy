@@ -28,6 +28,7 @@
 
 #include "pjs/pjs.hpp"
 #include "data.hpp"
+#include "net.hpp"
 #include "pipeline.hpp"
 #include "codebase.hpp"
 

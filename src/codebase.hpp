@@ -27,7 +27,6 @@
 #define CODEBASE_HPP
 
 #include "pjs/pjs.hpp"
-#include "fetch.hpp"
 
 #include <mutex>
 #include <functional>
@@ -35,7 +34,6 @@
 
 namespace pipy {
 
-class CodebaseStore;
 class SharedData;
 
 //
@@ -87,11 +85,13 @@ public:
   };
 
   static auto current() -> Codebase* { return s_current; }
+  static auto list_builtin() -> std::vector<std::string>;
 
+  static Codebase* make();
   static Codebase* from_root(Codebase *root);
   static Codebase* from_fs(const std::string &path);
   static Codebase* from_fs(const std::string &path, const std::string &script);
-  static Codebase* from_store(CodebaseStore *store, const std::string &name);
+  static Codebase* from_builtin(const std::string &path);
 
   void set_current() {
     if (s_current) s_current->deactivate();
@@ -101,7 +101,6 @@ public:
 
   virtual ~Codebase() {}
 
-  virtual auto version() const -> const std::string& = 0;
   virtual bool writable() const = 0;
   virtual auto entry() const -> const std::string& = 0;
   virtual void entry(const std::string &path) = 0;
@@ -121,6 +120,10 @@ protected:
   auto normalize_path(const std::string &path) -> std::string;
 
 private:
+  static std::map<std::string, Codebase*> s_builtin_codebases;
+
+  static void load_builtin_codebases();
+
   thread_local static Codebase* s_current;
 };
 
