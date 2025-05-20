@@ -403,9 +403,9 @@ endif()
 
 add_subdirectory(tools/pack)
 
-set(CODEBASES "pipy/repo:${CMAKE_SOURCE_DIR}/src/scripts/repo,pipy/worker:${CMAKE_SOURCE_DIR}/src/scripts/worker")
+set(CODEBASES "pipy/repo:src/scripts/repo,pipy/node:src/scripts/node")
 if(PIPY_SAMPLE_CODEBASES)
-  set(CODEBASES "${CODEBASES},samples:${CMAKE_SOURCE_DIR}/samples,tutorial:${CMAKE_SOURCE_DIR}/tutorial")
+  set(CODEBASES "${CODEBASES},samples:samples,tutorial:tutorial")
 endif()
 if(PIPY_CUSTOM_CODEBASES)
   set(CODEBASES "${CODEBASES},${PIPY_CUSTOM_CODEBASES}")
@@ -415,7 +415,7 @@ add_custom_command(
   OUTPUT ${CMAKE_BINARY_DIR}/deps/codebases.br.h
   COMMAND ${CMAKE_BINARY_DIR}/pack
   ARGS ${CMAKE_BINARY_DIR}/deps/codebases.br.h ${CODEBASES} /samples/nmi/,/samples/bpf/
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   DEPENDS pack ${CMAKE_SOURCE_DIR}/src/scripts ${CMAKE_SOURCE_DIR}/tutorial ${CMAKE_SOURCE_DIR}/samples
 )
 

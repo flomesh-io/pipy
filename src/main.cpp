@@ -556,9 +556,10 @@ int pipy_main(int argc, char *argv[]) {
 
     // Start as codebase repo proxy
     } else if (is_repo_proxy) {
-      codebase = Codebase::from_builtin("/pipy/repo-proxy");
+      codebase = Codebase::from_builtin("/pipy/repo");
       std::string json_args;
       json_args_append(json_args, "url", opts.filename);
+      json_args_append(json_args, "listen", '[' + admin_ip + "]:" + std::to_string(admin_port));
       json_args += '}';
       args.insert(args.begin() + 1, json_args);
 
@@ -575,6 +576,7 @@ int pipy_main(int argc, char *argv[]) {
     } else if (is_builtin) {
       auto name = opts.filename.substr(6);
       codebase = Codebase::from_builtin(name);
+      if (!codebase) throw std::runtime_error("no builtin codebase: " + name);
 
     // Start using a local codebase
     } else if (is_file_found) {
