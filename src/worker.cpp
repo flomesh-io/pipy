@@ -36,6 +36,7 @@
 #include "api/algo.hpp"
 #include "api/bgp.hpp"
 #include "api/bpf.hpp"
+#include "api/codebase-api.hpp"
 #include "api/console.hpp"
 #include "api/crypto.hpp"
 #include "api/c-struct.hpp"
@@ -203,6 +204,9 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // pipeline
   variable("pipeline", class_of<PipelineLayoutWrapper::Constructor>());
+
+  // Codebase
+  variable("Codebase", class_of<Constructor<CodebaseWrapper>>());
 
   // __thread
   accessor("__thread", [](Object *obj, Value &ret) {

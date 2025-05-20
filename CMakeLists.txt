@@ -245,6 +245,7 @@ set(PIPY_SRC
   src/api/algo.cpp
   src/api/bgp.cpp
   src/api/bpf.cpp
+  src/api/codebase-api.cpp
   src/api/console.cpp
   src/api/crypto.cpp
   src/api/c-struct.cpp
@@ -415,7 +416,7 @@ add_custom_command(
   COMMAND ${CMAKE_BINARY_DIR}/pack
   ARGS ${CMAKE_BINARY_DIR}/deps/codebases.br.h ${CODEBASES} /samples/nmi/,/samples/bpf/
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
-  DEPENDS pack ${CMAKE_SOURCE_DIR}/tutorial ${CMAKE_SOURCE_DIR}/samples
+  DEPENDS pack ${CMAKE_SOURCE_DIR}/src/scripts ${CMAKE_SOURCE_DIR}/tutorial ${CMAKE_SOURCE_DIR}/samples
 )
 
 if(PIPY_DEFAULT_OPTIONS)

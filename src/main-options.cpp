@@ -75,11 +75,9 @@ void MainOptions::show_help() {
   std::cout << "  --log-local=<stdout|stderr|null>     Select local output for system log" << std::endl;
   std::cout << "  --log-local-only                     Do not send out system log" << std::endl;
   std::cout << "  --no-reload                          Do not check for remote codebase updates" << std::endl;
-  std::cout << "  --no-graph                           Do not print pipeline graphs to the log" << std::endl;
   std::cout << "  --no-status                          Do not report current status to the repo" << std::endl;
   std::cout << "  --no-metrics                         Do not report metrics to the repo" << std::endl;
   std::cout << "  --trace-objects                      Enable tracing the locations of object construction" << std::endl;
-  std::cout << "  --force-start                        Force to start even at failure of address/port binding" << std::endl;
   std::cout << "  --init-repo=<dirname>                Populate the repo with codebases under the specified directory" << std::endl;
   std::cout << "  --init-code=<codebase>               Start running the specified codebase after repo initialization" << std::endl;
   std::cout << "  --instance-uuid=<uuid>               Specify a UUID for this worker process" << std::endl;
@@ -87,11 +85,9 @@ void MainOptions::show_help() {
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
   std::cout << "  --admin-port=<[[ip]:]port>           Enable administration service on the specified port" << std::endl;
   std::cout << "  --admin-port-off                     Do not start administration service at startup" << std::endl;
-  std::cout << "  --admin-gui=<dirname>                Specify the location of administration GUI front-end files" << std::endl;
   std::cout << "  --admin-tls-cert=<filename>          Administration service certificate" << std::endl;
   std::cout << "  --admin-tls-key=<filename>           Administration service private key" << std::endl;
   std::cout << "  --admin-tls-trusted=<filename>       Client certificate(s) trusted by administration service" << std::endl;
-  std::cout << "  --admin-log-file=<filename>          Set the pathname of the administration log file" << std::endl;
   std::cout << "  --tls-cert=<filename>                Client certificate in communication to administration service" << std::endl;
   std::cout << "  --tls-key=<filename>                 Client private key in communication to administration service" << std::endl;
   std::cout << "  --tls-trusted=<filename>             Administration service certificate(s) trusted by client" << std::endl;
@@ -253,16 +249,12 @@ void MainOptions::parse(const std::list<std::string> &args) {
         log_local_only = true;
       } else if (k == "--no-reload") {
         no_reload = true;
-      } else if (k == "--no-graph") {
-        no_graph = true;
       } else if (k == "--no-status") {
         no_status = true;
       } else if (k == "--no-metrics") {
         no_metrics = true;
       } else if (k == "--trace-objects") {
         trace_objects = true;
-      } else if (k == "--force-start") {
-        force_start = true;
       } else if (k == "--init-repo") {
         init_repo = v;
       } else if (k == "--init-code") {
@@ -277,16 +269,12 @@ void MainOptions::parse(const std::list<std::string> &args) {
         admin_port_off = true;
       } else if (k == "--admin-port") {
         admin_port = v;
-      } else if (k == "--admin-gui") {
-        admin_gui = v;
       } else if (k == "--admin-tls-cert") {
         admin_tls_cert = load_certificate(v);
       } else if (k == "--admin-tls-key") {
         admin_tls_key = load_private_key(v);
       } else if (k == "--admin-tls-trusted") {
         load_certificate_list(v, admin_tls_trusted);
-      } else if (k == "--admin-log-file") {
-        admin_log_file = v;
       } else if (k == "--tls-cert") {
         tls_cert = load_certificate(v);
       } else if (k == "--tls-key") {
@@ -385,11 +373,9 @@ auto MainOptions::to_string() -> std::string {
     case Log::OUTPUT_STDERR: list.push_back("--log-local=stderr"); break;
   }
   if (log_local_only) list.push_back("--log-local-only");
-  if (no_graph) list.push_back("--no-graph");
   if (no_status) list.push_back("--no-status");
   if (no_metrics) list.push_back("--no-metrics");
   if (trace_objects) list.push_back("--trace-objects");
-  if (force_start) list.push_back("--force-start");
   if (!init_repo.empty()) list.push_back("--init-repo=" + init_repo);
   if (!init_code.empty()) list.push_back("--init-code=" + init_code);
   if (!instance_uuid.empty()) list.push_back("--instance-uuid" + instance_uuid);
@@ -397,8 +383,6 @@ auto MainOptions::to_string() -> std::string {
   if (reuse_port) list.push_back("--reuse-port");
   if (admin_port_off) list.push_back("--admin-port-off");
   if (!admin_port.empty()) list.push_back("--admin-port=" + admin_port);
-  if (!admin_gui.empty()) list.push_back("--admin-gui=" + admin_gui);
-  if (!admin_log_file.empty()) list.push_back("--admin-log-file=" + admin_log_file);
 
   if (!openssl_engine.empty()) list.push_back("--openssl-engine=" + openssl_engine);
 

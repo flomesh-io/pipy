@@ -443,7 +443,7 @@ public:
 
   virtual bool writable() const override { return false; }
   virtual auto entry() const -> const std::string& override { return m_entry; }
-  virtual void entry(const std::string &path) override {}
+  virtual void entry(const std::string &path) override { m_entry = path; }
   virtual void mount(const std::string &path, Codebase *codebase) override;
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
@@ -519,6 +519,10 @@ auto Codebase::list_builtin() -> std::vector<std::string> {
   return list;
 }
 
+Codebase* Codebase::make() {
+  return new CodebaseFromMemory("/main.js");
+}
+
 Codebase* Codebase::from_root(Codebase *root) {
   return new CodebaseFromRoot(root);
 }
@@ -585,7 +589,7 @@ void Codebase::load_builtin_codebases() {
         auto codebase_name = filename.substr(0, i);
         auto codebase = s_builtin_codebases[codebase_name];
         if (!codebase) {
-          codebase = new CodebaseFromMemory("main.js");
+          codebase = new CodebaseFromMemory("/main.js");
           s_builtin_codebases[codebase_name] = codebase;
         }
         codebase->set(filename.substr(i), SharedData::make(Data(data, &s_dp)));

@@ -408,6 +408,27 @@ private:
 };
 
 //
+// JSON arguments
+//
+
+static void json_args_append(std::string &json, const char *key, int value) {
+  json += json.empty() ? '{' : ',';
+  json += '"';
+  json += key;
+  json += "\":";
+  json += std::to_string(value);
+}
+
+static void json_args_append(std::string &json, const char *key, const std::string &value) {
+  json += json.empty() ? '{' : ',';
+  json += '"';
+  json += key;
+  json += "\":\"";
+  json += utils::escape(value);
+  json += '"';
+}
+
+//
 // Program entrance
 //
 
@@ -521,35 +542,39 @@ int pipy_main(int argc, char *argv[]) {
       if (!opts.init_code.empty()) throw std::runtime_error("invalid option --init-code for non-repo mode");
     }
 
-    Store *store = nullptr;
-    CodebaseStore *repo = nullptr;
     Codebase *codebase = nullptr;
-
-    std::function<void()> load, exit, fail;
-    Timer retry_timer;
+    std::vector<std::string> args = opts.arguments;
 
     // Start as codebase repo service
     if (is_repo) {
-      store = opts.filename.empty()
-        ? Store::open_memory()
-        : Store::open_memory(); // TODO: Sqlite store
-      repo = new CodebaseStore(store, opts.init_repo);
-      throw std::string("TODO");
+      codebase = Codebase::from_builtin("/pipy/repo");
+      std::string json_args;
+      json_args_append(json_args, "pathname", opts.filename);
+      json_args_append(json_args, "listen", '[' + admin_ip + "]:" + std::to_string(admin_port));
+      json_args += '}';
+      args.insert(args.begin() + 1, json_args);
 
     // Start as codebase repo proxy
     } else if (is_repo_proxy) {
-      throw std::string("TODO");
+      codebase = Codebase::from_builtin("/pipy/repo-proxy");
+      std::string json_args;
+      json_args_append(json_args, "url", opts.filename);
+      json_args += '}';
+      args.insert(args.begin() + 1, json_args);
+
+    // Start using a remote codebase
+    } else if (is_remote) {
+      codebase = Codebase::from_builtin("/pipy/worker");
+      std::string json_args;
+      json_args_append(json_args, "url", opts.filename);
+      json_args_append(json_args, "threads", opts.threads);
+      json_args += '}';
+      args.insert(args.begin() + 1, json_args);
 
     // Start using a builtin codebase
     } else if (is_builtin) {
       auto name = opts.filename.substr(6);
-      store = Store::open_memory();
-      repo = new CodebaseStore(store);
       codebase = Codebase::from_builtin(name);
-
-    // Start using a remote codebase
-    } else if (is_remote) {
-      throw std::string("TODO");
 
     // Start using a local codebase
     } else if (is_file_found) {
@@ -562,23 +587,21 @@ int pipy_main(int argc, char *argv[]) {
 
     codebase = Codebase::from_root(codebase);
 
-    if (opts.threads > 1) {
+    if (opts.threads > 1 && !is_repo && !is_repo_proxy) {
       pjs::Ref<WorkerManager> wm = WorkerManager::make(
         codebase, opts.threads,
         []() { Net::current().stop(); }
       );
-      wm->start(opts.arguments);
+      wm->start(args);
       SignalHandler().run(wm, admin_ip, admin_port, admin_open);
 
     } else {
       WorkerThread t(codebase);
       SignalHandler sh(&t, admin_ip, admin_port, admin_open);
-      t.main(opts.arguments);
+      t.main(args);
     }
 
-    delete repo;
-
-    if (store) store->close();
+    delete codebase;
 
     crypto::Crypto::free();
     stats::Metric::local().clear();

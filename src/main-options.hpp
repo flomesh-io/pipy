@@ -52,11 +52,9 @@ public:
   bool        file = false;
   bool        eval = false;
   bool        no_reload = false;
-  bool        no_graph = false;
   bool        no_status = false;
   bool        no_metrics = false;
   bool        trace_objects = false;
-  bool        force_start = false;
   bool        reuse_port = false;
   int         threads = 1;
   std::string log_file;
@@ -70,8 +68,6 @@ public:
   bool        log_local_only = false;
   bool        admin_port_off = false;
   std::string admin_port;
-  std::string admin_gui;
-  std::string admin_log_file;
   std::string init_repo;
   std::string init_code;
   std::string instance_uuid;
