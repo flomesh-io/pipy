@@ -885,6 +885,7 @@ template<> void ClassDef<MessageHead>::init() {
   field<Ref<Str>>("protocol", [](MessageHead *obj) { return &obj->protocol; });
   field<Ref<Object>>("headers", [](MessageHead *obj) { return &obj->headers; });
   field<Ref<Object>>("headerNames", [](MessageHead *obj) { return &obj->headerNames; });
+  field<bool>("isChunked", [](MessageHead *obj) { return &obj->isChunked; });
 }
 
 template<> void ClassDef<MessageTail>::init() {

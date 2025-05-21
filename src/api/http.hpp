@@ -54,6 +54,7 @@ public:
   pjs::Ref<pjs::Str> protocol;
   pjs::Ref<pjs::Object> headers;
   pjs::Ref<pjs::Object> headerNames;
+  bool isChunked = false;
 
   bool is_final() const;
   bool is_final(pjs::Str *header_connection) const;

@@ -572,6 +572,7 @@ void Decoder::on_event(Event *evt) {
             m_header_transfer_encoding &&
             utils::starts_with(m_header_transfer_encoding->str(), s_chunked)
           ) {
+            m_head->isChunked = true;
             message_start();
             if (m_method == s_HEAD) {
               message_end();
@@ -725,10 +726,6 @@ void Encoder::on_event(Event *evt) {
 
   if (auto start = evt->as<MessageStart>()) {
     if (!m_head) {
-      m_content_length = 0;
-      m_chunked = false;
-      m_buffer.clear();
-
       if (m_is_response) {
         auto head = pjs::coerce<ResponseHead>(start->head());
         auto protocol = head->protocol.get();
@@ -758,6 +755,14 @@ void Encoder::on_event(Event *evt) {
         m_protocol = protocol;
         m_method = method;
         m_path = path;
+      }
+
+      m_content_length = 0;
+      m_chunked = m_head->isChunked;
+      m_buffer.clear();
+
+      if (m_chunked) {
+        output_head();
       }
     }
 
