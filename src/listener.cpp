@@ -149,18 +149,6 @@ void Listener::set_reuse_port(bool reuse) {
   s_reuse_port = reuse;
 }
 
-void Listener::commit_all() {
-  for (auto l : s_listeners) {
-    l->commit();
-  }
-}
-
-void Listener::rollback_all() {
-  for (auto l : s_listeners) {
-    l->rollback();
-  }
-}
-
 void Listener::delete_all() {
   std::set<Listener*> all(std::move(s_listeners));
   for (auto l : all) delete l;

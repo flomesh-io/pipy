@@ -309,110 +309,35 @@ auto Worker::load_module(const std::string &path, pjs::Value &result) -> pjs::Mo
   return load_module(nullptr, path, result);
 }
 
-void Worker::add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options) {
-  auto &p = m_listeners[listener];
-  p.pipeline_layout = layout;
-  p.options = options;
+void Worker::add_listener(Listener *listener) {
+  m_listeners.insert(listener);
 }
 
 void Worker::remove_listener(Listener *listener) {
   m_listeners.erase(listener);
 }
 
-bool Worker::update_listeners(bool force) {
-
-  // Open new ports
-  std::set<Listener*> new_open;
-  for (const auto &i : m_listeners) {
-    auto l = i.first;
-    if (!l->is_open()) {
-#ifndef __linux__
-      if (l->options().transparent) {
-        Log::error("Trying to listen on %d in transparent mode, which is not supported on this platform", l->port());
-      }
-#endif
-      new_open.insert(l);
-      l->set_options(i.second.options);
-      if (!l->pipeline_layout(i.second.pipeline_layout)) {
-        if (force) continue;
-        for (auto *l : new_open) {
-          l->pipeline_layout(nullptr);
-        }
-        return false;
-      }
-    }
-  }
-
-  // Update existing ports
-  for (const auto &i : m_listeners) {
-    auto l = i.first;
-    if (!new_open.count(l)) {
-      l->set_options(i.second.options);
-      l->pipeline_layout(i.second.pipeline_layout);
-    }
-  }
-
-  // Close old ports
-  Listener::for_each(
-    [&](Listener *l) {
-      if (l->is_new_listen()) return true; // TODO: Remove this
-      if (l->reserved()) return true;
-      if (m_listeners.find(l) == m_listeners.end()) {
-        l->pipeline_layout(nullptr);
-      }
-      return true;
-    }
-  );
-
-  return true;
-}
-
-bool Worker::start() {
-  if (!update_listeners(false)) {
-    return false;
-  }
-  m_started = true;
-  s_current = this;
-  return true;
-}
-
 void Worker::stop(bool force) {
   if (force || !Pipy::has_exit_callbacks()) {
-    end_all();
-  } else if (!m_exit_signal) {
-    m_exit_signal = std::unique_ptr<Signal>(new Signal);
+    stop_all();
+  } else if (!m_waiting_for_exit_callbacks) {
     if (Pipy::has_exit_callbacks()) {
       pjs::Ref<Context> ctx = new_context();
       m_waiting_for_exit_callbacks = Pipy::start_exiting(*ctx, [this]() {
         m_waiting_for_exit_callbacks = false;
-        on_exit();
+        stop_all();
       });
     }
     if (!m_waiting_for_exit_callbacks) {
-      m_exit_signal->fire();
-      end_all();
+      stop_all();
     }
   }
 }
 
-void Worker::on_exit() {
-  if (!m_waiting_for_exit_callbacks) {
-    if (m_exit_signal) m_exit_signal->fire();
-    end_all();
-  }
-}
-
-void Worker::end_all() {
+void Worker::stop_all() {
   m_period->end();
-  if (s_current == this) s_current = nullptr;
-
   for (auto *pt : m_pipeline_templates) pt->shutdown();
-
-  if (m_pipeline_templates.empty()) {
-
-  } else {
-    m_unloading = true;
-  }
+  if (s_current == this) s_current = nullptr;
 }
 
 void Worker::append_pipeline_template(PipelineLayout *pt) {
@@ -421,9 +346,6 @@ void Worker::append_pipeline_template(PipelineLayout *pt) {
 
 void Worker::remove_pipeline_template(PipelineLayout *pt) {
   m_pipeline_templates.erase(pt);
-  if (m_pipeline_templates.empty() && m_unloading) {
-    m_unloading = false;
-  }
 }
 
 } // namespace pipy

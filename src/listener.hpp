@@ -128,8 +128,6 @@ public:
     return true;
   }
 
-  static void commit_all();
-  static void rollback_all();
   static void delete_all();
 
   auto options() const -> const Options& { return m_options; }

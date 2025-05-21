@@ -437,9 +437,6 @@ void Pipy::listen(pjs::Context &ctx) {
   thread_local static pjs::ConstStr s_tcp("tcp");
   thread_local static pjs::ConstStr s_udp("udp");
 
-  auto instance = ctx.root()->instance();
-  auto worker = instance ? static_cast<Worker*>(instance) : nullptr;
-
   int i = 0;
   int port = 0;
   pjs::Str *address = nullptr;
@@ -511,14 +508,17 @@ void Pipy::listen(pjs::Context &ctx) {
   }
 
   auto l = Listener::get(proto, ip, port);
-  if (!l->set_next_state(pl, options) && worker && !worker->started()) {
+  if (!l->set_next_state(pl, options)) {
     l->rollback();
     ctx.error("unable to listen on [" + ip + "]:" + std::to_string(port));
     return;
   }
 
-  if (!worker || worker->started()) {
-    l->commit();
+  l->commit();
+
+  if (auto instance = ctx.root()->instance()) {
+    auto worker = static_cast<Worker*>(instance);
+    worker->add_listener(l);
   }
 }
 

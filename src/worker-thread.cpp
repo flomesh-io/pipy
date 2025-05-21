@@ -67,14 +67,19 @@ void WorkerThread::main(const std::vector<std::string> &argv) {
     }
   );
 
-  m_codebase->set_current();
   m_worker = Worker::make(pjs::Promise::Period::current());
+  m_worker->set_current();
+  m_codebase->set_current();
 
+  pjs::Module *mod = nullptr;
   auto result = pjs::Value::empty;
-  auto mod = m_worker->load_module(m_codebase->entry(), result);
 
-  if (mod && m_worker->start()) {
-    Listener::commit_all();
+  {
+    InputContext ic;
+    mod = m_worker->load_module(m_codebase->entry(), result);
+  }
+
+  if (mod) {
     Net::context().poll();
 
     if (Net::context().stopped()) {
@@ -97,13 +102,9 @@ void WorkerThread::main(const std::vector<std::string> &argv) {
       init_metrics();
       Net::current().run();
     }
-
-  } else {
-    Listener::rollback_all();
   }
 
   Log::shutdown();
-  Listener::delete_all();
   Timer::cancel_all();
 
   m_ended.store(true);
@@ -208,7 +209,9 @@ void WorkerThread::stop(bool force) {
         Net::current().stop();
       }
     );
-    m_thread.join();
+    if (m_thread.joinable()) {
+      m_thread.join();
+    }
   } else {
     m_net->post(
       []() {

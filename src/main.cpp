@@ -378,7 +378,8 @@ private:
 
   void run(Net *net, const std::string &admin_ip, int admin_port, bool admin_open, const std::function<void(int)> &cb) {
     Log::init();
-    pjs::Ref<Worker> worker = Worker::make(pjs::Promise::Period::current());
+    auto worker = Worker::make(pjs::Promise::Period::current());
+    worker->set_current();
     asio::signal_set signals(Net::context());
     signals.add(SIGNAL_STOP);
     signals.add(SIGNAL_ADMIN);
@@ -396,11 +397,9 @@ private:
       );
     };
     wait();
-    worker->start();
     if (admin_open) cb(SIGNAL_ADMIN);
     net->run();
     worker->stop(true);
-    worker = nullptr;
     Log::shutdown();
     Listener::delete_all();
     Timer::cancel_all();

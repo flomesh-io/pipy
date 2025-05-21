@@ -55,40 +55,28 @@ public:
     return s_current;
   }
 
+  void set_current() { s_current = this; }
   auto root_fiber() const -> pjs::Fiber* { return m_root_fiber; }
   auto new_context(Context *base = nullptr) -> Context*;
   auto load_module(pjs::Module *referer, const std::string &path, pjs::Value &result) -> pjs::Module*;
   auto load_module(pjs::Module *referer, const std::string &path) -> pjs::Module*;
   auto load_module(const std::string &path, pjs::Value &result) -> pjs::Module*;
-  void add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options);
+  void add_listener(Listener *listener);
   void remove_listener(Listener *listener);
-  bool update_listeners(bool force);
-  bool started() const { return m_started; }
-  bool start();
   void stop(bool force);
 
 private:
   Worker(pjs::Promise::Period *period);
   ~Worker();
 
-  struct ListeningPipeline {
-    PipelineLayout* pipeline_layout;
-    Listener::Options options;
-  };
-
   pjs::Ref<pjs::Promise::Period> m_period;
   pjs::Ref<pjs::Fiber> m_root_fiber;
-  std::set<PipelineLayout*> m_pipeline_templates;
   std::map<std::string, std::unique_ptr<pjs::Module>> m_module_map;
-  std::map<Listener*, ListeningPipeline> m_listeners;
-  std::unique_ptr<Signal> m_exit_signal;
-  bool m_forced = false;
-  bool m_started = false;
-  bool m_unloading = false;
+  std::set<PipelineLayout*> m_pipeline_templates;
+  std::set<Listener*> m_listeners;
   bool m_waiting_for_exit_callbacks = false;
 
-  void on_exit();
-  void end_all();
+  void stop_all();
 
   void append_pipeline_template(PipelineLayout *pt);
   void remove_pipeline_template(PipelineLayout *pt);

@@ -43,12 +43,10 @@ PipelineLayout::PipelineLayout(Worker *worker, int index, const std::string &nam
   : m_index(index)
   , m_name(pjs::Str::make(name))
   , m_label(pjs::Str::make(label))
-  , m_worker(worker)
+  , m_worker(worker ? worker : Worker::current())
 {
   s_all_pipeline_layouts.push(this);
-  if (worker) {
-    worker->append_pipeline_template(this);
-  }
+  if (m_worker) m_worker->append_pipeline_template(this);
   Log::debug(Log::PIPELINE, "[pipeline] create layout: %s", name_or_label()->c_str());
 }
 
