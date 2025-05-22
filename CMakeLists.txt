@@ -94,12 +94,14 @@ if(WIN32)
   set(LIB_SSL libssl.lib)
   set(LIB_BROTLI libbrotlidec-static.lib)
   set(EXT_SHELL cmd)
+  set(EXE_PACK "Release\\pack.exe")
 else(WIN32)
   set(LIB_Z libz.a)
   set(LIB_CRYPTO libcrypto.a)
   set(LIB_SSL libssl.a)
   set(LIB_BROTLI libbrotlidec-static.a)
   set(EXT_SHELL sh)
+  set(EXE_PACK pack)
 endif(WIN32)
 
 if(PIPY_ZLIB)
@@ -413,7 +415,7 @@ endif()
 
 add_custom_command(
   OUTPUT ${CMAKE_BINARY_DIR}/deps/codebases.br.h
-  COMMAND ${CMAKE_BINARY_DIR}/pack
+  COMMAND ${CMAKE_BINARY_DIR}/${EXE_PACK}
   ARGS ${CMAKE_BINARY_DIR}/deps/codebases.br.h ${CODEBASES} /samples/nmi/,/samples/bpf/
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   DEPENDS pack ${CMAKE_SOURCE_DIR}/src/scripts ${CMAKE_SOURCE_DIR}/tutorial ${CMAKE_SOURCE_DIR}/samples

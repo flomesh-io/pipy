@@ -1,4 +1,5 @@
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <string>
@@ -10,10 +11,183 @@
 
 #include <Windows.h>
 
+class Utf8Decoder {
+public:
+  static size_t encode(uint32_t code, char *output, size_t size) {
+    if (code <= 0x7f) {
+      if (size < 1) return 0;
+      output[0] = code;
+      return 1;
+    } else if (code <= 0x7ff) {
+      if (size < 2) return 0;
+      output[0] = 0xc0 | (0x1f & (code >> 6));
+      output[1] = 0x80 | (0x3f & (code >> 0));
+      return 2;
+    } else if (code <= 0xffff) {
+      if (size < 3) return 0;
+      output[0] = 0xe0 | (0x0f & (code >> 12));
+      output[1] = 0x80 | (0x3f & (code >>  6));
+      output[2] = 0x80 | (0x3f & (code >>  0));
+      return 3;
+    } else {
+      if (size < 4) return 0;
+      output[0] = 0xf0 | (0x07 & (code >> 18));
+      output[1] = 0x80 | (0x3f & (code >> 12));
+      output[2] = 0x80 | (0x3f & (code >>  6));
+      output[3] = 0x80 | (0x3f & (code >>  0));
+      return 4;
+    }
+  }
+
+  Utf8Decoder(const std::function<void(int)> &output)
+    : m_output(output) {}
+
+  void reset() {
+    m_codepoint = 0;
+    m_shift = 0;
+  }
+
+  bool input(char c) {
+    if (!m_shift) {
+      if (c & 0x80) {
+        if ((c & 0xe0) == 0xc0) { m_codepoint = c & 0x1f; m_shift = 1; } else
+        if ((c & 0xf0) == 0xe0) { m_codepoint = c & 0x0f; m_shift = 2; } else
+        if ((c & 0xf8) == 0xf0) { m_codepoint = c & 0x07; m_shift = 3; } else return false;
+      } else {
+        m_output(c);
+      }
+    } else {
+      if ((c & 0xc0) != 0x80) {
+        return false;
+      }
+      m_codepoint = (m_codepoint << 6) | (c & 0x3f);
+      if (!--m_shift) m_output(m_codepoint);
+    }
+    return true;
+  }
+
+  bool end() {
+    return !m_shift;
+  }
+
+private:
+  const std::function<void(int)> m_output;
+  uint32_t m_codepoint = 0;
+  int m_shift = 0;
+};
+
+class Utf16Encoder {
+public:
+  Utf16Encoder(const std::function<void(wchar_t)> &output)
+    : m_output_w(output) {}
+
+  Utf16Encoder(bool big_endian, const std::function<void(uint8_t)> &output)
+    : m_output_b(output)
+    , m_big_endian(big_endian) {}
+
+  void input(uint32_t ch) {
+    if (ch <= 0xffff) {
+      if (m_output_w) {
+        m_output_w(ch);
+      } else if (m_big_endian) {
+        m_output_b(ch >> 8);
+        m_output_b(ch & 0xff);
+      } else {
+        m_output_b(ch & 0xff);
+        m_output_b(ch >> 8);
+      }
+    } else if (ch <= 0x10ffff) {
+      ch -= 0x10000;
+      uint16_t h = 0xd800 | (ch >> 10);
+      uint16_t l = 0xdc00 | (ch & 0x3ff);
+      if (m_output_w) {
+        m_output_w(h);
+        m_output_w(l);
+      } else if (m_big_endian) {
+        m_output_b(h >> 8);
+        m_output_b(h & 0xff);
+        m_output_b(l >> 8);
+        m_output_b(l & 0xff);
+      } else {
+        m_output_b(h & 0xff);
+        m_output_b(h >> 8);
+        m_output_b(l & 0xff);
+        m_output_b(l >> 8);
+      }
+    }
+  }
+
+private:
+  const std::function<void(wchar_t)> m_output_w;
+  const std::function<void(uint8_t)> m_output_b;
+  bool m_big_endian;
+};
+
+class Utf16Decoder {
+public:
+  Utf16Decoder(const std::function<void(uint32_t)> &output)
+    : m_output(output)
+    , m_big_endian(false) {}
+
+  Utf16Decoder(bool big_endian, const std::function<void(uint32_t)> &output)
+    : m_output(output)
+    , m_big_endian(big_endian) {}
+
+  void input(char c) { input((uint8_t)c); }
+
+  void input(uint8_t b) {
+    if (m_has_half_word) {
+      wchar_t w = m_half_word | (uint16_t(b) << (m_big_endian ? 0 : 8));
+      input(w);
+      m_has_half_word = false;
+    } else {
+      m_half_word = uint16_t(b) << (m_big_endian ? 8 : 0);
+      m_has_half_word = true;
+    }
+  }
+
+  void input(wchar_t w) {
+    if (m_surrogate) {
+      if ((w & 0xfc00) == 0xdc00) {
+        uint32_t h = 0x3ff & m_surrogate;
+        uint32_t l = 0x3ff & w;
+        m_output(((h << 10) | l) + 0x10000);
+        m_surrogate = 0;
+      } else {
+        m_output(m_surrogate);
+        if ((w & 0xfc00) == 0xd800) {
+          m_surrogate = w;
+        } else {
+          m_surrogate = 0;
+          m_output(w);
+        }
+      }
+    } else if ((w & 0xfc00) == 0xd800) {
+      m_surrogate = w;
+    } else {
+      m_output(w);
+    }
+  }
+
+  void flush() {
+    if (auto w = m_surrogate) {
+      m_surrogate = 0;
+      m_output(w);
+    }
+  }
+
+private:
+  const std::function<void(uint32_t)> m_output;
+  bool m_big_endian;
+  bool m_has_half_word = false;
+  uint16_t m_half_word = 0;
+  uint16_t m_surrogate = 0;
+};
+
 auto a2w(const std::string &s) -> std::wstring {
   std::wstring buf;
-  utils::Utf16Encoder enc([&](wchar_t c) { buf.push_back(c); });
-  pjs::Utf8Decoder dec([&](int c) { enc.input(c); });
+  Utf16Encoder enc([&](wchar_t c) { buf.push_back(c); });
+  Utf8Decoder dec([&](int c) { enc.input(c); });
   for (const auto c : s) dec.input(c);
   dec.end();
   return std::wstring(std::move(buf));
@@ -21,10 +195,10 @@ auto a2w(const std::string &s) -> std::wstring {
 
 auto w2a(const std::wstring &s) -> std::string {
   std::string buf;
-  utils::Utf16Decoder dec(
+  Utf16Decoder dec(
     [&](uint32_t c) {
       char utf[5];
-      auto len = pjs::Utf8Decoder::encode(c, utf, sizeof(utf));
+      auto len = Utf8Decoder::encode(c, utf, sizeof(utf));
       buf.append(utf, len);
     }
   );
