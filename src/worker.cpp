@@ -249,7 +249,13 @@ auto Worker::load_module(pjs::Module *referer, const std::string &path, pjs::Val
     name = path;
   } else if (path[0] == '/') {
     name = utils::path_normalize(path);
-  } else if (path[0] == '.' && path[1] == '/') {
+  } else if (
+    path[0] == '.' && (
+      path[1] == '/' || (
+        path[1] == '.' && path[2] == '/'
+      )
+    )
+  ) {
     auto base = referer ? utils::path_dirname(referer->name()) : std::string("/");
     name = utils::path_normalize(utils::path_join(base, path));
   } else {

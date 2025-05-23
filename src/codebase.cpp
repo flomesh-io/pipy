@@ -219,9 +219,8 @@ CodebaseFromFS::CodebaseFromFS(const std::string &path) {
   m_base = full_path;
 
   if (!fs::is_dir(full_path)) {
-    auto i = m_base.find_last_of("/\\");
-    m_entry = m_base.substr(i);
-    m_base = m_base.substr(0, i);
+    m_base = utils::path_dirname(full_path);
+    m_entry = '/' + utils::path_basename(full_path);
   }
 
   start_watching();
