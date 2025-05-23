@@ -196,7 +196,11 @@ auto Match::exec(const std::string &path) -> pjs::Object* {
   size_t i = 0, p = 0;
   auto args = pjs::Object::make();
   auto size = path.length();
-  if (size > 0 && path.back() == '/') size--;
+  bool ending_slash = false;
+  if (size > 0 && path.back() == '/') {
+    size--;
+    ending_slash = true;
+  }
   while (i < m_sections.size() && p < size) {
     if (path[p] == '/') p++; else break;
     auto q = p;
@@ -218,6 +222,7 @@ auto Match::exec(const std::string &path) -> pjs::Object* {
             if (c == '#' || c == '?') break; else q++;
           }
           n = q - p;
+          if (ending_slash) n++;
           args->set(s_asterisk, pjs::Str::make(s, n));
         }
       }
