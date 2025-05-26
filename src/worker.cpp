@@ -296,8 +296,8 @@ auto Worker::load_module(pjs::Module *referer, const std::string &path, pjs::Val
     }
   );
 
-  pjs::Ref<Context> ctx = new_context();
-  mod->execute(*ctx, nullptr, result);
+  pjs::Ref<Context> ctx = Context::make(this, m_root_fiber);
+  mod->execute(*ctx, result);
   if (!ctx->ok()) {
     Log::pjs_error(ctx->error());
     return nullptr;
@@ -328,7 +328,7 @@ void Worker::stop(bool force) {
     stop_all();
   } else if (!m_waiting_for_exit_callbacks) {
     if (Pipy::has_exit_callbacks()) {
-      pjs::Ref<Context> ctx = new_context();
+      pjs::Ref<Context> ctx = Context::make(this, m_root_fiber);
       m_waiting_for_exit_callbacks = Pipy::start_exiting(*ctx, [this]() {
         m_waiting_for_exit_callbacks = false;
         stop_all();
