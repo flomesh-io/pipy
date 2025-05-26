@@ -84,19 +84,6 @@ public:
   };
 
   //
-  // Tree::LegacyImports
-  //
-
-  class LegacyImports {
-  public:
-    void add(Str *name, int file, Str *original_name);
-    bool get(Str *name, int *file, Str **original_name);
-
-  private:
-    std::map<Ref<Str>, std::pair<int, Ref<Str>>> m_imports;
-  };
-
-  //
   // Tree::Scope
   //
 
@@ -183,7 +170,7 @@ public:
   //
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval = false) { return true; }
-  virtual void resolve(Module *module, Context &ctx, LegacyImports *imports = nullptr) {}
+  virtual void resolve(Module *module, Context &ctx) {}
 
 private:
   const Source* m_source = nullptr;

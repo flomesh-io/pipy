@@ -32,23 +32,6 @@
 namespace pjs {
 
 //
-// Tree::LegacyImports
-//
-
-void Tree::LegacyImports::add(Str *name, int file, Str *original_name) {
-  m_imports[name] = { file, original_name };
-}
-
-bool Tree::LegacyImports::get(Str *name, int *file, Str **original_name) {
-  auto i = m_imports.find(name);
-  if (i == m_imports.end()) return false;
-  const auto &imp = i->second;
-  *file = imp.first;
-  *original_name = imp.second;
-  return true;
-}
-
-//
 // Tree::Scope
 //
 

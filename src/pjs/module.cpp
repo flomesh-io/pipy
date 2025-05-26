@@ -165,8 +165,8 @@ void Module::resolve(const std::function<Module*(Module*, Str*)> &resolver) {
   }
 }
 
-void Module::execute(Context &ctx, Tree::LegacyImports *imports, Value &result) {
-  m_tree->resolve(this, ctx, imports);
+void Module::execute(Context &ctx, Value &result) {
+  m_tree->resolve(this, ctx);
   m_scope.instantiate(ctx);
 
   for (auto &exp : m_exports) {
