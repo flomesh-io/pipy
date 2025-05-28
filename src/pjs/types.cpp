@@ -3429,6 +3429,9 @@ auto Array::splice(int start, int delete_count, const Value *values, int count) 
         if (new_size > MAX_SIZE) return ret; // TODO: report error
         new_data = Data::make(new_size);
         new_values = new_data->elements();
+        for (int i = 0; i < start; i++) {
+          new_values[i] = std::move(old_values[i]);
+        }
       }
       auto max = n - count;
       for (int i = max - 1; i >= start; i--) {
