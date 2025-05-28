@@ -3786,7 +3786,7 @@ private:
   int m_size;
 
   static auto power(size_t size) -> size_t {
-    return size <= 1 ? 1 : sizeof(unsigned int) * 8 - clz(size - 1);
+    return size <= 1 ? 1 : sizeof(uint32_t) * 8 - clz(size - 1);
   }
 
   friend class ObjectTemplate<Array>;
