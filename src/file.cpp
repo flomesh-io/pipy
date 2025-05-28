@@ -32,6 +32,7 @@
 
 #include <chrono>
 #include <functional>
+#include <thread>
 
 namespace pipy {
 
@@ -48,14 +49,20 @@ void File::open_read(size_t seek, const std::function<void(FileStream*)> &cb) {
 void File::open_read(size_t seek, size_t size, const std::function<void(FileStream*)> &cb) {
   if (m_f.valid() || m_closed) return;
 
-  auto *net = &Net::current();
-  std::string path = m_path;
-
-  m_open_signal = std::unique_ptr<Signal>(new Signal);
+  m_open_signal = std::unique_ptr<Signal>(new Signal(
+    [=]() {
+      cb(m_stream);
+      release();
+    }
+  ));
 
   retain();
 
-  Net::main().post(
+  std::string path = m_path;
+  auto *sig = m_open_signal.get();
+  auto *net = &Net::current();
+
+  std::thread(
     [=]() {
       bool is_std = (path == "-");
       auto f = (is_std ? os::FileHandle::std_input() : os::FileHandle::read(path));
@@ -66,36 +73,46 @@ void File::open_read(size_t seek, size_t size, const std::function<void(FileStre
             m_f = f;
             m_stream = FileStream::make(size, f, &s_dp);
             if (is_std) m_stream->set_no_close();
-            cb(m_stream);
-            m_open_signal->fire();
-            release();
+            sig->fire();
           }
         );
       } else {
         net->post(
           [=]() {
             Log::error("[file] cannot open file for reading: %s", m_path.c_str());
-            cb(nullptr);
-            m_open_signal->fire();
-            release();
+            sig->fire();
           }
         );
       }
     }
-  );
+  ).detach();
 }
 
 void File::open_write(bool append) {
   if (m_f.valid() || m_closed) return;
 
-  auto *net = &Net::current();
-  std::string path = m_path;
-
-  m_open_signal = std::unique_ptr<Signal>(new Signal);
+  m_open_signal = std::unique_ptr<Signal>(new Signal(
+    [=]() {
+      if (m_stream) {
+        if (!m_buffer.empty()) {
+          m_stream->input()->input(Data::make(m_buffer));
+          m_buffer.clear();
+        }
+        if (m_closed) {
+          close();
+        }
+      }
+      release();
+    }
+  ));
 
   retain();
 
-  Net::main().post(
+  std::string path = m_path;
+  auto *sig = m_open_signal.get();
+  auto *net = &Net::current();
+
+  std::thread(
     [=]() {
       auto dirname = utils::path_dirname(path);
       if (!dirname.empty() && !mkdir_p(dirname)) {
@@ -123,29 +140,20 @@ void File::open_write(bool append) {
               m_writing = true;
               m_stream = FileStream::make(0, f, &s_dp);
               if (is_std) m_stream->set_no_close();
-              if (!m_buffer.empty()) {
-                m_stream->input()->input(Data::make(m_buffer));
-                m_buffer.clear();
-              }
-              if (m_closed) {
-                close();
-              }
-              m_open_signal->fire();
-              release();
+              sig->fire();
             }
           );
         } else {
           net->post(
             [=]() {
               Log::error("[file] cannot open file for writing: %s", m_path.c_str());
-              m_open_signal->fire();
-              release();
+              sig->fire();
             }
           );
         }
       }
     }
-  );
+  ).detach();
 }
 
 void File::write(const Data &data) {
@@ -173,7 +181,7 @@ void File::unlink() {
 
   retain();
 
-  Net::main().post(
+  std::thread(
     [=]() {
       auto succ = fs::unlink(m_path);
       net->post(
@@ -185,7 +193,7 @@ void File::unlink() {
         }
       );
     }
-  );
+  ).detach();
 }
 
 bool File::mkdir_p(const std::string &path) {
