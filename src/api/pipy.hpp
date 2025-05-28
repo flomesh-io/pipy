@@ -81,6 +81,7 @@ public:
     pjs::Ref<PipelineLayout> m_pt;
     pjs::Ref<Pipeline> m_pipeline;
     pjs::Ref<File> m_file;
+    pjs::Ref<FileStream> m_stream;
     pjs::Ref<pjs::Promise> m_promise;
     pjs::Ref<pjs::Promise::Settler> m_settler;
     pjs::Value m_start_arg;

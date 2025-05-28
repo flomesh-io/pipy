@@ -599,6 +599,7 @@ void Pipy::FileReader::on_open(FileStream *fs) {
     m_pipeline->on_end(this);
     m_pipeline->chain(EventTarget::input());
     m_pipeline->start(1, &m_start_arg);
+    m_stream = fs;
     fs->chain(m_pipeline->input());
   } else {
     std::string msg = "cannot open file: " + m_pathname->str();
@@ -614,6 +615,10 @@ void Pipy::FileReader::on_event(Event *evt) {
 }
 
 void Pipy::FileReader::on_pipeline_result(Pipeline *p, pjs::Value &result) {
+  if (m_stream) {
+    m_stream->close();
+    m_stream = nullptr;
+  }
   m_settler->resolve(result);
   release();
 }
