@@ -195,10 +195,7 @@ static void str_free_tmp_buf(char *buf) {
   }
 }
 
-auto Str::local_map() -> LocalMap& {
-  thread_local static LocalMap s_local_map;
-  return s_local_map;
-}
+thread_local std::unordered_map<std::string, Str*> *Str::LocalMap::m_hash = nullptr;
 
 auto Str::make(const uint32_t *codes, size_t len) -> Str* {
   if (len > s_max_size) len = s_max_size;

@@ -829,17 +829,17 @@ public:
   static auto make(const std::string &str) -> Str* {
     if (str.length() > s_max_size) {
       auto sub = str.substr(0, s_max_size);
-      if (auto s = local_map().get(sub)) return s;
+      if (auto s = LocalMap::get(sub)) return s;
       return new Str(std::move(sub));
     } else {
-      if (auto s = local_map().get(str)) return s;
+      if (auto s = LocalMap::get(str)) return s;
       return new Str(str);
     }
   }
 
   static auto make(std::string &&str) -> Str* {
     if (str.length() > s_max_size) str.resize(s_max_size);
-    if (auto s = local_map().get(str)) return s;
+    if (auto s = LocalMap::get(str)) return s;
     return new Str(std::move(str));
   }
 
@@ -853,7 +853,7 @@ public:
   }
 
   static auto make(CharData *data) -> Str* {
-    if (auto s = local_map().get(data->str())) return s;
+    if (auto s = LocalMap::get(data->str())) return s;
     return new Str(data);
   }
 
@@ -886,30 +886,31 @@ private:
 
   class LocalMap {
   public:
-    ~LocalMap() {
-      m_destructed = true;
-    }
-
-    auto get(const std::string &k) -> Str* {
-      if (m_destructed) return nullptr;
-      auto i = m_hash.find(k);
-      if (i == m_hash.end()) return nullptr;
+    static auto get(const std::string &k) -> Str* {
+      if (!m_hash) return nullptr;
+      auto i = m_hash->find(k);
+      if (i == m_hash->end()) return nullptr;
       return i->second;
     }
 
-    void set(const std::string &k, Str *s) {
-      if (m_destructed) return;
-      m_hash[k] = s;
+    static void set(const std::string &k, Str *s) {
+      if (!m_hash) {
+        m_hash = new std::unordered_map<std::string, Str*>;
+      }
+      (*m_hash)[k] = s;
     }
 
-    void erase(const std::string &k) {
-      if (m_destructed) return;
-      m_hash.erase(k);
+    static void erase(const std::string &k) {
+      if (!m_hash) return;
+      m_hash->erase(k);
+      if (m_hash->empty()) {
+        delete m_hash;
+        m_hash = nullptr;
+      }
     }
 
   private:
-    std::unordered_map<std::string, Str*> m_hash;
-    bool m_destructed = false;
+    thread_local static std::unordered_map<std::string, Str*> *m_hash;
   };
 
   Ref<CharData> m_char_data;
@@ -924,7 +925,7 @@ private:
     , m_thread_id(std::this_thread::get_id())
 #endif
   {
-    local_map().set(char_data->str(), this);
+    LocalMap::set(char_data->str(), this);
   }
 
   Str(const std::string &str) : Str(new CharData(std::string(str))) {}
@@ -932,12 +933,10 @@ private:
 
   ~Str() {
     assert_same_thread(*this);
-    local_map().erase(m_char_data->str());
+    LocalMap::erase(m_char_data->str());
   }
 
   static size_t s_max_size;
-
-  static auto local_map() -> LocalMap&;
 
   static void assert_same_thread(const Str &str) {
 #ifdef PIPY_ASSERT_SAME_THREAD
