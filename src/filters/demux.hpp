@@ -42,7 +42,7 @@ class DemuxSession : public EventFunction {
 protected:
   virtual auto on_demux_open_stream() -> EventFunction* = 0;
   virtual void on_demux_close_stream(EventFunction *stream) = 0;
-  virtual void on_demux_complete() = 0;
+  virtual void on_demux_complete() {}
 };
 
 //

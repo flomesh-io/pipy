@@ -82,6 +82,8 @@ public:
   void set_tunnel() { m_is_tunnel = true; }
 
 protected:
+  virtual void on_decode_message_start(RequestHead *head) {}
+  virtual void on_decode_message_end(MessageTail *tail) {}
   virtual void on_decode_request(RequestQueue::Request *req) { delete req; }
   virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* { return nullptr; }
   virtual bool on_decode_tunnel(TunnelType tt) { return false; }
@@ -145,6 +147,7 @@ public:
   void set_tunnel() { m_is_tunnel = true; }
 
 protected:
+  virtual auto on_encode_message_start(ResponseHead *head, bool &is_final) -> RequestHead* { return nullptr; }
   virtual void on_encode_request(RequestQueue::Request *req) { delete req; }
   virtual auto on_encode_response(ResponseHead *head) -> RequestQueue::Request* { return nullptr; }
   virtual bool on_encode_tunnel(TunnelType tt) { return false; }
@@ -285,7 +288,6 @@ private:
 
 class Demux :
   public Filter,
-  protected DemuxQueue,
   protected Decoder,
   protected Encoder,
   protected http2::Server
@@ -305,6 +307,31 @@ protected:
   Demux(const Demux &r);
   ~Demux();
 
+  //
+  // Demux::Stream
+  //
+
+  class Stream :
+    public pjs::Pooled<Stream>,
+    public List<Stream>::Item,
+    public EventTarget
+  {
+  public:
+    Stream(Demux *demux, EventFunction *handler, RequestHead *head);
+    ~Stream();
+    auto handler() const -> EventFunction* { return m_handler; }
+    auto head() const -> RequestHead* { return m_head; }
+  private:
+    virtual void on_event(Event *evt) override;
+    Demux* m_demux;
+    EventFunction* m_handler;
+    pjs::Ref<RequestHead> m_head;
+    EventBuffer m_buffer;
+    bool m_started = false;
+    bool m_ended = false;
+    bool m_continue = false;
+  };
+
   virtual auto clone() -> Filter* override;
   virtual void chain() override;
   virtual void reset() override;
@@ -314,20 +341,22 @@ protected:
 
   Options m_options;
   RequestQueue m_request_queue;
-  pjs::Ref<StreamEnd> m_eos;
+  List<Stream> m_streams;
   int m_message_count = 0;
   bool m_http2 = false;
+  bool m_tunneling = false;
   bool m_shutdown = false;
 
   virtual auto on_demux_open_stream() -> EventFunction* override;
   virtual void on_demux_close_stream(EventFunction *stream) override;
-  virtual void on_demux_complete() override;
-
-  virtual void on_decode_error() override;
-  virtual void on_decode_request(RequestQueue::Request *req) override;
-  virtual auto on_encode_response(ResponseHead *head) -> RequestQueue::Request* override;
+  virtual void on_decode_message_start(RequestHead *head) override;
+  virtual void on_decode_message_end(MessageTail *tail) override;
   virtual bool on_decode_tunnel(TunnelType tt) override;
+  virtual void on_decode_error() override;
+  virtual auto on_encode_message_start(ResponseHead *head, bool &is_final) -> RequestHead* override;
   virtual bool on_encode_tunnel(TunnelType tt) override;
+
+  void clear_streams();
 };
 
 //
@@ -490,7 +519,6 @@ private:
 
   virtual auto on_demux_open_stream() -> EventFunction* override;
   virtual void on_demux_close_stream(EventFunction *stream) override;
-  virtual void on_demux_queue_dedicate(EventFunction *stream) override;
 
   pjs::Ref<pjs::Object> m_handler;
 };

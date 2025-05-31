@@ -90,6 +90,17 @@ public:
     m_size++;
   }
 
+  auto shift() -> Item* {
+    if (auto item = m_head) {
+      m_head = item->m_next;
+      if (m_head) m_head->m_back = nullptr; else m_tail = nullptr;
+      item->m_next = nullptr;
+      m_size--;
+      return item;
+    }
+    return nullptr;
+  }
+
   void unshift(Item *item) {
     item->m_next = m_head;
     if (m_head) {
