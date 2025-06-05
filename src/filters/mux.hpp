@@ -34,6 +34,7 @@
 #include "list.hpp"
 #include "timer.hpp"
 #include "options.hpp"
+#include "utils.hpp"
 
 #include <unordered_map>
 
@@ -385,6 +386,152 @@ protected:
 
 private:
   Options m_options;
+};
+
+//
+// Muxer
+//
+
+class Muxer : public pjs::RefCount<Muxer> {
+public:
+
+  //
+  // Muxer::Options
+  //
+
+  struct Options : public pipy::Options {
+    double max_idle = 60;
+    int max_sessions = 0;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+private:
+  class SessionPool;
+
+public:
+  class Session;
+
+  //
+  // Muxer::Stream
+  //
+
+  class Stream : public List<Stream>::Item {
+  public:
+    Stream() {}
+    ~Stream() { if (m_session) m_session->m_streams.remove(this); }
+
+    auto session() -> Session* { return m_session; }
+
+  private:
+    Session* m_session = nullptr;
+
+    friend class Session;
+  };
+
+  //
+  // Muxer::Session
+  //
+
+  class Session : public List<Session>::Item {
+  protected:
+    Session() : m_idle_time(utils::now()) {}
+    ~Session() {
+      if (m_pool) m_pool->m_sessions.remove(this);
+      for (auto s = m_streams.head(); s; s = s->next()) s->m_session = nullptr;
+    }
+
+  public:
+    auto head() const -> Stream* { return m_streams.head(); }
+    auto tail() const -> Stream* { return m_streams.tail(); }
+    void append(Stream *s) { m_streams.push(s); s->m_session = this; sort(); }
+    void remove(Stream *s) { m_streams.remove(s); s->m_session = nullptr; sort(); }
+    void allow_queuing(bool allowed) { m_allow_queuing = allowed; }
+
+  private:
+    SessionPool* m_pool = nullptr;
+    List<Stream> m_streams;
+    double m_idle_time;
+    bool m_allow_queuing = false;
+
+    bool is_idle() const { return m_streams.empty(); }
+
+    bool is_idle_timeout(double now, double max_idle) const {
+      return is_idle() && now - m_idle_time >= max_idle;
+    }
+
+    void sort() {
+      if (m_pool) m_pool->sort(this);
+      if (m_streams.empty()) {
+        m_idle_time = utils::now();
+      }
+    }
+
+    friend class SessionPool;
+    friend class Stream;
+  };
+
+  Muxer() {}
+  Muxer(const Options &options) : m_options(options) {}
+
+  auto alloc(Filter *filter, const pjs::Value &key) -> Session*;
+  void shutdown();
+
+protected:
+  virtual ~Muxer() {}
+
+private:
+  virtual auto on_muxer_session_open(Filter *filter) -> Session* = 0;
+  virtual void on_muxer_session_close(Session *session) = 0;
+
+  //
+  // Muxer::SessionPool
+  //
+
+  class SessionPool :
+    public pjs::Pooled<SessionPool>,
+    public pjs::Object::WeakPtr::Watcher,
+    public List<SessionPool>::Item
+  {
+  public:
+    SessionPool(Muxer *muxer, const pjs::Value &key)
+      : m_muxer(muxer)
+      , m_key(key) {}
+
+    SessionPool(Muxer *muxer, pjs::Object::WeakPtr *key)
+      : m_muxer(muxer)
+      , m_weak_key(key) { watch(key); }
+
+    auto alloc(Filter *filter) -> Session*;
+    void recycle(double now);
+
+  private:
+    pjs::Ref<Muxer> m_muxer;
+    pjs::Ref<pjs::Object::WeakPtr> m_weak_key;
+    pjs::Value m_key;
+    List<Session> m_sessions;
+    bool m_weak_ptr_gone = false;
+    bool m_has_recycling_scheduled = false;
+
+    void sort(Session *session);
+    void schedule_recycling();
+
+    virtual void on_weak_ptr_gone() override;
+
+    friend class Session;
+  };
+
+  Options m_options;
+  std::unordered_map<pjs::Value, SessionPool*> m_pools;
+  std::unordered_map<pjs::Ref<pjs::Object::WeakPtr>, SessionPool*> m_weak_pools;
+  List<SessionPool> m_recycle_pools;
+  Timer m_recycle_timer;
+  bool m_has_recycling_scheduled = false;
+  bool m_has_shutdown = false;
+
+  void schedule_recycling();
+
+  friend class pjs::RefCount<Muxer>;
 };
 
 } // namespace pipy

@@ -129,6 +129,19 @@ bool ResponseHead::is_tunnel_ok(TunnelType requested) {
   return false;
 }
 
+bool ResponseHead::is_continue(pjs::Object *head) {
+  thread_local static pjs::ConstStr s_status("status");
+  if (!head) {
+    return false;
+  } else if (head->is<ResponseHead>()) {
+    return head->as<ResponseHead>()->status == 100;
+  } else {
+    pjs::Value status;
+    head->get(s_status, status);
+    return status.is_number() && status.n() == 100;
+  }
+}
+
 auto ResponseHead::error_to_status(StreamEnd::Error err, int &status) -> pjs::Str* {
   switch (err) {
   case StreamEnd::CANNOT_RESOLVE:
@@ -149,6 +162,7 @@ auto ResponseHead::error_to_status(StreamEnd::Error err, int &status) -> pjs::St
   case StreamEnd::CONNECTION_TIMEOUT:
   case StreamEnd::READ_TIMEOUT:
   case StreamEnd::WRITE_TIMEOUT:
+  case StreamEnd::IDLE_TIMEOUT:
     status = 504;
     return s_gateway_timeout;
   default:

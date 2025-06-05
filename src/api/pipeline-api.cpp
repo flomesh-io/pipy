@@ -355,11 +355,7 @@ void PipelineDesigner::mux_fcgi(pjs::Function *session_selector, pjs::Object *op
 }
 
 void PipelineDesigner::mux_http(pjs::Function *session_selector, pjs::Object *options) {
-  if (options && options->is_function()) {
-    require_sub_pipeline(append_filter(new http::Mux(session_selector, options->as<pjs::Function>())));
-  } else {
-    require_sub_pipeline(append_filter(new http::Mux(session_selector, options)));
-  }
+  require_sub_pipeline(append_filter(new http::Mux(session_selector, options)));
 }
 
 void PipelineDesigner::read(const pjs::Value &filename, pjs::Object *options) {

@@ -282,7 +282,6 @@ set(PIPY_SRC
   src/elf.cpp
   src/event.cpp
   src/event-queue.cpp
-  src/fetch.cpp
   src/file.cpp
   src/filter.cpp
   src/filters/bgp.cpp

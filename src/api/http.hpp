@@ -85,6 +85,7 @@ public:
 
   bool is_tunnel_ok(TunnelType requested);
 
+  static bool is_continue(pjs::Object *head);
   static auto error_to_status(StreamEnd::Error err, int &status) -> pjs::Str*;
 };
 

@@ -865,4 +865,179 @@ void Mux::Session::on_queue_end(StreamEnd *eos) {
   MuxSession::end(eos);
 }
 
+//
+// Muxer::Options
+//
+
+Muxer::Options::Options(pjs::Object *options) {
+  thread_local static pjs::ConstStr s_max_idle("maxIdle");
+  thread_local static pjs::ConstStr s_max_sessions("maxSessions");
+  Value(options, s_max_idle)
+    .get(max_idle)
+    .check_nullable();
+  Value(options, s_max_sessions)
+    .get(max_sessions)
+    .check_nullable();
+}
+
+//
+// Muxer
+//
+
+auto Muxer::alloc(Filter *filter, const pjs::Value &key) -> Session* {
+  auto weak_ptr = (key.is_object() && key.o() ? key.o()->weak_ptr() : nullptr);
+  if (!weak_ptr) {
+    auto i = m_pools.find(key);
+    if (i != m_pools.end()) {
+      return i->second->alloc(filter);
+    }
+  } else {
+    auto i = m_weak_pools.find(weak_ptr);
+    if (i != m_weak_pools.end()) {
+      return i->second->alloc(filter);
+    }
+  }
+
+  if (weak_ptr) {
+    auto pool = new SessionPool(this, weak_ptr);
+    m_weak_pools[weak_ptr] = pool;
+    return pool->alloc(filter);
+  } else {
+    auto pool = new SessionPool(this, key);
+    m_pools[key] = pool;
+    return pool->alloc(filter);
+  }
+}
+
+void Muxer::shutdown() {
+  m_has_shutdown = true;
+}
+
+void Muxer::schedule_recycling() {
+  if (m_has_recycling_scheduled) return;
+  if (m_recycle_pools.empty()) return;
+
+  m_recycle_timer.schedule(
+    1.0,
+    [this]() {
+      InputContext ic;
+      m_has_recycling_scheduled = false;
+      auto now = m_has_shutdown ? std::numeric_limits<double>::infinity() : utils::now();
+      auto p = m_recycle_pools.head();
+      while (p) {
+        auto pool = p; p = p->next();
+        pool->recycle(now);
+      }
+      schedule_recycling();
+      release();
+    }
+  );
+
+  retain();
+  m_has_recycling_scheduled = true;
+}
+
+//
+// Muxer::SessionPool
+//
+
+auto Muxer::SessionPool::alloc(Filter *filter) -> Session* {
+  if (auto s = m_sessions.head()) {
+    if (s->is_idle()) {
+      return s;
+    }
+  }
+
+  auto max_sessions = m_muxer->m_options.max_sessions;
+  if (max_sessions > 0 && m_sessions.size() >= max_sessions) {
+    for (auto s = m_sessions.head(); s; s = s->next()) {
+      if (s->m_allow_queuing) {
+        return s;
+      }
+    }
+  }
+
+  auto s = m_muxer->on_muxer_session_open(filter);
+  s->m_pool = this;
+  m_sessions.unshift(s);
+  schedule_recycling();
+  return s;
+}
+
+void Muxer::SessionPool::recycle(double now) {
+  auto max_idle = m_muxer->m_options.max_idle * 1000;
+  auto s = m_sessions.head();
+  while (s) {
+    auto session = s; s = s->next();
+    if (session->m_streams.size() > 0) break;
+    if (session->is_idle_timeout(now, max_idle) || m_weak_ptr_gone) {
+      session->m_pool = nullptr;
+      m_sessions.remove(session);
+      m_muxer->on_muxer_session_close(session);
+    }
+  }
+
+  if (m_sessions.empty()) {
+    if (m_weak_key) {
+      m_muxer->m_weak_pools.erase(m_weak_key);
+    } else {
+      m_muxer->m_pools.erase(m_key);
+    }
+    if (m_has_recycling_scheduled) {
+      m_muxer->m_recycle_pools.remove(this);
+    }
+    delete this;
+  }
+}
+
+void Muxer::SessionPool::sort(Session *session) {
+  if (session) {
+    auto p = session->back();
+    while (p && p->m_streams.size() > session->m_streams.size()) p = p->back();
+    if (p == session->back()) {
+      auto p = session->next();
+      while (p && p->m_streams.size() < session->m_streams.size()) p = p->next();
+      if (p != session->next()) {
+        m_sessions.remove(session);
+        if (p) {
+          m_sessions.insert(session, p);
+        } else {
+          m_sessions.push(session);
+        }
+      }
+    } else {
+      m_sessions.remove(session);
+      if (p) {
+        m_sessions.insert(session, p->next());
+      } else {
+        m_sessions.unshift(session);
+      }
+    }
+  }
+
+  schedule_recycling();
+}
+
+void Muxer::SessionPool::schedule_recycling() {
+  auto s = m_sessions.head();
+  if (s && s->m_streams.size() > 0) {
+    if (m_has_recycling_scheduled) {
+      m_muxer->m_recycle_pools.remove(this);
+      m_has_recycling_scheduled = false;
+    }
+  } else {
+    if (!m_has_recycling_scheduled) {
+      m_muxer->m_recycle_pools.push(this);
+      m_muxer->schedule_recycling();
+      m_has_recycling_scheduled = true;
+    }
+  }
+}
+
+void Muxer::SessionPool::on_weak_ptr_gone() {
+  m_muxer->m_weak_pools.erase(m_weak_key);
+  m_weak_ptr_gone = true;
+  schedule_recycling();
+}
+
 } // namespace pipy

@@ -2337,10 +2337,10 @@ Client::Client(const Options &options) : Endpoint(false, options)
 {
 }
 
-auto Client::stream(const std::function<void()> &on_close) -> EventFunction* {
+auto Client::stream(const std::function<void()> &on_delete) -> EventFunction* {
   auto id = (m_last_sent_stream_id += 2);
   auto stream = static_cast<Stream*>(Endpoint::stream_open(id));
-  stream->m_on_close = on_close;
+  stream->m_on_on_delete = on_delete;
   return stream;
 }
 

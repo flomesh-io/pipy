@@ -634,7 +634,11 @@ void Decoder::message_start() {
     m_method = nullptr;
     m_responded_tunnel_type = TunnelType::NONE;
     auto res = m_head->as<ResponseHead>();
-    if (auto req = on_decode_response(res)) {
+    if (auto req = on_decode_message_start(res)) {
+      m_method = req->method;
+      auto tt = req->tunnel_type();
+      if (res->is_tunnel_ok(tt)) m_responded_tunnel_type = tt;
+    } else if (auto req = on_decode_response(res)) {
       m_method = req->head->method;
       auto tt = req->tunnel_type;
       if (res->is_tunnel_ok(tt)) m_responded_tunnel_type = tt;
@@ -1445,9 +1449,8 @@ void Demux::Stream::on_event(Event *evt) {
 
   if (auto start = evt->as<MessageStart>()) {
     if (!m_started) {
-      pjs::Ref<ResponseHead> head = pjs::coerce<ResponseHead>(start->head());
       m_started = true;
-      m_continue = (head->status == 100);
+      m_continue = ResponseHead::is_continue(start->head());
       if (is_current) {
         output->input(evt);
       } else {
@@ -1519,7 +1522,7 @@ void Demux::Stream::on_event(Event *evt) {
 //
 
 Mux::Options::Options(pjs::Object *options)
-  : MuxSession::Options(options)
+  : Muxer::Options(options)
   , http2::Endpoint::Options(options)
 {
   Value(options, "bufferSize")
@@ -1542,38 +1545,24 @@ Mux::Options::Options(pjs::Object *options)
 // Mux
 //
 
-Mux::Mux()
-  : m_waiting_events(Filter::buffer_stats())
-{
-}
-
 Mux::Mux(pjs::Function *session_selector)
-  : MuxBase(session_selector)
-  , m_waiting_events(Filter::buffer_stats())
+  : m_muxer(new HTTPMuxer)
+  , m_session_selector(session_selector)
 {
 }
 
 Mux::Mux(pjs::Function *session_selector, const Options &options)
-  : MuxBase(session_selector)
+  : m_muxer(new HTTPMuxer(options))
+  , m_session_selector(session_selector)
   , m_options(options)
-  , m_waiting_events(Filter::buffer_stats())
-{
-}
-
-Mux::Mux(pjs::Function *session_selector, pjs::Function *options)
-  : MuxBase(session_selector, options)
-  , m_waiting_events(Filter::buffer_stats())
 {
 }
 
 Mux::Mux(const Mux &r)
-  : MuxBase(r)
+  : Filter(r)
+  , m_muxer(r.m_muxer)
+  , m_session_selector(r.m_session_selector)
   , m_options(r.m_options)
-  , m_waiting_events(r.m_waiting_events)
-{
-}
-
-Mux::~Mux()
 {
 }
 
@@ -1587,214 +1576,389 @@ auto Mux::clone() -> Filter* {
   return new Mux(*this);
 }
 
-auto Mux::on_mux_new_pool(pjs::Object *options) -> MuxSessionPool* {
-  if (options) {
-    try {
-      Options opts(options);
-      return new SessionPool(opts, Filter::buffer_stats());
-    } catch (std::runtime_error &err) {
-      Filter::error(err.what());
-      return nullptr;
+void Mux::reset() {
+  Filter::reset();
+  if (m_stream) {
+    m_stream->discard();
+    m_stream = nullptr;
+  }
+  m_session = nullptr;
+  m_has_error = false;
+}
+
+void Mux::shutdown() {
+  Filter::shutdown();
+  m_muxer->shutdown();
+}
+
+void Mux::process(Event *evt) {
+  if (!m_has_error) {
+    if (!m_stream) {
+      pjs::Value key;
+      if (m_session_selector) {
+        if (!Filter::eval(m_session_selector, key)) {
+          m_has_error = true;
+          return;
+        }
+      }
+      if (key.is_nullish()) {
+        key.set(Filter::context()->inbound());
+      }
+      m_session = static_cast<HTTPSession*>(m_muxer->alloc(this, key));
+      m_stream = m_session->alloc(Filter::output());
     }
-  } else {
-    return new SessionPool(m_options, Filter::buffer_stats());
+
+    if (m_stream) {
+      m_stream->input()->input(evt);
+    }
   }
 }
 
-auto Mux::verify_http_version(int version) -> int {
-  if (version == 1 || version == 2) return version;
-  Filter::error("invalid HTTP version number");
-  return 0;
+//
+// Mux::HTTPStream
+//
+
+void Mux::HTTPStream::open(bool is_http2) {
+  m_is_http2 = is_http2;
+  m_is_open = true;
+
+  if (is_http2) {
+    if (auto s = Muxer::Stream::session()) {
+      auto session = static_cast<HTTPSession*>(s);
+      m_http2_stream = session->http2::Client::stream(
+        [this]() {
+          m_http2_stream = nullptr;
+          if (auto s = Muxer::Stream::session()) {
+            static_cast<HTTPSession*>(s)->free(this);
+          }
+        }
+      );
+      m_http2_stream->chain(EventFunction::output());
+    }
+  }
+
+  if (!m_buffer.empty()) {
+    auto i = EventFunction::input();
+    EventBuffer buf(std::move(m_buffer));
+    buf.flush([&](Event *evt) {
+      i->input(evt);
+    });
+  }
 }
 
-auto Mux::verify_http_version(pjs::Str *name) -> int {
+void Mux::HTTPStream::discard() {
+  if (m_is_http2 && m_http2_stream) {
+    if (auto s = Muxer::Stream::session()) {
+      auto session = static_cast<HTTPSession*>(s);
+      session->http2::Client::close(m_http2_stream);
+    }
+  }
+}
+
+void Mux::HTTPStream::on_event(Event *evt) {
+  if (!m_is_open) {
+    m_buffer.push(evt);
+
+  } else if (m_is_http2) {
+    if (m_http2_stream) {
+      m_http2_stream->input()->input(evt);
+    }
+
+  } else if (auto s = Muxer::Stream::session()) {
+    auto session = static_cast<HTTPSession*>(s);
+    auto input = session->Encoder::input();
+    auto is_sending = m_is_sending;
+
+    if (m_is_tunnel) {
+      input->input(evt);
+
+    } else if (auto start = evt->as<MessageStart>()) {
+      if (!m_started) {
+        m_started = true;
+        m_head = pjs::coerce<RequestHead>(start->head());
+        if (is_sending) {
+          input->input(evt);
+        } else {
+          m_buffer.push(evt);
+        }
+      }
+
+    } else if (evt->is<Data>()) {
+      if (m_started && !m_ended) {
+        if (is_sending) {
+          input->input(evt);
+        } else {
+          m_buffer.push(evt);
+        }
+      }
+
+    } else if (evt->is_end()) {
+      if (m_started && !m_ended) {
+        m_ended = true;
+        if (evt->is<StreamEnd>()) {
+          evt = MessageEnd::make();
+        }
+        if (is_sending) {
+          input->input(evt);
+          auto s = Muxer::Stream::next();
+          while (s) {
+            auto stream = static_cast<HTTPStream*>(s);
+            stream->m_is_sending = true;
+            stream->m_buffer.flush([&](Event *evt) { input->input(evt); });
+            if (stream->m_ended) s = s->next(); else break;
+          }
+        } else {
+          m_buffer.push(evt);
+        }
+      }
+    }
+  }
+}
+
+//
+// Mux::Queue
+//
+
+void Mux::Queue::open(bool is_http2) {
+  m_is_http2 = is_http2;
+  m_is_open = true;
+  for (auto s = Muxer::Session::head(); s; s = s->next()) {
+    static_cast<HTTPStream*>(s)->open(false);
+  }
+}
+
+auto Mux::Queue::alloc(EventTarget::Input *output) -> HTTPStream* {
+  auto s = new HTTPStream();
+  s->chain(output);
+  Muxer::Session::append(s);
+  if (Muxer::Session::head() == s) s->m_is_sending = true;
+  if (m_is_open) s->open(m_is_http2);
+  return s->retain();
+}
+
+void Mux::Queue::free(HTTPStream *s) {
+  Muxer::Session::remove(s);
+  s->release();
+}
+
+void Mux::Queue::free_all() {
+  for (auto s = Muxer::Session::head(); s; ) {
+    auto stream = static_cast<HTTPStream*>(s); s = s->next();
+    free(stream);
+  }
+}
+
+auto Mux::Queue::current_request() -> RequestHead* {
+  if (auto s = Muxer::Session::head()) {
+    return static_cast<HTTPStream*>(s)->m_head;
+  } else {
+    return nullptr;
+  }
+}
+
+void Mux::Queue::on_event(Event *evt) {
+  if (auto s = Muxer::Session::head()) {
+    auto stream = static_cast<HTTPStream*>(s);
+    auto output = stream->output();
+
+    if (m_tunneling) {
+      output->input(evt);
+
+    } else if (auto start = evt->as<MessageStart>()) {
+      if (!m_started) {
+        m_started = true;
+        m_continue = ResponseHead::is_continue(start->head());
+        output->input(evt);
+      }
+
+    } else if (evt->is<Data>()) {
+      if (m_started) {
+        output->input(evt);
+      }
+
+    } else if (evt->is<MessageEnd>()) {
+      if (m_started) {
+        m_started = false;
+        output->input(evt);
+        if (m_continue) {
+          m_continue = false;
+        } else {
+          free(stream);
+        }
+      }
+
+    } else if (evt->is<StreamEnd>()) {
+      while (s) {
+        static_cast<HTTPStream*>(s)->output()->input(evt);
+        s = s->next();
+      }
+      free_all();
+    }
+  }
+}
+
+//
+// Mux::HTTPSession
+//
+
+Mux::HTTPSession::HTTPSession(Mux *mux)
+  : Encoder(false)
+  , Decoder(true)
+  , http2::Client(mux->m_options)
+  , m_context(mux->context())
+  , m_ping_handler(mux->m_options.ping_f)
+{
+  Decoder::set_max_header_size(mux->m_options.max_header_size);
+  Encoder::set_buffer_size(mux->m_options.buffer_size);
+
+  m_pipeline = mux->sub_pipeline(0, true);
+
+  if (auto f = mux->m_options.version_f.get()) {
+    pjs::Value version;
+    if (mux->Filter::eval(f, version)) {
+      if (version.is_promise()) {
+        m_version_callback = pjs::Promise::Callback::make(
+          [this](pjs::Promise::State state, const pjs::Value &value) {
+            if (state == pjs::Promise::State::RESOLVED) {
+              select_protocol(value);
+            } else {
+              select_protocol(1);
+            }
+          }
+        );
+        version.as<pjs::Promise>()->then(
+          mux->context(),
+          m_version_callback->resolved(),
+          m_version_callback->rejected()
+        );
+      } else {
+        select_protocol(version);
+      }
+    } else {
+      select_protocol(1);
+    }
+  } else if (auto s = mux->m_options.version_s.get()) {
+    select_protocol(s);
+  } else {
+    select_protocol(mux->m_options.version);
+  }
+
+  m_pipeline->start();
+}
+
+Mux::HTTPSession::~HTTPSession() {
+  if (m_version_callback) {
+    m_version_callback->discard();
+  }
+}
+
+void Mux::HTTPSession::shutdown() {
+  if (m_version == 2) {
+    http2::Client::shutdown();
+  }
+  Queue::free_all();
+}
+
+void Mux::HTTPSession::select_protocol(const pjs::Value &version) {
   thread_local static const pjs::ConstStr s_http_1("http/1");
   thread_local static const pjs::ConstStr s_http_2("http/2");
   thread_local static const pjs::ConstStr s_http_1_0("http/1.0");
   thread_local static const pjs::ConstStr s_http_1_1("http/1.1");
   thread_local static const pjs::ConstStr s_h2("h2");
-  if (name == s_http_2 || name == s_h2) return 2;
-  if (name == s_http_1 || name == s_http_1_0 || name == s_http_1_1) return 1;
-  Filter::error("invalid HTTP version name");
-  return 0;
-}
 
-//
-// Mux::Session
-//
-
-Mux::Session::Session(const Mux::Options &options, std::shared_ptr<BufferStats> buffer_stats)
-  : MuxQueue(this)
-  , Encoder(false, buffer_stats)
-  , Decoder(true)
-  , http2::Client(options)
-  , m_options(options)
-{
-  Decoder::set_max_header_size(options.max_header_size);
-}
-
-Mux::Session::~Session() {
-  if (m_version_selector) {
-    m_version_selector->close();
-  }
-  if (m_ping_promise_cb) {
-    m_ping_promise_cb->discard();
-  }
-}
-
-void Mux::Session::mux_session_open(MuxSource *source) {
-  auto mux = static_cast<Mux*>(source);
-  if (!select_protocol(mux)) {
-    MuxSession::set_pending(true);
-    MuxSession::input()->flush();
-  }
-}
-
-auto Mux::Session::mux_session_open_stream(MuxSource *source) -> EventFunction* {
-  if (m_http2) {
-    return http2::Client::stream([=]() { source->discard(); });
-  } else {
-    return MuxQueue::stream(source);
-  }
-}
-
-void Mux::Session::mux_session_close_stream(EventFunction *stream) {
-  if (m_http2) {
-    http2::Client::close(stream);
-  } else {
-    MuxQueue::close(stream);
-  }
-}
-
-void Mux::Session::mux_session_close() {
-  if (m_http2) {
-    if (m_ping_promise_cb) {
-      m_ping_promise_cb->discard();
-      m_ping_promise_cb = nullptr;
-      m_ping_context = nullptr;
-    }
-    http2::Client::shutdown();
-  } else {
-    MuxQueue::reset();
-    m_request_queue.reset();
-  }
-}
-
-void Mux::Session::on_encode_request(RequestQueue::Request *req) {
-  m_request_queue.push(req);
-}
-
-auto Mux::Session::on_decode_response(ResponseHead *head) -> RequestQueue::Request* {
-  if (head->status == 100) {
-    MuxQueue::increase_output_count(1);
-    return nullptr;
-  } else {
-    return m_request_queue.shift();
-  }
-}
-
-bool Mux::Session::on_decode_tunnel(TunnelType tt) {
-  Encoder::set_tunnel();
-  MuxQueue::dedicate();
-  MuxSession::detach(); // so that it won't get allocated for other sources
-  return true;
-}
-
-void Mux::Session::on_decode_final() {
-  MuxSession::end(StreamEnd::make());
-}
-
-void Mux::Session::on_decode_error()
-{
-}
-
-void Mux::Session::on_ping(const Data &data) {
-  if (m_options.ping_f) {
-    pjs::Ref<Data> d(Data::make(data));
-    schedule_ping(d);
-  }
-}
-
-void Mux::Session::on_queue_end(StreamEnd *eos) {
-  MuxSession::end(eos);
-}
-
-void Mux::Session::on_endpoint_close(StreamEnd *eos) {
-  MuxSession::end(eos);
-}
-
-bool Mux::Session::select_protocol(Mux *mux) {
-  thread_local static auto s_method_select = pjs::ClassDef<VersionSelector>::method("select");
-
-  if (m_version_selected) return true;
-
-  if (m_options.version_f) {
-    pjs::Value ret;
-    if (!mux->eval(m_options.version_f, ret)) return false;
-    if (ret.is<pjs::Promise>()) {
-      m_version_selector = VersionSelector::make(mux, this);
-      ret.as<pjs::Promise>()->then(nullptr, pjs::Function::make(s_method_select, m_version_selector));
-      return false;
-    }
-    return select_protocol(mux, ret);
-  } else if (m_options.version_s) {
-    return select_protocol(mux, m_options.version_s.get());
-  } else {
-    return select_protocol(mux, m_options.version);
-  }
-}
-
-bool Mux::Session::select_protocol(Mux *mux, const pjs::Value &version) {
   if (version.is_number()) {
-    m_version_selected = mux->verify_http_version(version.to_int32());
+    auto n = version.n();
+    if (n == 1 || n == 2) {
+      m_version = n;
+    }
+
   } else if (version.is_string()) {
-    m_version_selected = mux->verify_http_version(version.s());
-  } else {
-    mux->error("invalid HTTP version");
+    auto s = version.s();
+    if (s == s_http_2 || s == s_h2) m_version = 2; else
+    if (s == s_http_1 || s == s_http_1_0 || s == s_http_1_1) m_version = 1;
   }
 
-  switch (m_version_selected) {
-  case 1:
-    MuxQueue::chain(Encoder::input());
-    Encoder::chain(MuxSession::input());
-    MuxSession::chain(Decoder::input());
-    Decoder::chain(MuxQueue::reply());
-    Encoder::set_buffer_size(m_options.buffer_size);
-    MuxSession::set_pending(false);
-    return true;
-  case 2:
-    m_http2 = true;
-    http2::Client::chain(MuxSession::input());
-    MuxSession::chain(http2::Client::reply());
-    MuxSession::set_pending(false);
-    if (m_options.ping_f) {
-      m_ping_context = mux->context();
+  if (m_version == 1) {
+    Encoder::chain(m_pipeline->input());
+    m_pipeline->chain(Decoder::input());
+    Decoder::chain(Queue::input());
+    Queue::open(false);
+
+  } else if (m_version == 2) {
+    http2::Client::chain(m_pipeline->input());
+    m_pipeline->chain(http2::Client::reply());
+    Queue::open(true);
+    Muxer::Session::allow_queuing(true);
+    if (m_ping_handler) {
       schedule_ping();
     }
-    return true;
-  default:
-    break;
-  }
 
-  return false;
+  } else {
+    m_context->error("invalid HTTP version value");
+  }
 }
 
-void Mux::Session::schedule_ping(Data *ack) {
+void Mux::HTTPSession::schedule_ping(Data *ack) {
   pjs::Value arg(ack), ret;
-  (*m_options.ping_f)(*m_ping_context, 1, &arg, ret);
-  if (!m_ping_context->ok()) return;
+  (*m_ping_handler)(*m_context, 1, &arg, ret);
+  if (!m_context->ok()) return;
   if (ret.is_nullish()) return;
   if (ret.is<Data>()) return http2::Client::ping(*ret.as<Data>());
   if (ret.is_promise()) {
-    m_ping_promise_cb = pjs::Promise::Callback::make(
+    m_ping_callback = pjs::Promise::Callback::make(
       [this](pjs::Promise::State, const pjs::Value &value) {
         if (value.is<Data>()) {
           http2::Client::ping(*value.as<Data>());
         }
       }
     );
-    ret.as<pjs::Promise>()->then(m_ping_context, m_ping_promise_cb->resolved());
+    ret.as<pjs::Promise>()->then(m_context, m_ping_callback->resolved());
   }
+}
+
+auto Mux::HTTPSession::on_decode_message_start(ResponseHead *) -> RequestHead* {
+  return Queue::current_request();
+}
+
+bool Mux::HTTPSession::on_decode_tunnel(TunnelType tt) {
+  if (auto s = Muxer::Session::head()) {
+    static_cast<HTTPStream*>(s)->set_tunnel();
+  }
+  Encoder::set_tunnel();
+  Queue::set_tunnel();
+  return true;
+}
+
+void Mux::HTTPSession::on_ping(const Data &data) {
+  if (m_ping_handler) {
+    pjs::Ref<Data> d(Data::make(data));
+    schedule_ping(d);
+  }
+}
+
+//
+// Mux::HTTPMuxer
+//
+
+Mux::HTTPMuxer::HTTPMuxer()
+{
+}
+
+Mux::HTTPMuxer::HTTPMuxer(const Options &options)
+  : Muxer(options)
+  , m_options(options)
+{
+}
+
+auto Mux::HTTPMuxer::on_muxer_session_open(Filter *filter) -> Session* {
+  auto s = new HTTPSession(static_cast<Mux*>(filter));
+  return s->retain();
+}
+
+void Mux::HTTPMuxer::on_muxer_session_close(Session *session) {
+  auto s = static_cast<HTTPSession*>(session);
+  s->shutdown();
+  s->release();
 }
 
 //
@@ -2132,13 +2296,6 @@ void TunnelClient::on_reply(Event *evt) {
 namespace pjs {
 
 using namespace pipy::http;
-
-template<> void ClassDef<Mux::Session::VersionSelector>::init() {
-  method("select", [](Context &ctx, Object *obj, Value &) {
-    Value version; ctx.get(0, version);
-    obj->as<Mux::Session::VersionSelector>()->select(version);
-  });
-}
 
 template<> void ClassDef<Server::Handler>::init() {
   super<Promise::Callback>();

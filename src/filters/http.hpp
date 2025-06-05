@@ -83,6 +83,7 @@ public:
 
 protected:
   virtual void on_decode_message_start(RequestHead *head) {}
+  virtual auto on_decode_message_start(ResponseHead *head) -> RequestHead* { return nullptr; }
   virtual void on_decode_message_end(MessageTail *tail) {}
   virtual void on_decode_request(RequestQueue::Request *req) { delete req; }
   virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* { return nullptr; }
@@ -363,10 +364,10 @@ protected:
 // Mux
 //
 
-class Mux : public MuxBase {
+class Mux : public Filter {
 public:
   struct Options :
-    public MuxSession::Options,
+    public Muxer::Options,
     public http2::Endpoint::Options
   {
     size_t buffer_size = DATA_CHUNK_SIZE;
@@ -379,103 +380,148 @@ public:
     Options(pjs::Object *options);
   };
 
-  Mux();
   Mux(pjs::Function *session_selector);
   Mux(pjs::Function *session_selector, const Options &options);
-  Mux(pjs::Function *session_selector, pjs::Function *options);
+  Mux(const Mux &r);
+
+private:
+  class HTTPMuxer;
+  class HTTPSession;
+  class Queue;
 
   //
-  // Mux::Session
+  // Mux::HTTPStream
   //
 
-  class Session :
-    public pjs::Pooled<Session, MuxSession>,
-    protected MuxQueue,
-    protected Encoder,
+  class HTTPStream :
+    public pjs::RefCount<HTTPStream>,
+    public pjs::Pooled<HTTPStream>,
+    public Muxer::Stream,
+    public EventFunction
+  {
+  public:
+    void set_tunnel() { m_is_tunnel = true; }
+    void discard();
+
+  private:
+    HTTPStream() {}
+    ~HTTPStream() {}
+
+    void open(bool is_http2);
+
+    virtual void on_event(Event *evt) override;
+
+    EventFunction* m_http2_stream = nullptr;
+    EventBuffer m_buffer;
+    pjs::Ref<RequestHead> m_head;
+    bool m_is_http2 = false;
+    bool m_is_open = false;
+    bool m_is_sending = false;
+    bool m_is_tunnel = false;
+    bool m_started = false;
+    bool m_ended = false;
+
+    friend class pjs::RefCount<HTTPStream>;
+    friend class Queue;
+  };
+
+  //
+  // Mux::Queue
+  //
+
+  class Queue :
+    public Muxer::Session,
+    public EventTarget
+  {
+  public:
+    auto alloc(EventTarget::Input *output) -> HTTPStream*;
+
+  protected:
+    void open(bool is_http2);
+    void free(HTTPStream *s);
+    void free_all();
+    auto current_request() -> RequestHead*;
+    void set_tunnel() { m_tunneling = true; }
+
+  private:
+    bool m_is_http2 = false;
+    bool m_is_open = false;
+    bool m_started = false;
+    bool m_continue = false;
+    bool m_tunneling = false;
+
+    virtual void on_event(Event *evt) override;
+  };
+
+  //
+  // Mux::HTTPSession
+  //
+
+  class HTTPSession :
+    public pjs::RefCount<HTTPSession>,
+    public pjs::Pooled<HTTPSession>,
+    public Queue,
+    public Encoder,
     protected Decoder,
     protected http2::Client
   {
   public:
-    Session(const Mux::Options &options, std::shared_ptr<BufferStats> buffer_stats);
-    ~Session();
-
-    //
-    // Mux::Session::VersionSelector
-    //
-
-    class VersionSelector : public pjs::ObjectTemplate<VersionSelector> {
-    public:
-      void select(const pjs::Value &version) {
-        if (m_session) m_session->select_protocol(m_mux, version);
-      }
-      void close() { m_session = nullptr; }
-    private:
-      VersionSelector(Mux *mux, Session *session)
-        : m_mux(mux), m_session(session) {}
-      Mux* m_mux;
-      Session* m_session;
-      friend class pjs::ObjectTemplate<VersionSelector>;
-    };
+    void shutdown();
 
   private:
-    virtual void mux_session_open(MuxSource *source) override;
-    virtual auto mux_session_open_stream(MuxSource *source) -> EventFunction* override;
-    virtual void mux_session_close_stream(EventFunction *stream) override;
-    virtual void mux_session_close() override;
+    HTTPSession(Mux *mux);
+    ~HTTPSession();
 
-    virtual void on_encode_request(RequestQueue::Request *req) override;
-    virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* override;
-    virtual bool on_decode_tunnel(TunnelType tt) override;
-    virtual void on_decode_final() override;
-    virtual void on_decode_error() override;
-    virtual void on_ping(const Data &data) override;
-    virtual void on_queue_end(StreamEnd *eos) override;
-    virtual void on_endpoint_close(StreamEnd *eos) override;
-    virtual void on_auto_release() override { delete this; }
+  private:
+    int m_version = 0;
+    pjs::Ref<Pipeline> m_pipeline;
+    pjs::Ref<pjs::Promise::Callback> m_version_callback;
+    pjs::Ref<Context> m_context;
+    pjs::Ref<pjs::Function> m_ping_handler;
+    pjs::Ref<pjs::Promise::Callback> m_ping_callback;
 
-    const Mux::Options& m_options;
-    int m_version_selected = 0;
-    pjs::Ref<VersionSelector> m_version_selector;
-    pjs::Ref<Context> m_ping_context;
-    pjs::Ref<pjs::Promise::Callback> m_ping_promise_cb;
-    RequestQueue m_request_queue;
-    bool m_http2 = false;
-
-    bool select_protocol(Mux *muxer);
-    bool select_protocol(Mux *muxer, const pjs::Value &version);
+    void select_protocol(const pjs::Value &version);
     void schedule_ping(Data *ack = nullptr);
+
+    virtual auto on_decode_message_start(ResponseHead *head) -> RequestHead* override;
+    virtual bool on_decode_tunnel(TunnelType tt) override;
+    virtual void on_ping(const Data &data) override;
+
+    friend class pjs::RefCount<HTTPSession>;
+    friend class HTTPStream;
+    friend class HTTPMuxer;
   };
 
-private:
-  Mux(const Mux &r);
-  ~Mux();
+  //
+  // Mux::HTTPMuxer
+  //
 
+  class HTTPMuxer : public Muxer {
+  public:
+    HTTPMuxer();
+    HTTPMuxer(const Options &options);
+
+  private:
+    pjs::Ref<pjs::Function> m_session_selector;
+    pjs::Ref<pjs::Function> m_options_f;
+    Options m_options;
+
+    virtual auto on_muxer_session_open(Filter *filter) -> Session* override;
+    virtual void on_muxer_session_close(Session *session) override;
+  };
+
+  pjs::Ref<HTTPMuxer> m_muxer;
+  pjs::Ref<pjs::Function> m_session_selector;
+  pjs::Ref<HTTPSession> m_session;
+  pjs::Ref<HTTPStream> m_stream;
   Options m_options;
-  EventBuffer m_waiting_events;
+  bool m_has_error = false;
 
   virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void shutdown() override;
+  virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
-  virtual auto on_mux_new_pool(pjs::Object *options) -> MuxSessionPool* override;
-
-  auto verify_http_version(int version) -> int;
-  auto verify_http_version(pjs::Str *name) -> int;
-
-  //
-  // Mux::SessionPool
-  //
-
-  struct SessionPool : public pjs::Pooled<SessionPool, MuxSessionPool> {
-    SessionPool(const Options &options, std::shared_ptr<BufferStats> buffer_stats)
-      : pjs::Pooled<SessionPool, MuxSessionPool>(options)
-      , m_options(options)
-      , m_buffer_stats(buffer_stats) {}
-
-    virtual auto session() -> MuxSession* override { return new Session(m_options, m_buffer_stats); }
-    virtual void free() override { delete this; }
-
-    Options m_options;
-    std::shared_ptr<BufferStats> m_buffer_stats;
-  };
 };
 
 //
