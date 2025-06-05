@@ -258,7 +258,7 @@ void SocketTCP::on_tick(double tick) {
   }
 
   if (m_options.write_timeout > 0) {
-    if (r >= m_options.write_timeout) {
+    if (w >= m_options.write_timeout) {
       on_socket_input(StreamEnd::make(StreamEnd::WRITE_TIMEOUT));
       close();
       return;
@@ -453,6 +453,14 @@ void SocketUDP::send(Data *data) {
     DataChunks(data->chunks()),
     SendHandler(this, data)
   );
+
+  auto t = Ticker::get()->tick();
+  m_tick_write = t;
+
+  if (!m_sending) {
+    m_sending = true;
+    m_tick_read = t;
+  }
 }
 
 void SocketUDP::send(Data *data, const asio::ip::udp::endpoint &endpoint) {
@@ -518,6 +526,37 @@ void SocketUDP::on_tap_close() {
 }
 
 void SocketUDP::on_tick(double tick) {
+  if (m_sending) {
+    const auto &options = m_options;
+    auto r = tick - m_tick_read;
+    auto w = tick - m_tick_write;
+
+    if (options.idle_timeout > 0) {
+      auto t = options.idle_timeout;
+      if (r >= t && w >= t) {
+        on_socket_input(StreamEnd::make(StreamEnd::IDLE_TIMEOUT));
+        close();
+        return;
+      }
+    }
+
+    if (options.read_timeout > 0) {
+      if (r >= options.read_timeout) {
+        on_socket_input(StreamEnd::make(StreamEnd::READ_TIMEOUT));
+        close();
+        return;
+      }
+    }
+
+    if (options.write_timeout > 0) {
+      if (w >= options.write_timeout) {
+        on_socket_input(StreamEnd::make(StreamEnd::WRITE_TIMEOUT));
+        close();
+        return;
+      }
+    }
+  }
+
   auto i = m_peers.begin();
   while (i != m_peers.end()) {
     auto p = i->second; i++;
@@ -529,6 +568,7 @@ void SocketUDP::on_receive(Data *data, const std::error_code &ec, std::size_t n)
   InputContext ic(this);
 
   m_receiving = false;
+  m_tick_read = Ticker::get()->tick();
 
   if (ec != asio::error::operation_aborted && !m_closing) {
     if (n > 0) {
@@ -642,7 +682,7 @@ void SocketUDP::Peer::tick(double t) {
   }
 
   if (options.write_timeout > 0) {
-    if (r >= options.write_timeout) {
+    if (w >= options.write_timeout) {
       m_socket->m_peers.erase(m_endpoint);
       m_socket = nullptr;
       on_peer_input(StreamEnd::make(StreamEnd::WRITE_TIMEOUT));
