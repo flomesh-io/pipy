@@ -216,6 +216,9 @@ private:
   Congestion m_congestion;
   int m_sending_size = 0;
   int m_sending_count = 0;
+  double m_tick_read;
+  double m_tick_write;
+  bool m_sending = false;
   bool m_receiving = false;
   bool m_opened = false;
   bool m_paused = false;
