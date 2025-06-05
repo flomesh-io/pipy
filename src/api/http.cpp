@@ -149,6 +149,7 @@ auto ResponseHead::error_to_status(StreamEnd::Error err, int &status) -> pjs::St
   case StreamEnd::CONNECTION_TIMEOUT:
   case StreamEnd::READ_TIMEOUT:
   case StreamEnd::WRITE_TIMEOUT:
+  case StreamEnd::IDLE_TIMEOUT:
     status = 504;
     return s_gateway_timeout;
   default:
