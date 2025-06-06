@@ -168,10 +168,12 @@ public:
   auto chain() const -> PipelineLayout::Chain* { return m_chain; }
   void chain(Input *input) { EventProxy::chain(input); }
   void chain(PipelineLayout::Chain *chain, const pjs::Value &args = pjs::Value::undefined) { m_chain = chain; m_chain_args = args; }
+  void chain_null() { EventProxy::chain(nullptr); }
   auto chain_args() const -> const pjs::Value& { return m_chain_args; }
   void start(const pjs::Value &args);
   auto start(int argc = 0, pjs::Value *argv = nullptr) -> Pipeline*;
   void on_end(ResultCallback *cb) { m_result_cb = cb; }
+  void on_eos(const std::function<void(StreamEnd *)> &f) { m_on_eos = f; }
 
 private:
   Pipeline(PipelineLayout *layout);
@@ -190,6 +192,7 @@ private:
   pjs::Value m_chain_args;
   EventBuffer m_pending_events;
   ResultCallback* m_result_cb = nullptr;
+  std::function<void(StreamEnd *)> m_on_eos;
   bool m_started = false;
 
   void wait(pjs::Promise *promise);

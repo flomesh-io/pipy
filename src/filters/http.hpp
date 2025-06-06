@@ -423,6 +423,7 @@ private:
 
     friend class pjs::RefCount<HTTPStream>;
     friend class Queue;
+    friend class HTTPSession;
   };
 
   //
@@ -466,7 +467,7 @@ private:
     protected http2::Client
   {
   public:
-    void shutdown();
+    void close_all();
 
   private:
     HTTPSession(Mux *mux);

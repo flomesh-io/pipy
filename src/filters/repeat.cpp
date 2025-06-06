@@ -65,10 +65,13 @@ void Repeat::reset() {
     m_promise_cb->discard();
     m_promise_cb = nullptr;
   }
+  if (m_pipeline) {
+    m_pipeline->chain_null();
+    m_pipeline = nullptr;
+  }
   m_eos = nullptr;
   m_buffer.clear();
   m_timer.cancel();
-  m_pipeline = nullptr;
   m_outputting = false;
   m_restarting = false;
   m_ended = false;
@@ -94,6 +97,7 @@ void Repeat::shutdown() {
 void Repeat::on_reply(Event *evt) {
   if (auto eos = evt->as<StreamEnd>()) {
     m_eos = eos;
+    m_pipeline->chain_null();
     if (m_shutdown) {
       end();
       return;

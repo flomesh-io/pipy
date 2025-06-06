@@ -230,6 +230,11 @@ void Pipeline::on_input(Event *evt) {
 
 void Pipeline::on_reply(Event *evt) {
   auto_release(this);
+  if (m_on_eos) {
+    if (auto eos = evt->as<StreamEnd>()) {
+      m_on_eos(eos);
+    }
+  }
   EventProxy::output(evt);
 }
 

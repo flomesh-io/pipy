@@ -965,6 +965,12 @@ auto Muxer::SessionPool::alloc(Filter *filter) -> Session* {
 }
 
 void Muxer::SessionPool::recycle(double now) {
+  for (auto s = m_aborted_sessions.head(); s; ) {
+    auto session = s; s = s->next();
+    m_muxer->on_muxer_session_close(session);
+  }
+  m_aborted_sessions.clear();
+
   auto max_idle = m_muxer->m_options.max_idle * 1000;
   auto s = m_sessions.head();
   while (s) {
@@ -992,25 +998,31 @@ void Muxer::SessionPool::recycle(double now) {
 
 void Muxer::SessionPool::sort(Session *session) {
   if (session) {
-    auto p = session->back();
-    while (p && p->m_streams.size() > session->m_streams.size()) p = p->back();
-    if (p == session->back()) {
-      auto p = session->next();
-      while (p && p->m_streams.size() < session->m_streams.size()) p = p->next();
-      if (p != session->next()) {
+    if (session->m_has_aborted) {
+      session->m_pool = nullptr;
+      m_sessions.remove(session);
+      m_aborted_sessions.push(session);
+    } else {
+      auto p = session->back();
+      while (p && p->m_streams.size() > session->m_streams.size()) p = p->back();
+      if (p == session->back()) {
+        auto p = session->next();
+        while (p && p->m_streams.size() < session->m_streams.size()) p = p->next();
+        if (p != session->next()) {
+          m_sessions.remove(session);
+          if (p) {
+            m_sessions.insert(session, p);
+          } else {
+            m_sessions.push(session);
+          }
+        }
+      } else {
         m_sessions.remove(session);
         if (p) {
-          m_sessions.insert(session, p);
+          m_sessions.insert(session, p->next());
         } else {
-          m_sessions.push(session);
+          m_sessions.unshift(session);
         }
-      }
-    } else {
-      m_sessions.remove(session);
-      if (p) {
-        m_sessions.insert(session, p->next());
-      } else {
-        m_sessions.unshift(session);
       }
     }
   }
@@ -1020,7 +1032,7 @@ void Muxer::SessionPool::sort(Session *session) {
 
 void Muxer::SessionPool::schedule_recycling() {
   auto s = m_sessions.head();
-  if (s && s->m_streams.size() > 0) {
+  if (s && s->m_streams.size() > 0 && m_aborted_sessions.empty()) {
     if (m_has_recycling_scheduled) {
       m_muxer->m_recycle_pools.remove(this);
       m_has_recycling_scheduled = false;

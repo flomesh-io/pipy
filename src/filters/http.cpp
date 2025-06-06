@@ -1812,6 +1812,7 @@ Mux::HTTPSession::HTTPSession(Mux *mux)
   Encoder::set_buffer_size(mux->m_options.buffer_size);
 
   m_pipeline = mux->sub_pipeline(0, true);
+  m_pipeline->on_eos([this](StreamEnd *) { Muxer::Session::abort(); });
 
   if (auto f = mux->m_options.version_f.get()) {
     pjs::Value version;
@@ -1847,14 +1848,17 @@ Mux::HTTPSession::HTTPSession(Mux *mux)
 }
 
 Mux::HTTPSession::~HTTPSession() {
-  if (m_version_callback) {
-    m_version_callback->discard();
-  }
+  if (m_version_callback) m_version_callback->discard();
+  if (m_ping_callback) m_ping_callback->discard();
 }
 
-void Mux::HTTPSession::shutdown() {
+void Mux::HTTPSession::close_all() {
   if (m_version == 2) {
     http2::Client::shutdown();
+    for (auto s = Queue::head(); s; s = s->next()) {
+      auto stream = static_cast<HTTPStream*>(s);
+      http2::Client::discard(stream->m_http2_stream);
+    }
   }
   Queue::free_all();
 }
@@ -1957,7 +1961,7 @@ auto Mux::HTTPMuxer::on_muxer_session_open(Filter *filter) -> Session* {
 
 void Mux::HTTPMuxer::on_muxer_session_close(Session *session) {
   auto s = static_cast<HTTPSession*>(session);
-  s->shutdown();
+  s->close_all();
   s->release();
 }
 

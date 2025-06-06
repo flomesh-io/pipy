@@ -616,6 +616,7 @@ public:
 
   auto stream(const std::function<void()> &on_delete) -> EventFunction*;
   void close(EventFunction *stream);
+  void discard(EventFunction *stream);
   void shutdown() { Endpoint::shutdown(); }
 
 private:
@@ -635,12 +636,12 @@ private:
     Stream(Client *client, int id);
 
     ~Stream() {
-      if (m_on_on_delete) {
-        m_on_on_delete();
+      if (m_on_delete) {
+        m_on_delete();
       }
     }
 
-    std::function<void()> m_on_on_delete;
+    std::function<void()> m_on_delete;
 
     bool m_has_message_started = false;
     bool m_has_message_ended = false;

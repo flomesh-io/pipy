@@ -441,6 +441,8 @@ public:
       for (auto s = m_streams.head(); s; s = s->next()) s->m_session = nullptr;
     }
 
+    void abort() { m_has_aborted = true; sort(); }
+
   public:
     auto head() const -> Stream* { return m_streams.head(); }
     auto tail() const -> Stream* { return m_streams.tail(); }
@@ -453,6 +455,7 @@ public:
     List<Stream> m_streams;
     double m_idle_time;
     bool m_allow_queuing = false;
+    bool m_has_aborted = false;
 
     bool is_idle() const { return m_streams.empty(); }
 
@@ -510,6 +513,7 @@ private:
     pjs::Ref<pjs::Object::WeakPtr> m_weak_key;
     pjs::Value m_key;
     List<Session> m_sessions;
+    List<Session> m_aborted_sessions;
     bool m_weak_ptr_gone = false;
     bool m_has_recycling_scheduled = false;
 
