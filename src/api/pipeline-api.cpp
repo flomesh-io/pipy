@@ -190,12 +190,12 @@ void PipelineDesigner::decode_dubbo() {
   append_filter(new dubbo::Decoder());
 }
 
-void PipelineDesigner::decode_http_request(pjs::Function *handler) {
-  append_filter(new http::RequestDecoder(handler));
+void PipelineDesigner::decode_http_request() {
+  append_filter(new http::RequestDecoder());
 }
 
-void PipelineDesigner::decode_http_response(pjs::Function *handler) {
-  append_filter(new http::ResponseDecoder(handler));
+void PipelineDesigner::decode_http_response(pjs::Object *options) {
+  append_filter(new http::ResponseDecoder(options));
 }
 
 void PipelineDesigner::decode_mqtt() {
@@ -266,12 +266,12 @@ void PipelineDesigner::encode_dubbo() {
   append_filter(new dubbo::Encoder());
 }
 
-void PipelineDesigner::encode_http_request(pjs::Object *options, pjs::Function *handler) {
-  append_filter(new http::RequestEncoder(options, handler));
+void PipelineDesigner::encode_http_request(pjs::Object *options) {
+  append_filter(new http::RequestEncoder(options));
 }
 
-void PipelineDesigner::encode_http_response(pjs::Object *options, pjs::Function *handler) {
-  append_filter(new http::ResponseEncoder(options, handler));
+void PipelineDesigner::encode_http_response(pjs::Object *options) {
+  append_filter(new http::ResponseEncoder(options));
 }
 
 void PipelineDesigner::encode_mqtt() {
@@ -339,11 +339,7 @@ void PipelineDesigner::loop() {
 }
 
 void PipelineDesigner::mux(pjs::Function *session_selector, pjs::Object *options) {
-  if (options && options->is_function()) {
-    require_sub_pipeline(append_filter(new Mux(session_selector, options->as<pjs::Function>())));
-  } else {
-    require_sub_pipeline(append_filter(new Mux(session_selector, options)));
-  }
+  require_sub_pipeline(append_filter(new Mux(session_selector, options)));
 }
 
 void PipelineDesigner::mux_fcgi(pjs::Function *session_selector, pjs::Object *options) {
@@ -778,16 +774,14 @@ template<> void ClassDef<PipelineDesigner>::init() {
 
   // PipelineDesigner.decodeHTTPRequest
   filter("decodeHTTPRequest", [](Context &ctx, PipelineDesigner *obj) {
-    Function *handler = nullptr;
-    if (!ctx.arguments(0, &handler)) return;
-    obj->decode_http_request(handler);
+    obj->decode_http_request();
   });
 
   // PipelineDesigner.decodeHTTPResponse
   filter("decodeHTTPResponse", [](Context &ctx, PipelineDesigner *obj) {
-    Function *handler = nullptr;
-    if (!ctx.arguments(0, &handler)) return;
-    obj->decode_http_response(handler);
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
+    obj->decode_http_response(options);
   });
 
   // PipelineDesigner.decodeMQTT
@@ -892,25 +886,15 @@ template<> void ClassDef<PipelineDesigner>::init() {
   // PipelineDesigner.encodeHTTPRequest
   filter("encodeHTTPRequest", [](Context &ctx, PipelineDesigner *obj) {
     Object *options = nullptr;
-    Function *handler = nullptr;
-    if (ctx.is_function(0)) {
-      if (!ctx.arguments(1, &handler, &options)) return;
-    } else {
-      if (!ctx.arguments(0, &options)) return;
-    }
-    obj->encode_http_request(options, handler);
+    if (!ctx.arguments(0, &options)) return;
+    obj->encode_http_request(options);
   });
 
   // PipelineDesigner.encodeHTTPResponse
   filter("encodeHTTPResponse", [](Context &ctx, PipelineDesigner *obj) {
     Object *options = nullptr;
-    Function *handler = nullptr;
-    if (ctx.is_function(0)) {
-      if (!ctx.arguments(1, &handler, &options)) return;
-    } else {
-      if (!ctx.arguments(0, &options)) return;
-    }
-    obj->encode_http_response(options, handler);
+    if (!ctx.arguments(0, &options)) return;
+    obj->encode_http_response(options);
   });
 
   // PipelineDesigner.encodeMQTT

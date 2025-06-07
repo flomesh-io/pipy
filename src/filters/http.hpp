@@ -38,36 +38,6 @@ namespace pipy {
 namespace http {
 
 //
-// RequestQueue
-//
-
-class RequestQueue {
-public:
-
-  //
-  // RequestQueue::Request
-  //
-
-  struct Request :
-    public pjs::Pooled<Request>,
-    public List<Request>::Item
-  {
-    pjs::Ref<RequestHead> head;
-    bool is_final = false;
-    TunnelType tunnel_type = TunnelType::NONE;
-  };
-
-  bool empty() const { return m_queue.empty(); }
-  void reset() { while (auto *r = m_queue.head()) { m_queue.remove(r); delete r; } }
-  void push(Request *req) { m_queue.push(req); }
-  auto head() const -> Request* { return m_queue.head(); }
-  auto shift() -> Request* { auto r = head(); if (r) m_queue.remove(r); return r; }
-
-private:
-  List<Request> m_queue;
-};
-
-//
 // Decoder
 //
 
@@ -85,8 +55,6 @@ protected:
   virtual void on_decode_message_start(RequestHead *head) {}
   virtual auto on_decode_message_start(ResponseHead *head) -> RequestHead* { return nullptr; }
   virtual void on_decode_message_end(MessageTail *tail) {}
-  virtual void on_decode_request(RequestQueue::Request *req) { delete req; }
-  virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* { return nullptr; }
   virtual bool on_decode_tunnel(TunnelType tt) { return false; }
   virtual void on_decode_final() {}
   virtual void on_decode_error() {}
@@ -149,8 +117,6 @@ public:
 
 protected:
   virtual auto on_encode_message_start(ResponseHead *head, bool &is_final) -> RequestHead* { return nullptr; }
-  virtual void on_encode_request(RequestQueue::Request *req) { delete req; }
-  virtual auto on_encode_response(ResponseHead *head) -> RequestQueue::Request* { return nullptr; }
   virtual bool on_encode_tunnel(TunnelType tt) { return false; }
 
 private:
@@ -194,10 +160,6 @@ private:
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
-
-  pjs::Ref<pjs::Function> m_handler;
-
-  virtual void on_decode_request(RequestQueue::Request *req) override;
 };
 
 //
@@ -206,7 +168,13 @@ private:
 
 class ResponseDecoder : public Filter, public Decoder {
 public:
-  ResponseDecoder(pjs::Function *handler = nullptr);
+  struct Options : pipy::Options {
+    pjs::Ref<pjs::Function> on_message_start_f;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  ResponseDecoder(const Options &options);
 
 private:
   ResponseDecoder(const ResponseDecoder &r);
@@ -218,9 +186,10 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  pjs::Ref<pjs::Function> m_handler;
+  Options m_options;
+  pjs::Ref<RequestHead> m_request_head;
 
-  virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* override;
+  virtual auto on_decode_message_start(ResponseHead *head) -> RequestHead* override;
 };
 
 //
@@ -235,7 +204,7 @@ public:
     Options(pjs::Object *options);
   };
 
-  RequestEncoder(const Options &options, pjs::Function *handler = nullptr);
+  RequestEncoder(const Options &options);
 
 private:
   RequestEncoder(const RequestEncoder &r);
@@ -248,9 +217,6 @@ private:
   virtual void dump(Dump &d) override;
 
   Options m_options;
-  pjs::Ref<pjs::Function> m_handler;
-
-  virtual void on_encode_request(RequestQueue::Request *req) override;
 };
 
 //
@@ -261,11 +227,12 @@ class ResponseEncoder : public Filter, public Encoder {
 public:
   struct Options : pipy::Options {
     size_t buffer_size = DATA_CHUNK_SIZE;
+    pjs::Ref<pjs::Function> on_message_start_f;
     Options() {}
     Options(pjs::Object *options);
   };
 
-  ResponseEncoder(const Options &options, pjs::Function *handler = nullptr);
+  ResponseEncoder(const Options &options);
 
 private:
   ResponseEncoder(const ResponseEncoder &r);
@@ -278,9 +245,9 @@ private:
   virtual void dump(Dump &d) override;
 
   Options m_options;
-  pjs::Ref<pjs::Function> m_handler;
+  pjs::Ref<RequestHead> m_request_head;
 
-  virtual auto on_encode_response(ResponseHead *head) -> RequestQueue::Request* override;
+  virtual auto on_encode_message_start(ResponseHead *head, bool &is_final) -> RequestHead* override;
 };
 
 //

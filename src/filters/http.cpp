@@ -638,20 +638,10 @@ void Decoder::message_start() {
       m_method = req->method;
       auto tt = req->tunnel_type();
       if (res->is_tunnel_ok(tt)) m_responded_tunnel_type = tt;
-    } else if (auto req = on_decode_response(res)) {
-      m_method = req->head->method;
-      auto tt = req->tunnel_type;
-      if (res->is_tunnel_ok(tt)) m_responded_tunnel_type = tt;
-      delete req;
     }
   } else {
     auto head = m_head->as<RequestHead>();
-    auto req = new RequestQueue::Request;
-    req->head = head;
-    req->is_final = head->is_final(m_header_connection);
-    req->tunnel_type = head->tunnel_type(m_header_upgrade);
     on_decode_message_start(head);
-    on_decode_request(req);
   }
   output(MessageStart::make(m_head));
 }
@@ -748,12 +738,6 @@ void Encoder::on_event(Event *evt) {
           if (head->status == 100) m_is_final = false;
           auto tt = req->tunnel_type();
           if (head->is_tunnel_ok(tt)) m_responded_tunnel_type = tt;
-        } else if (auto req = on_encode_response(head)) {
-          m_method = req->head->method;
-          m_is_final = req->is_final;
-          auto tt = req->tunnel_type;
-          if (head->is_tunnel_ok(tt)) m_responded_tunnel_type = tt;
-          delete req;
         }
 
       } else {
@@ -912,15 +896,6 @@ void Encoder::output_head() {
     );
   }
 
-  if (!m_is_response) {
-    auto head = m_head->as<RequestHead>();
-    auto req = new RequestQueue::Request;
-    req->head = head;
-    req->is_final = head->is_final(m_header_connection);
-    req->tunnel_type = head->tunnel_type(m_header_upgrade);
-    on_encode_request(req);
-  }
-
   if (!no_content_length) {
     if (m_chunked) {
       static const std::string str("transfer-encoding: chunked\r\n");
@@ -998,14 +973,12 @@ void Encoder::output_end(Event *evt) {
 
 RequestDecoder::RequestDecoder(pjs::Function *handler)
   : Decoder(false)
-  , m_handler(handler)
 {
 }
 
 RequestDecoder::RequestDecoder(const RequestDecoder &r)
   : Filter(r)
   , Decoder(false)
-  , m_handler(r.m_handler)
 {
 }
 
@@ -1040,28 +1013,30 @@ void RequestDecoder::process(Event *evt) {
   }
 }
 
-void RequestDecoder::on_decode_request(RequestQueue::Request *req) {
-  if (m_handler) {
-    pjs::Value arg(req->head), ret;
-    Filter::callback(m_handler, 1, &arg, ret);
-  }
-  delete req;
+//
+// ResponseDecoder::Options
+//
+
+ResponseDecoder::Options::Options(pjs::Object *options) {
+  Value(options, "onMessageStart")
+    .get(on_message_start_f)
+    .check_nullable();
 }
 
 //
 // ResponseDecoder
 //
 
-ResponseDecoder::ResponseDecoder(pjs::Function *handler)
+ResponseDecoder::ResponseDecoder(const Options &options)
   : Decoder(true)
-  , m_handler(handler)
+  , m_options(options)
 {
 }
 
 ResponseDecoder::ResponseDecoder(const ResponseDecoder &r)
   : Filter(r)
   , Decoder(true)
-  , m_handler(r.m_handler)
+  , m_options(r.m_options)
 {
 }
 
@@ -1092,15 +1067,14 @@ void ResponseDecoder::process(Event *evt) {
   Filter::output(evt, Decoder::input());
 }
 
-auto ResponseDecoder::on_decode_response(ResponseHead *head) -> RequestQueue::Request* {
-  if (!m_handler) return nullptr;
+auto ResponseDecoder::on_decode_message_start(ResponseHead *head) -> RequestHead* {
+  if (!m_options.on_message_start_f) return nullptr;
   pjs::Value arg(head), ret;
-  if (Filter::callback(m_handler, 1, &arg, ret)) {
+  if (Filter::callback(m_options.on_message_start_f, 1, &arg, ret)) {
     if (ret.is_nullish()) return nullptr;
     if (ret.is_object()) {
-      auto req = new RequestQueue::Request;
-      req->head = pjs::coerce<RequestHead>(ret.o());
-      return req;
+      m_request_head = pjs::coerce<RequestHead>(ret.o());
+      return m_request_head;
     }
     Filter::error("callback did not return an object for request head");
   }
@@ -1108,7 +1082,7 @@ auto ResponseDecoder::on_decode_response(ResponseHead *head) -> RequestQueue::Re
 }
 
 //
-// RequestEncoder
+// RequestEncoder::Options
 //
 
 RequestEncoder::Options::Options(pjs::Object *options) {
@@ -1121,10 +1095,9 @@ RequestEncoder::Options::Options(pjs::Object *options) {
 // RequestEncoder
 //
 
-RequestEncoder::RequestEncoder(const Options &options, pjs::Function *handler)
+RequestEncoder::RequestEncoder(const Options &options)
   : Encoder(false, Filter::buffer_stats())
   , m_options(options)
-  , m_handler(handler)
 {
 }
 
@@ -1132,7 +1105,6 @@ RequestEncoder::RequestEncoder(const RequestEncoder &r)
   : Filter(r)
   , Encoder(false, Filter::buffer_stats())
   , m_options(r.m_options)
-  , m_handler(r.m_handler)
 {
 }
 
@@ -1168,21 +1140,16 @@ void RequestEncoder::process(Event *evt) {
   }
 }
 
-void RequestEncoder::on_encode_request(RequestQueue::Request *req) {
-  if (m_handler) {
-    pjs::Value arg(req->head), ret;
-    Filter::callback(m_handler, 1, &arg, ret);
-  }
-  delete req;
-}
-
 //
-// ResponseEncoder
+// ResponseEncoder::Options
 //
 
 ResponseEncoder::Options::Options(pjs::Object *options) {
   Value(options, "bufferSize")
     .get_binary_size(buffer_size)
+    .check_nullable();
+  Value(options, "onMessageStart")
+    .get(on_message_start_f)
     .check_nullable();
 }
 
@@ -1190,10 +1157,9 @@ ResponseEncoder::Options::Options(pjs::Object *options) {
 // ResponseEncoder
 //
 
-ResponseEncoder::ResponseEncoder(const Options &options, pjs::Function *handler)
+ResponseEncoder::ResponseEncoder(const Options &options)
   : Encoder(true, Filter::buffer_stats())
   , m_options(options)
-  , m_handler(handler)
 {
 }
 
@@ -1201,7 +1167,6 @@ ResponseEncoder::ResponseEncoder(const ResponseEncoder &r)
   : Filter(r)
   , Encoder(true, Filter::buffer_stats())
   , m_options(r.m_options)
-  , m_handler(r.m_handler)
 {
 }
 
@@ -1237,15 +1202,14 @@ void ResponseEncoder::process(Event *evt) {
   }
 }
 
-auto ResponseEncoder::on_encode_response(ResponseHead *head) -> RequestQueue::Request* {
-  if (!m_handler) return nullptr;
+auto ResponseEncoder::on_encode_message_start(ResponseHead *head, bool &is_final) -> RequestHead* {
+  if (!m_options.on_message_start_f) return nullptr;
   pjs::Value arg(head), ret;
-  if (Filter::callback(m_handler, 1, &arg, ret)) {
+  if (Filter::callback(m_options.on_message_start_f, 1, &arg, ret)) {
     if (ret.is_nullish()) return nullptr;
     if (ret.is_object()) {
-      auto req = new RequestQueue::Request;
-      req->head = pjs::coerce<RequestHead>(ret.o());
-      return req;
+      m_request_head = pjs::coerce<RequestHead>(ret.o());
+      return m_request_head;
     }
     Filter::error("callback did not return an object for request head");
   }

@@ -66,8 +66,8 @@ public:
   void connect_tls(pjs::Object *options);
   void decode_bgp(pjs::Object *options);
   void decode_dubbo();
-  void decode_http_request(pjs::Function *handler);
-  void decode_http_response(pjs::Function *handler);
+  void decode_http_request();
+  void decode_http_response(pjs::Object *options);
   void decode_mqtt();
   void decode_multipart();
   void decode_netlink();
@@ -85,8 +85,8 @@ public:
   void dump(const pjs::Value &tag);
   void encode_bgp(pjs::Object *options);
   void encode_dubbo();
-  void encode_http_request(pjs::Object *options, pjs::Function *handler);
-  void encode_http_response(pjs::Object *options, pjs::Function *handler);
+  void encode_http_request(pjs::Object *options);
+  void encode_http_response(pjs::Object *options);
   void encode_mqtt();
   void encode_netlink();
   void encode_resp();
