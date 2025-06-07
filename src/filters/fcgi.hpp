@@ -279,45 +279,97 @@ protected:
 // Mux
 //
 
-class Mux : public MuxBase {
+class Mux : public Filter {
 public:
-  Mux();
   Mux(pjs::Function *session_selector);
-  Mux(pjs::Function *session_selector, const MuxSession::Options &options);
-  Mux(pjs::Function *session_selector, pjs::Function *options);
+  Mux(pjs::Function *session_selector, const Muxer::Options &options);
 
 private:
   Mux(const Mux &mux);
 
-  MuxSession::Options m_options;
+  class Request;
+  class Queue;
+  class Pool;
 
-  virtual void dump(Dump &d) override;
+  //
+  // Mux::Request
+  //
+
+  class Request :
+    public pjs::RefCount<Request>,
+    public pjs::Pooled<Request>,
+    public Muxer::Stream,
+    public EventFunction
+  {
+  public:
+    void discard();
+
+  private:
+    Request() {}
+    ~Request() {}
+
+    virtual void on_event(Event *evt) override;
+
+    EventFunction* m_request = nullptr;
+
+    friend class pjs::RefCount<Request>;
+    friend class Queue;
+  };
+
+  //
+  // Mux::Queue
+  //
+
+  class Queue :
+    public pjs::RefCount<Queue>,
+    public pjs::Pooled<Queue>,
+    public Muxer::Session,
+    public Client
+  {
+  public:
+    auto alloc(EventTarget::Input *output) -> Mux::Request*;
+
+  protected:
+    Queue(Mux *mux);
+    ~Queue() {}
+
+    void free(Mux::Request *r);
+    void free_all();
+
+  private:
+    pjs::Ref<Pipeline> m_pipeline;
+
+    friend class pjs::RefCount<Queue>;
+    friend class Request;
+    friend class Pool;
+  };
+
+  //
+  // Mux::Pool
+  //
+
+  class Pool : public Muxer {
+  public:
+    Pool();
+    Pool(const Options &options);
+
+  private:
+    virtual auto on_muxer_session_open(Filter *filter) -> Session* override;
+    virtual void on_muxer_session_close(Session *session) override;
+  };
+
+  pjs::Ref<Pool> m_pool;
+  pjs::Ref<pjs::Function> m_session_selector;
+  pjs::Ref<Queue> m_queue;
+  pjs::Ref<Request> m_request;
+  Muxer::Options m_options;
+  bool m_has_error = false;
+
   virtual auto clone() -> Filter* override;
-  virtual auto on_mux_new_pool(pjs::Object *options) -> MuxSessionPool* override;
-
-  //
-  // Mux::Session
-  //
-
-  class Session : public pjs::Pooled<Session>, public MuxSession, public Client {
-    virtual void mux_session_open(MuxSource *source) override;
-    virtual auto mux_session_open_stream(MuxSource *source) -> EventFunction* override;
-    virtual void mux_session_close_stream(EventFunction *stream) override;
-    virtual void mux_session_close() override;
-    virtual void on_auto_release() override { delete this; }
-  };
-
-  //
-  // Mux::SessionPool
-  //
-
-  struct SessionPool : public pjs::Pooled<SessionPool>, public MuxSessionPool {
-    SessionPool(const MuxSession::Options &options)
-      : MuxSessionPool(options) {}
-
-    virtual auto session() -> MuxSession* override { return new Session(); }
-    virtual void free() override { delete this; }
-  };
+  virtual void reset() override;
+  virtual void shutdown() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
 };
 
 } // namespace fcgi

@@ -24,6 +24,7 @@
  */
 
 #include "fcgi.hpp"
+#include "context.hpp"
 
 namespace pipy {
 namespace fcgi {
@@ -710,28 +711,23 @@ void Demux::on_output(Event *evt) {
 // Mux
 //
 
-Mux::Mux()
-{
-}
-
 Mux::Mux(pjs::Function *session_selector)
-  : MuxBase(session_selector)
+  : m_pool(new Pool)
+  , m_session_selector(session_selector)
 {
 }
 
-Mux::Mux(pjs::Function *session_selector, const MuxSession::Options &options)
-  : MuxBase(session_selector)
+Mux::Mux(pjs::Function *session_selector, const Muxer::Options &options)
+  : m_pool(new Pool(options))
+  , m_session_selector(session_selector)
   , m_options(options)
 {
 }
 
-Mux::Mux(pjs::Function *session_selector, pjs::Function *options)
-  : MuxBase(session_selector, options)
-{
-}
-
 Mux::Mux(const Mux &r)
-  : MuxBase(r)
+  : Filter(r)
+  , m_pool(r.m_pool)
+  , m_session_selector(r.m_session_selector)
   , m_options(r.m_options)
 {
 }
@@ -746,29 +742,116 @@ auto Mux::clone() -> Filter* {
   return new Mux(*this);
 }
 
-auto Mux::on_mux_new_pool(pjs::Object *options) -> MuxSessionPool* {
-  return new SessionPool(options);
+void Mux::reset() {
+  Filter::reset();
+  if (m_request) {
+    m_request->discard();
+    m_request = nullptr;
+  }
+  m_queue = nullptr;
+  m_has_error = false;
+}
+
+void Mux::shutdown() {
+  Filter::shutdown();
+  m_pool->shutdown();
+}
+
+void Mux::process(Event *evt) {
+  if (!m_has_error) {
+    if (!m_request) {
+      pjs::Value key;
+      if (m_session_selector) {
+        if (!Filter::eval(m_session_selector, key)) {
+          m_has_error = true;
+          return;
+        }
+      }
+      if (key.is_nullish()) {
+        key.set(Filter::context()->inbound());
+      }
+      m_queue = static_cast<Queue*>(m_pool->alloc(this, key));
+      m_request = m_queue->alloc(Filter::output());
+    }
+
+    if (m_request) {
+      m_request->input()->input(evt);
+    }
+  }
 }
 
 //
-// Mux::Session
+// Mux::Request
 //
 
-void Mux::Session::mux_session_open(MuxSource *) {
-  Client::chain(MuxSession::input());
-  MuxSession::chain(Client::reply());
+void Mux::Request::discard() {
+  if (m_request) {
+    if (auto s = Muxer::Stream::session()) {
+      static_cast<Queue*>(s)->Client::close_request(m_request);
+    }
+    m_request = nullptr;
+  }
+  EventFunction::chain(nullptr);
 }
 
-auto Mux::Session::mux_session_open_stream(MuxSource *) -> EventFunction* {
-  return Client::open_request();
+void Mux::Request::on_event(Event *evt) {
+  if (m_request) {
+    m_request->input()->input(evt);
+  }
 }
 
-void Mux::Session::mux_session_close_stream(EventFunction *stream) {
-  Client::close_request(stream);
+//
+// Mux::Queue
+//
+
+Mux::Queue::Queue(Mux *mux) {
+  m_pipeline = mux->sub_pipeline(0, true, Client::reply());
+  m_pipeline->on_eos([this](StreamEnd *) { Muxer::Session::abort(); });
+  m_pipeline->start();
 }
 
-void Mux::Session::mux_session_close() {
-  Client::shutdown();
+auto Mux::Queue::alloc(EventTarget::Input *output) -> Mux::Request* {
+  auto r = new Mux::Request();
+  r->chain(output);
+  Muxer::Session::append(r);
+  return r->retain();
+}
+
+void Mux::Queue::free(Mux::Request *r) {
+  r->discard();
+  Muxer::Session::remove(r);
+  r->release();
+}
+
+void Mux::Queue::free_all() {
+  for (auto r = Muxer::Session::head(); r; ) {
+    auto request = static_cast<Mux::Request*>(r); r = r->next();
+    free(request);
+  }
+}
+
+//
+// Mux::Pool
+//
+
+Mux::Pool::Pool()
+{
+}
+
+Mux::Pool::Pool(const Options &options)
+  : Muxer(options)
+{
+}
+
+auto Mux::Pool::on_muxer_session_open(Filter *filter) -> Session* {
+  auto s = new Queue(static_cast<Mux*>(filter));
+  return s->retain();
+}
+
+void Mux::Pool::on_muxer_session_close(Session *session) {
+  auto s = static_cast<Queue*>(session);
+  s->free_all();
+  s->release();
 }
 
 } // namespace fcgi

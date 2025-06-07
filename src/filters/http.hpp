@@ -382,12 +382,14 @@ public:
 
   Mux(pjs::Function *session_selector);
   Mux(pjs::Function *session_selector, const Options &options);
-  Mux(const Mux &r);
 
 private:
-  class HTTPMuxer;
+  Mux(const Mux &r);
+
+  class HTTPStream;
+  class HTTPQueue;
   class HTTPSession;
-  class Queue;
+  class HTTPMuxer;
 
   //
   // Mux::HTTPStream
@@ -422,15 +424,15 @@ private:
     bool m_ended = false;
 
     friend class pjs::RefCount<HTTPStream>;
-    friend class Queue;
     friend class HTTPSession;
+    friend class HTTPQueue;
   };
 
   //
-  // Mux::Queue
+  // Mux::HTTPQueue
   //
 
-  class Queue :
+  class HTTPQueue :
     public Muxer::Session,
     public EventTarget
   {
@@ -438,18 +440,21 @@ private:
     auto alloc(EventTarget::Input *output) -> HTTPStream*;
 
   protected:
+    HTTPQueue() {}
+    ~HTTPQueue() {}
+
     void open(bool is_http2);
     void free(HTTPStream *s);
     void free_all();
     auto current_request() -> RequestHead*;
-    void set_tunnel() { m_tunneling = true; }
+    void set_tunnel() { m_is_tunnel = true; }
 
   private:
     bool m_is_http2 = false;
     bool m_is_open = false;
+    bool m_is_tunnel = false;
     bool m_started = false;
     bool m_continue = false;
-    bool m_tunneling = false;
 
     virtual void on_event(Event *evt) override;
   };
@@ -461,19 +466,16 @@ private:
   class HTTPSession :
     public pjs::RefCount<HTTPSession>,
     public pjs::Pooled<HTTPSession>,
-    public Queue,
+    public HTTPQueue,
     public Encoder,
     protected Decoder,
     protected http2::Client
   {
-  public:
-    void close_all();
-
-  private:
     HTTPSession(Mux *mux);
     ~HTTPSession();
 
-  private:
+    void free_all();
+
     int m_version = 0;
     pjs::Ref<Pipeline> m_pipeline;
     pjs::Ref<pjs::Promise::Callback> m_version_callback;
@@ -503,8 +505,6 @@ private:
     HTTPMuxer(const Options &options);
 
   private:
-    pjs::Ref<pjs::Function> m_session_selector;
-    pjs::Ref<pjs::Function> m_options_f;
     Options m_options;
 
     virtual auto on_muxer_session_open(Filter *filter) -> Session* override;

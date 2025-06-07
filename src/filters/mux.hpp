@@ -27,9 +27,7 @@
 #define MUX_HPP
 
 #include "filter.hpp"
-#include "data.hpp"
 #include "event.hpp"
-#include "input.hpp"
 #include "pipeline.hpp"
 #include "list.hpp"
 #include "timer.hpp"
@@ -39,354 +37,6 @@
 #include <unordered_map>
 
 namespace pipy {
-
-class MuxSession;
-class MuxSessionPool;
-class MuxSessionMap;
-class MuxSource;
-
-//
-// MuxSession
-//
-
-class MuxSession :
-  public AutoReleased,
-  public EventProxy,
-  public List<MuxSession>::Item
-{
-public:
-
-  //
-  // MuxSession::Options
-  //
-
-  struct Options : public pipy::Options {
-    double max_idle = 60;
-    int max_queue = 1;
-    int max_messages = 0;
-    Options() {}
-    Options(pjs::Object *options);
-  };
-
-  virtual void mux_session_open(MuxSource *source) = 0;
-  virtual auto mux_session_open_stream(MuxSource *source) -> EventFunction* = 0;
-  virtual void mux_session_close_stream(EventFunction *stream) = 0;
-  virtual void mux_session_close() = 0;
-
-  void increase_share_count();
-  void decrease_share_count();
-
-protected:
-  auto pool() const -> MuxSessionPool* { return m_pool; }
-  auto input() const -> EventTarget::Input* { return m_pipeline->input(); }
-  bool is_open() const { return m_pipeline; }
-  bool is_free() const { return !m_share_count; }
-  bool is_pending() const { return m_is_pending; }
-  void set_pending(bool pending);
-  void detach();
-  void end(StreamEnd *eos);
-
-private:
-  void open(MuxSource *source, Pipeline *pipeline);
-  void close();
-
-  MuxSessionPool* m_pool = nullptr;
-  pjs::Ref<Pipeline> m_pipeline;
-  pjs::Ref<StreamEnd> m_eos;
-  List<MuxSource> m_waiting_sources;
-  int m_share_count = 0;
-  int m_message_count = 0;
-  double m_free_time = 0;
-  bool m_is_pending = false;
-
-  virtual void on_reply(Event *evt) override {
-    MuxSession::auto_release(this);
-    EventProxy::output(evt);
-  }
-
-  friend class pjs::RefCount<MuxSession>;
-  friend class MuxSource;
-  friend class MuxSessionPool;
-};
-
-//
-// MuxSessionPool
-//
-
-class MuxSessionPool :
-  public pjs::Object::WeakPtr::Watcher,
-  public List<MuxSessionPool>::Item
-{
-protected:
-  MuxSessionPool(const MuxSession::Options &options);
-
-  virtual auto session() -> MuxSession* = 0;
-  virtual void free() = 0;
-
-private:
-  auto alloc() -> MuxSession*;
-  void free(MuxSession *session);
-  void detach(MuxSession *session);
-
-  pjs::Value m_key;
-  pjs::Ref<pjs::Object::WeakPtr> m_weak_key;
-  pjs::Ref<MuxSessionMap> m_map;
-  List<MuxSession> m_sessions;
-  double m_max_idle;
-  int m_max_queue;
-  int m_max_messages;
-  bool m_weak_ptr_gone = false;
-  bool m_recycle_scheduled = false;
-
-  void sort(MuxSession *session);
-  void schedule_recycling();
-  void recycle(double now);
-
-  virtual void on_weak_ptr_gone() override;
-
-  friend class MuxSource;
-  friend class MuxSession;
-  friend class MuxSessionMap;
-};
-
-//
-// MuxSessionMap
-//
-
-class MuxSessionMap : public pjs::RefCount<MuxSessionMap> {
-public:
-  void shutdown() { m_has_shutdown = true; }
-
-private:
-  std::unordered_map<pjs::Value, MuxSessionPool*> m_pools;
-  std::unordered_map<pjs::Ref<pjs::Object::WeakPtr>, MuxSessionPool*> m_weak_pools;
-  List<MuxSessionPool> m_recycle_pools;
-  Timer m_recycle_timer;
-  bool m_has_recycling_scheduled = false;
-  bool m_has_shutdown = false;
-
-  auto alloc(const pjs::Value &key, MuxSource *source) -> MuxSession*;
-  auto alloc(pjs::Object::WeakPtr *weak_key, MuxSource *source) -> MuxSession*;
-  void schedule_recycling();
-
-  friend class pjs::RefCount<MuxSessionMap>;
-  friend class MuxSource;
-  friend class MuxSessionPool;
-};
-
-//
-// MuxSource
-//
-
-class MuxSource : public List<MuxSource>::Item {
-public:
-  void discard();
-
-protected:
-  MuxSource(std::shared_ptr<BufferStats> buffer_stats = nullptr);
-  MuxSource(const MuxSource &r);
-
-  void reset();
-  void key(const pjs::Value &key);
-  auto map() -> MuxSessionMap* { return m_map; }
-
-  void chain(EventTarget::Input *input);
-  void input(Event *evt);
-
-  virtual auto on_mux_new_pool() -> MuxSessionPool* = 0;
-  virtual auto on_mux_new_pipeline() -> Pipeline* = 0;
-
-private:
-  pjs::Ref<MuxSessionMap> m_map;
-  pjs::Ref<MuxSession> m_session;
-  pjs::Value m_session_key;
-  pjs::Ref<pjs::Object::WeakPtr> m_session_weak_key;
-  pjs::Ref<EventTarget::Input> m_output;
-  EventFunction* m_stream = nullptr;
-  EventBuffer m_waiting_events;
-  bool m_is_waiting = false;
-  bool m_has_alloc_error = false;
-
-  void alloc_stream();
-  void start_waiting();
-  void flush_waiting();
-  void stop_waiting();
-  void close_stream();
-
-  friend class MuxSession;
-  friend class MuxSessionMap;
-};
-
-//
-// MuxQueue
-//
-
-class MuxQueue : public EventSource {
-protected:
-  MuxQueue(MuxSession *session) : m_session(session) {}
-  ~MuxQueue();
-
-  void reset();
-  auto stream(MuxSource *source) -> EventFunction*;
-  void close(EventFunction *stream);
-  void increase_output_count(int n);
-  void dedicate();
-
-  virtual auto on_queue_message(MuxSource *source, MessageStart *msg) -> int { return 1; }
-  virtual void on_queue_end(StreamEnd *eos) {}
-
-private:
-  void on_reply(Event *evt) override;
-
-  //
-  // MuxQueue::Stream
-  //
-
-  class Stream :
-    public pjs::Pooled<Stream>,
-    public pjs::RefCount<Stream>,
-    public EventFunction
-  {
-  public:
-    Stream(MuxQueue *queue, MuxSource *source);
-    ~Stream();
-
-  protected:
-    virtual void on_event(Event *evt) override;
-
-  private:
-    MuxQueue* m_queue;
-    MuxSource* m_source;
-    pjs::Ref<MessageStart> m_message_start;
-    pjs::Ref<StreamEnd> m_eos;
-    Data m_buffer;
-    int m_receiver_count = 0;
-
-    void shift();
-
-    friend class MuxQueue;
-  };
-
-  //
-  // MuxQueue::Receiver
-  //
-
-  class Receiver :
-    public pjs::Pooled<Receiver>,
-    public List<Receiver>::Item
-  {
-  public:
-    Receiver(Stream *stream, int output_count)
-      : m_stream(stream)
-      , m_output_count(output_count) {}
-
-    auto stream() const -> Stream* { return m_stream; }
-    void increase_output_count(int n) { m_output_count += n; }
-    bool receive(Event *evt);
-
-  private:
-    pjs::Ref<Stream> m_stream;
-    int m_output_count;
-    bool m_has_message_started = false;
-
-    friend class MuxQueue;
-  };
-
-  MuxSession* m_session;
-  List<Receiver> m_receivers;
-  pjs::Ref<Stream> m_dedicated_stream;
-};
-
-//
-// MuxBase
-//
-
-class MuxBase : public Filter, public MuxSource {
-protected:
-  MuxBase();
-  MuxBase(const MuxBase &r);
-  MuxBase(pjs::Function *session_selector);
-  MuxBase(pjs::Function *session_selector, pjs::Function *options);
-
-  virtual void reset() override;
-  virtual void chain() override;
-  virtual void shutdown() override;
-  virtual void process(Event *evt) override;
-
-  virtual auto on_mux_new_pool() -> MuxSessionPool* override;
-  virtual auto on_mux_new_pool(pjs::Object *options) -> MuxSessionPool* = 0;
-  virtual auto on_mux_new_pipeline() -> Pipeline* override;
-
-  pjs::Ref<pjs::Function> m_session_selector;
-  pjs::Ref<pjs::Function> m_options;
-  bool m_session_key_ready = false;
-};
-
-//
-// Mux
-//
-
-class Mux : public MuxBase {
-public:
-  struct Options : public MuxSession::Options {
-    int output_count = 1;
-    pjs::Ref<pjs::Function> output_count_f;
-    Options() {}
-    Options(pjs::Object *options);
-  };
-
-  Mux();
-  Mux(pjs::Function *session_selector);
-  Mux(pjs::Function *session_selector, const Options &options);
-  Mux(pjs::Function *session_selector, pjs::Function *options);
-
-protected:
-  Mux(const Mux &r);
-  ~Mux();
-
-  virtual void dump(Dump &d) override;
-  virtual auto clone() -> Filter* override;
-  virtual auto on_mux_new_pool(pjs::Object *options) -> MuxSessionPool* override;
-
-  //
-  // Mux::Session
-  //
-
-  struct Session :
-    public pjs::Pooled<Session, MuxSession>,
-    public MuxQueue
-  {
-    Session() : MuxQueue(this) {}
-
-    virtual void mux_session_open(MuxSource *source) override;
-    virtual auto mux_session_open_stream(MuxSource *source) -> EventFunction* override;
-    virtual void mux_session_close_stream(EventFunction *stream) override;
-    virtual void mux_session_close() override;
-    virtual auto on_queue_message(MuxSource *source, MessageStart *msg) -> int override;
-    virtual void on_queue_end(StreamEnd *eos) override;
-    virtual void on_auto_release() override { delete this; }
-  };
-
-  //
-  // Mux::SessionPool
-  //
-
-  struct SessionPool : public pjs::Pooled<SessionPool, MuxSessionPool> {
-    SessionPool(const Options &options)
-      : pjs::Pooled<SessionPool, MuxSessionPool>(options)
-      , m_output_count(options.output_count)
-      , m_output_count_f(options.output_count_f) {}
-
-    virtual auto session() -> MuxSession* override { return new Session(); }
-    virtual void free() override { delete this; }
-
-    int m_output_count;
-    pjs::Ref<pjs::Function> m_output_count_f;
-  };
-
-private:
-  Options m_options;
-};
 
 //
 // Muxer
@@ -411,13 +61,14 @@ private:
 
 public:
   class Session;
+  class Stream;
 
   //
   // Muxer::Stream
   //
 
   class Stream : public List<Stream>::Item {
-  public:
+  protected:
     Stream() {}
     ~Stream() { if (m_session) m_session->m_streams.remove(this); }
 
@@ -441,14 +92,13 @@ public:
       for (auto s = m_streams.head(); s; s = s->next()) s->m_session = nullptr;
     }
 
-    void abort() { m_has_aborted = true; sort(); }
-
   public:
     auto head() const -> Stream* { return m_streams.head(); }
     auto tail() const -> Stream* { return m_streams.tail(); }
     void append(Stream *s) { m_streams.push(s); s->m_session = this; sort(); }
     void remove(Stream *s) { m_streams.remove(s); s->m_session = nullptr; sort(); }
     void allow_queuing(bool allowed) { m_allow_queuing = allowed; }
+    void abort() { m_has_aborted = true; sort(); }
 
   private:
     SessionPool* m_pool = nullptr;
@@ -536,6 +186,117 @@ private:
   void schedule_recycling();
 
   friend class pjs::RefCount<Muxer>;
+};
+
+//
+// Mux
+//
+
+class Mux : public Filter {
+public:
+  struct Options : public Muxer::Options {
+    pjs::Ref<pjs::Function> message_key_f;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  Mux(pjs::Function *session_selector);
+  Mux(pjs::Function *session_selector, const Options &options);
+
+private:
+  Mux(const Mux &r);
+
+  class Request;
+  class Queue;
+  class Pool;
+
+  //
+  // Mux::Request
+  //
+
+  class Request :
+    public pjs::RefCount<Request>,
+    public pjs::Pooled<Request>,
+    public Muxer::Stream,
+    public EventFunction
+  {
+  public:
+    void discard();
+
+  private:
+    Request() {}
+    ~Request() {}
+
+    virtual void on_event(Event *evt) override;
+
+    EventBuffer m_buffer;
+    bool m_is_sending = false;
+    bool m_started = false;
+    bool m_ended = false;
+
+    friend class pjs::RefCount<Request>;
+    friend class Queue;
+  };
+
+  //
+  // Mux::Queue
+  //
+
+  class Queue :
+    public pjs::RefCount<Queue>,
+    public pjs::Pooled<Queue>,
+    public Muxer::Session,
+    public EventTarget
+  {
+  public:
+    auto alloc(EventTarget::Input *output) -> Request*;
+
+  private:
+    Queue(Mux *mux);
+    ~Queue() {}
+
+    void free(Request *r);
+    void free_all();
+
+    pjs::Ref<pjs::Function> m_message_key;
+    pjs::Ref<Pipeline> m_pipeline;
+    bool m_started = false;
+
+    virtual void on_event(Event *evt) override;
+
+    friend class pjs::RefCount<Queue>;
+    friend class Request;
+    friend class Pool;
+  };
+
+  //
+  // Mux::Pool
+  //
+
+  class Pool : public Muxer {
+  public:
+    Pool();
+    Pool(const Options &options);
+
+  private:
+    Options m_options;
+
+    virtual auto on_muxer_session_open(Filter *filter) -> Session* override;
+    virtual void on_muxer_session_close(Session *session) override;
+  };
+
+  pjs::Ref<Pool> m_pool;
+  pjs::Ref<pjs::Function> m_session_selector;
+  pjs::Ref<Queue> m_queue;
+  pjs::Ref<Request> m_request;
+  Options m_options;
+  bool m_has_error = false;
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void shutdown() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
 };
 
 } // namespace pipy

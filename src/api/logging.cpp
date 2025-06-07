@@ -329,7 +329,6 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options) {
   PipelineLayout *ppl_pack = PipelineLayout::make();
 
   Mux::Options mux_opts;
-  mux_opts.output_count = 0;
   ppl->append(new Mux(pjs::Function::make(m_mux_grouper), mux_opts))->add_sub_pipeline(ppl_pack);
   ppl_pack->append(new Pack(options.batch_size, options.batch));
   ppl_pack->append(new http::RequestEncoder(http::RequestEncoder::Options()));

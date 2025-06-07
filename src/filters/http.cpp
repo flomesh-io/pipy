@@ -1653,6 +1653,7 @@ void Mux::HTTPStream::discard() {
       session->http2::Client::close(m_http2_stream);
     }
   }
+  EventFunction::chain(nullptr);
 }
 
 void Mux::HTTPStream::on_event(Event *evt) {
@@ -1716,10 +1717,10 @@ void Mux::HTTPStream::on_event(Event *evt) {
 }
 
 //
-// Mux::Queue
+// Mux::HTTPQueue
 //
 
-void Mux::Queue::open(bool is_http2) {
+void Mux::HTTPQueue::open(bool is_http2) {
   m_is_http2 = is_http2;
   m_is_open = true;
   for (auto s = Muxer::Session::head(); s; s = s->next()) {
@@ -1727,7 +1728,7 @@ void Mux::Queue::open(bool is_http2) {
   }
 }
 
-auto Mux::Queue::alloc(EventTarget::Input *output) -> HTTPStream* {
+auto Mux::HTTPQueue::alloc(EventTarget::Input *output) -> HTTPStream* {
   auto s = new HTTPStream();
   s->chain(output);
   Muxer::Session::append(s);
@@ -1736,19 +1737,20 @@ auto Mux::Queue::alloc(EventTarget::Input *output) -> HTTPStream* {
   return s->retain();
 }
 
-void Mux::Queue::free(HTTPStream *s) {
+void Mux::HTTPQueue::free(HTTPStream *s) {
+  s->discard();
   Muxer::Session::remove(s);
   s->release();
 }
 
-void Mux::Queue::free_all() {
+void Mux::HTTPQueue::free_all() {
   for (auto s = Muxer::Session::head(); s; ) {
     auto stream = static_cast<HTTPStream*>(s); s = s->next();
     free(stream);
   }
 }
 
-auto Mux::Queue::current_request() -> RequestHead* {
+auto Mux::HTTPQueue::current_request() -> RequestHead* {
   if (auto s = Muxer::Session::head()) {
     return static_cast<HTTPStream*>(s)->m_head;
   } else {
@@ -1756,12 +1758,12 @@ auto Mux::Queue::current_request() -> RequestHead* {
   }
 }
 
-void Mux::Queue::on_event(Event *evt) {
+void Mux::HTTPQueue::on_event(Event *evt) {
   if (auto s = Muxer::Session::head()) {
     auto stream = static_cast<HTTPStream*>(s);
     auto output = stream->output();
 
-    if (m_tunneling) {
+    if (m_is_tunnel) {
       output->input(evt);
 
     } else if (auto start = evt->as<MessageStart>()) {
@@ -1852,15 +1854,15 @@ Mux::HTTPSession::~HTTPSession() {
   if (m_ping_callback) m_ping_callback->discard();
 }
 
-void Mux::HTTPSession::close_all() {
+void Mux::HTTPSession::free_all() {
   if (m_version == 2) {
     http2::Client::shutdown();
-    for (auto s = Queue::head(); s; s = s->next()) {
+    for (auto s = HTTPQueue::head(); s; s = s->next()) {
       auto stream = static_cast<HTTPStream*>(s);
       http2::Client::discard(stream->m_http2_stream);
     }
   }
-  Queue::free_all();
+  HTTPQueue::free_all();
 }
 
 void Mux::HTTPSession::select_protocol(const pjs::Value &version) {
@@ -1885,13 +1887,13 @@ void Mux::HTTPSession::select_protocol(const pjs::Value &version) {
   if (m_version == 1) {
     Encoder::chain(m_pipeline->input());
     m_pipeline->chain(Decoder::input());
-    Decoder::chain(Queue::input());
-    Queue::open(false);
+    Decoder::chain(HTTPQueue::input());
+    HTTPQueue::open(false);
 
   } else if (m_version == 2) {
     http2::Client::chain(m_pipeline->input());
     m_pipeline->chain(http2::Client::reply());
-    Queue::open(true);
+    HTTPQueue::open(true);
     Muxer::Session::allow_queuing(true);
     if (m_ping_handler) {
       schedule_ping();
@@ -1921,7 +1923,7 @@ void Mux::HTTPSession::schedule_ping(Data *ack) {
 }
 
 auto Mux::HTTPSession::on_decode_message_start(ResponseHead *) -> RequestHead* {
-  return Queue::current_request();
+  return HTTPQueue::current_request();
 }
 
 bool Mux::HTTPSession::on_decode_tunnel(TunnelType tt) {
@@ -1929,7 +1931,7 @@ bool Mux::HTTPSession::on_decode_tunnel(TunnelType tt) {
     static_cast<HTTPStream*>(s)->set_tunnel();
   }
   Encoder::set_tunnel();
-  Queue::set_tunnel();
+  HTTPQueue::set_tunnel();
   return true;
 }
 
@@ -1961,7 +1963,7 @@ auto Mux::HTTPMuxer::on_muxer_session_open(Filter *filter) -> Session* {
 
 void Mux::HTTPMuxer::on_muxer_session_close(Session *session) {
   auto s = static_cast<HTTPSession*>(session);
-  s->close_all();
+  s->free_all();
   s->release();
 }
 
