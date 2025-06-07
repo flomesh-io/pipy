@@ -535,7 +535,7 @@ protected:
 // Server
 //
 
-class Server : public Endpoint, public DemuxSession {
+class Server : public Endpoint, public EventFunction {
 public:
   Server(const Options &options);
   virtual ~Server();
@@ -547,6 +547,9 @@ public:
 private:
   class Stream;
   class InitialStream;
+
+  virtual auto on_server_open_stream() -> EventFunction* = 0;
+  virtual void on_server_close_stream(EventFunction *stream) = 0;
 
   //
   // Server::Stream

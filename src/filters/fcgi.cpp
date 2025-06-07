@@ -546,7 +546,7 @@ void Server::on_delete_request(Endpoint::Request *request) {
 
 Server::Request::~Request() {
   if (auto s = m_stream) {
-    m_server->on_demux_close_stream(s);
+    m_server->on_server_close_stream(s);
   }
 }
 
@@ -576,7 +576,7 @@ void Server::Request::receive_params(Data &data) {
       head->role = m_role;
       head->keepAlive = m_keep_conn;
       head->params = m_params;
-      auto s = m_stream = m_server->on_demux_open_stream();
+      auto s = m_stream = m_server->on_server_open_stream();
       s->chain(EventTarget::input());
       s->input()->input(MessageStart::make(head));
       m_request_started = true;
@@ -623,7 +623,7 @@ void Server::Request::on_event(Event *evt) {
       m_server->send_record(FCGI_STDOUT, id(), nullptr, 0);
       m_server->send_record(FCGI_END_REQUEST, id(), &body, sizeof(body));
       if (!m_keep_conn) m_server->send_end();
-      m_server->on_demux_close_stream(m_stream);
+      m_server->on_server_close_stream(m_stream);
       m_stream = nullptr;
     }
   } else if (evt->is<StreamEnd>()) {
@@ -634,7 +634,7 @@ void Server::Request::on_event(Event *evt) {
       m_server->send_record(FCGI_STDOUT, id(), nullptr, 0);
       m_server->send_record(FCGI_END_REQUEST, id(), &body, sizeof(body));
       if (!m_keep_conn) m_server->send_end();
-      m_server->on_demux_close_stream(m_stream);
+      m_server->on_server_close_stream(m_stream);
       m_stream = nullptr;
     }
   }
@@ -684,19 +684,19 @@ void Demux::shutdown() {
   Server::shutdown();
 }
 
-auto Demux::on_demux_open_stream() -> EventFunction* {
+auto Demux::on_server_open_stream() -> EventFunction* {
   auto p = Filter::sub_pipeline(0, true);
   p->retain();
   p->start();
   return p;
 }
 
-void Demux::on_demux_close_stream(EventFunction *stream) {
+void Demux::on_server_close_stream(EventFunction *stream) {
   auto p = static_cast<Pipeline*>(stream);
   p->release();
 }
 
-void Demux::on_demux_complete() {
+void Demux::on_server_complete() {
   if (auto eos = m_eos) {
     Filter::output(eos);
     m_eos = nullptr;

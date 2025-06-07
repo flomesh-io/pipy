@@ -35,194 +35,59 @@
 namespace pipy {
 
 //
-// DemuxSession
-//
-
-class DemuxSession : public EventFunction {
-protected:
-  virtual auto on_demux_open_stream() -> EventFunction* = 0;
-  virtual void on_demux_close_stream(EventFunction *stream) = 0;
-  virtual void on_demux_complete() {}
-};
-
-//
-// DemuxQueue
-//
-
-class DemuxQueue : public DemuxSession {
-public:
-  void reset();
-  bool empty() const { return m_receivers.empty() && m_waiters.empty(); }
-  void output_count(int output_count) { m_output_count = output_count; }
-  void wait_output() { m_waiting_output_requested = true; }
-  void increase_output_count(int n) { if (auto r = m_receivers.head()) r->increase_output_count(n); }
-  void dedicate() { m_dedication_requested = true; }
-
-protected:
-  DemuxQueue(std::shared_ptr<BufferStats> buffer_stats = nullptr)
-    : m_buffer(buffer_stats) {}
-
-  virtual void on_demux_queue_dedicate(EventFunction *stream) {}
-
-private:
-
-  //
-  // DemuxQueue::Stream
-  //
-
-  struct Stream : public pjs::Pooled<Stream> {
-    EventFunction* handler;
-    bool end_input = false;
-    bool end_output = false;
-  };
-
-  auto open_stream() -> Stream* {
-    auto s = new Stream;
-    s->handler = on_demux_open_stream();
-    return s;
-  }
-
-  void close_stream_input(Stream *s) {
-    if (s) {
-      if (!s->end_input) {
-        s->end_input = true;
-        recycle_stream(s);
-      }
-    }
-  }
-
-  void close_stream_output(Stream *s) {
-    if (s) {
-      if (!s->end_output) {
-        s->end_output = true;
-        recycle_stream(s);
-      }
-    }
-  }
-
-  void close_stream(Stream *s) {
-    if (s) {
-      auto h = s->handler;
-      on_demux_close_stream(h);
-      delete s;
-    }
-  }
-
-  void recycle_stream(Stream *s) {
-    if (s->end_input && s->end_output) {
-      close_stream(s);
-    }
-  }
-
-  //
-  // DemuxQueue::Receiver
-  //
-
-  class Receiver :
-    public pjs::Pooled<Receiver>,
-    public List<Receiver>::Item,
-    public EventTarget
-  {
-  public:
-    Receiver(DemuxQueue *queue, Stream *stream, int output_count)
-      : m_queue(queue)
-      , m_stream(stream)
-      , m_buffer(queue->m_buffer)
-      , m_output_count(output_count) {}
-
-    auto stream() const -> Stream* { return m_stream; }
-    auto eos() const -> StreamEnd* { return m_eos; }
-    void increase_output_count(int n) { m_output_count += n; }
-    bool flush();
-
-  private:
-    virtual void on_event(Event *evt) override;
-
-    DemuxQueue* m_queue;
-    Stream* m_stream;
-    EventBuffer m_buffer;
-    pjs::Ref<StreamEnd> m_eos;
-    int m_output_count;
-    bool m_has_message_started = false;
-  };
-
-  //
-  // DemuxQueue::Waiter
-  //
-
-  class Waiter :
-    public pjs::Pooled<Waiter>,
-    public List<Waiter>::Item,
-    public EventTarget
-  {
-  public:
-    Waiter(DemuxQueue *queue, Stream *stream)
-      : m_queue(queue)
-      , m_stream(stream) {}
-
-    auto stream() const -> Stream* { return m_stream; }
-
-  private:
-    virtual void on_event(Event *evt) override;
-
-    DemuxQueue* m_queue;
-    Stream* m_stream;
-  };
-
-  virtual void on_event(Event *evt) override;
-
-  void queue_event(Event *evt);
-  void start_waiting_output();
-  bool continue_input();
-  bool check_dedicated();
-  void shift_receiver();
-  void clear_receivers(bool reset);
-  void clear_waiters(bool reset);
-
-  Stream* m_input_stream = nullptr;
-  EventBuffer m_buffer;
-  List<Receiver> m_receivers;
-  List<Waiter> m_waiters;
-  pjs::Ref<InputSource::Tap> m_closed_tap;
-  int m_output_count = 1;
-  bool m_waiting_output_requested = false;
-  bool m_waiting_output = false;
-  bool m_dedication_requested = false;
-  bool m_dedicated = false;
-};
-
-//
 // Demux
 //
 
-class Demux : public Filter, public DemuxQueue {
+class Demux : public Filter {
 public:
   struct Options : public pipy::Options {
-    int output_count = 1;
-    pjs::Ref<pjs::Function> output_count_f;
+    pjs::Ref<pjs::Function> message_key_f;
     Options() {}
     Options(pjs::Object *options);
   };
 
-  Demux();
   Demux(const Options &options);
 
 private:
   Demux(const Demux &r);
   ~Demux();
 
+  //
+  // Demux::Request
+  //
+
+  class Request :
+    public pjs::Pooled<Request>,
+    public List<Request>::Item,
+    public EventTarget
+  {
+  public:
+    Request(Demux *demux, Pipeline *pipeline);
+
+    void input(Event *evt);
+
+  private:
+  public:
+    virtual void on_event(Event *evt) override;
+
+    Demux* m_demux;
+    pjs::Ref<Pipeline> m_pipeline;
+    EventBuffer m_buffer;
+    bool m_started = false;
+    bool m_ended = false;
+  };
+
+  Options m_options;
+  List<Request> m_requests;
+  bool m_started = false;
+  bool m_has_shutdown = false;
+
   virtual auto clone() -> Filter* override;
-  virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  virtual auto on_demux_open_stream() -> EventFunction* override;
-  virtual void on_demux_close_stream(EventFunction *stream) override;
-  virtual void on_demux_complete() override;
-
-  Options m_options;
-  pjs::Ref<StreamEnd> m_eos;
+  void clear_requests();
 };
 
 } // namespace pipy

@@ -2298,14 +2298,14 @@ void Server::init() {
 Server::Stream::Stream(Server *server, int id)
   : StreamBase(server, id, true)
 {
-  auto h = m_handler = server->on_demux_open_stream();
+  auto h = m_handler = server->on_server_open_stream();
   EventSource::chain(h->input());
   h->chain(EventSource::reply());
 }
 
 Server::Stream::~Stream() {
   auto server = static_cast<Server*>(endpoint());
-  server->on_demux_close_stream(m_handler);
+  server->on_server_close_stream(m_handler);
 }
 
 // Request (input)

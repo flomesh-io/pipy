@@ -320,10 +320,13 @@ protected:
   public:
     Stream(Demux *demux, EventFunction *handler, RequestHead *head);
     ~Stream();
+
     auto handler() const -> EventFunction* { return m_handler; }
     auto head() const -> RequestHead* { return m_head; }
+
   private:
     virtual void on_event(Event *evt) override;
+
     Demux* m_demux;
     EventFunction* m_handler;
     pjs::Ref<RequestHead> m_head;
@@ -341,15 +344,14 @@ protected:
   virtual void dump(Dump &d) override;
 
   Options m_options;
-  RequestQueue m_request_queue;
   List<Stream> m_streams;
   int m_message_count = 0;
-  bool m_http2 = false;
-  bool m_tunneling = false;
-  bool m_shutdown = false;
+  bool m_is_http2 = false;
+  bool m_is_tunnel = false;
+  bool m_has_shutdown = false;
 
-  virtual auto on_demux_open_stream() -> EventFunction* override;
-  virtual void on_demux_close_stream(EventFunction *stream) override;
+  virtual auto on_server_open_stream() -> EventFunction* override;
+  virtual void on_server_close_stream(EventFunction *stream) override;
   virtual void on_decode_message_start(RequestHead *head) override;
   virtual void on_decode_message_end(MessageTail *tail) override;
   virtual bool on_decode_tunnel(TunnelType tt) override;
@@ -564,8 +566,8 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void dump(Dump &d) override;
 
-  virtual auto on_demux_open_stream() -> EventFunction* override;
-  virtual void on_demux_close_stream(EventFunction *stream) override;
+  virtual auto on_server_open_stream() -> EventFunction* override;
+  virtual void on_server_close_stream(EventFunction *stream) override;
 
   pjs::Ref<pjs::Object> m_handler;
 };

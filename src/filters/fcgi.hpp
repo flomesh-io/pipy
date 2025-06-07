@@ -206,12 +206,16 @@ protected:
 // Server
 //
 
-class Server : public Endpoint, public DemuxSession {
+class Server : public Endpoint, public EventFunction {
 public:
   void reset();
   void shutdown();
 
 protected:
+  virtual auto on_server_open_stream() -> EventFunction* = 0;
+  virtual void on_server_close_stream(EventFunction *stream) = 0;
+  virtual void on_server_complete() = 0;
+
   virtual void on_event(Event *evt) override;
   virtual void on_record(int type, int request_id, Data &body) override;
   virtual auto on_new_request(int id) -> Endpoint::Request* override;
@@ -269,9 +273,9 @@ protected:
 
   pjs::Ref<StreamEnd> m_eos;
 
-  virtual auto on_demux_open_stream() -> EventFunction* override;
-  virtual void on_demux_close_stream(EventFunction *stream) override;
-  virtual void on_demux_complete() override;
+  virtual auto on_server_open_stream() -> EventFunction* override;
+  virtual void on_server_close_stream(EventFunction *stream) override;
+  virtual void on_server_complete() override;
   virtual void on_output(Event *evt) override;
 };
 

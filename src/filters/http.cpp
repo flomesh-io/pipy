@@ -1320,61 +1320,62 @@ void Demux::reset() {
   Encoder::reset();
   http2::Server::reset();
   Decoder::chain(nullptr);
-  m_request_queue.reset();
-  m_message_count = 0;
-  m_http2 = false;
-  m_tunneling = false;
-  m_shutdown = false;
   clear_streams();
+  m_message_count = 0;
+  m_is_http2 = false;
+  m_is_tunnel = false;
+  m_has_shutdown = false;
 }
 
 void Demux::process(Event *evt) {
-  Decoder::input()->input(evt);
-  if (evt->is<StreamEnd>()) {
-    if (m_streams.empty()) {
-      Filter::output(StreamEnd::make());
-    } else {
-      m_shutdown = true;
+  if (!m_has_shutdown) {
+    Decoder::input()->input(evt);
+    if (evt->is<StreamEnd>()) {
+      if (m_streams.empty()) {
+        Filter::output(StreamEnd::make());
+      } else {
+        m_has_shutdown = true;
+      }
     }
   }
 }
 
 void Demux::shutdown() {
   Filter::shutdown();
-  if (m_http2) {
+  if (m_is_http2) {
     http2::Server::shutdown();
   } else {
-    m_shutdown = true;
+    m_has_shutdown = true;
   }
 }
 
-auto Demux::on_demux_open_stream() -> EventFunction* {
+auto Demux::on_server_open_stream() -> EventFunction* {
   auto p = Filter::sub_pipeline(0, true);
   p->retain();
   p->start();
   return p;
 }
 
-void Demux::on_demux_close_stream(EventFunction *stream) {
+void Demux::on_server_close_stream(EventFunction *stream) {
   auto p = static_cast<Pipeline*>(stream);
   p->release();
 }
 
 void Demux::on_decode_message_start(RequestHead *head) {
-  auto handler = on_demux_open_stream();
+  auto handler = on_server_open_stream();
   m_streams.push(new Stream(this, handler, head));
   Decoder::chain(handler->input());
 }
 
 void Demux::on_decode_message_end(MessageTail *tail) {
-  if (!m_tunneling) {
+  if (!m_is_tunnel) {
     Decoder::chain(nullptr);
   }
 }
 
 bool Demux::on_decode_tunnel(TunnelType tt) {
   if (tt == TunnelType::HTTP2) {
-    m_http2 = true;
+    m_is_http2 = true;
     http2::Server::chain(Filter::output());
     http2::Server::init();
     Decoder::chain(http2::Server::input());
@@ -1392,7 +1393,7 @@ auto Demux::on_encode_message_start(ResponseHead *head, bool &is_final) -> Reque
   if (auto s = m_streams.head()) {
     is_final = (
       (m_options.max_messages > 0 && m_message_count >= m_options.max_messages) ||
-      (m_shutdown && m_streams.size() == 1)
+      (m_has_shutdown && m_streams.size() == 1)
     );
     return static_cast<Stream*>(s)->head();
   } else {
@@ -1405,7 +1406,7 @@ bool Demux::on_encode_tunnel(TunnelType tt) {
     if (auto h = m_streams.head()) {
       Decoder::set_tunnel();
       Decoder::chain(static_cast<Stream*>(h)->handler()->input());
-      m_tunneling = true;
+      m_is_tunnel = true;
     }
   }
   return true;
@@ -1433,14 +1434,14 @@ Demux::Stream::Stream(Demux *demux, EventFunction *handler, RequestHead *head)
 }
 
 Demux::Stream::~Stream() {
-  m_demux->on_demux_close_stream(m_handler);
+  m_demux->on_server_close_stream(m_handler);
 }
 
 void Demux::Stream::on_event(Event *evt) {
   auto demux = m_demux;
   bool is_current = (this == demux->m_streams.head());
 
-  if (is_current && demux->m_tunneling) {
+  if (is_current && demux->m_is_tunnel) {
     demux->Filter::output(evt);
     return;
   }
@@ -1502,7 +1503,7 @@ void Demux::Stream::on_event(Event *evt) {
         m_buffer.push(end);
       }
     }
-    if (is_current && m_ended && !demux->m_tunneling) {
+    if (is_current && m_ended && !demux->m_is_tunnel) {
       auto &streams = demux->m_streams;
       while (auto i = streams.shift()) {
         delete static_cast<Stream*>(i);
@@ -1996,13 +1997,13 @@ auto Server::clone() -> Filter* {
   return new Server(*this);
 }
 
-auto Server::on_demux_open_stream() -> EventFunction* {
+auto Server::on_server_open_stream() -> EventFunction* {
   auto handler = Handler::make(this);
   handler->retain();
   return handler;
 }
 
-void Server::on_demux_close_stream(EventFunction *stream) {
+void Server::on_server_close_stream(EventFunction *stream) {
   static_cast<Handler*>(stream)->release();
 }
 
