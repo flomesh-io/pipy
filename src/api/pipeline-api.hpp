@@ -211,7 +211,7 @@ class Hub : public pjs::ObjectTemplate<Hub> {
 public:
   void join(EventTarget::Input *party);
   void exit(EventTarget::Input *party);
-  void broadcast(Event *evt, EventTarget::Input *from);
+  void broadcast(Event *evt, EventTarget::Input *from = nullptr);
 
 private:
   Hub() {}

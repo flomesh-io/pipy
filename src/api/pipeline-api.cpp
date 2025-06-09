@@ -1300,6 +1300,16 @@ template<> void ClassDef<PipelineLayoutWrapper::Constructor>::init() {
 
 template<> void ClassDef<Hub>::init() {
   ctor();
+  method("broadcast", [](Context &ctx, Object *obj, Value &) {
+    Object *events = nullptr;
+    if (!ctx.get(0, events) || !Message::is_events(events)) {
+      ctx.error_argument_type(0, "an event, message, or array of events and messages");
+      return;
+    }
+    InputContext ic;
+    auto hub = static_cast<Hub*>(obj);
+    Message::to_events(events, [&](Event *evt) { hub->broadcast(evt); return true; });
+  });
 }
 
 template<> void ClassDef<Constructor<Hub>>::init() {
