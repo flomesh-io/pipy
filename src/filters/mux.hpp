@@ -50,7 +50,7 @@ public:
   //
 
   struct Options : public pipy::Options {
-    double max_idle = 60;
+    double max_idle = -1;
     int max_sessions = 0;
     Options() {}
     Options(pjs::Object *options);

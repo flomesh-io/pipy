@@ -1362,7 +1362,8 @@ void Endpoint::stream_error(int id, ErrorCode err) {
 }
 
 void Endpoint::connection_error(ErrorCode err) {
-  pjs::Ref<StreamEnd> eos(StreamEnd::make());
+  auto code = (err == ErrorCode::NO_ERROR ? StreamEnd::NO_ERROR : StreamEnd::PROTOCOL_ERROR);
+  pjs::Ref<StreamEnd> eos(StreamEnd::make(code));
   end(eos);
   FrameEncoder::GOAWAY(m_last_received_stream_id, err, m_output_buffer);
   on_output(Data::make(std::move(m_output_buffer)));

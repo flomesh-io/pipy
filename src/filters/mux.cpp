@@ -138,6 +138,12 @@ void Muxer::SessionPool::recycle(double now) {
   m_aborted_sessions.clear();
 
   auto max_idle = m_muxer->m_options.max_idle * 1000;
+  if (max_idle < 0) {
+    max_idle = std::numeric_limits<double>::infinity();
+  } else {
+    max_idle *= 1000;
+  }
+
   auto s = m_sessions.head();
   while (s) {
     auto session = s; s = s->next();
