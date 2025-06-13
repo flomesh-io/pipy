@@ -1697,7 +1697,14 @@ auto Mux::HTTPQueue::alloc(EventTarget::Input *output) -> HTTPStream* {
   auto s = new HTTPStream();
   s->chain(output);
   Muxer::Session::append(s);
-  if (Muxer::Session::head() == s) s->m_is_sending = true;
+  if (auto back = s->back()) {
+    auto last = static_cast<HTTPStream*>(back);
+    if (last->m_is_sending && last->m_ended) {
+      s->m_is_sending = true;
+    }
+  } else {
+    s->m_is_sending = true;
+  }
   if (m_is_open) s->open(m_is_http2);
   return s->retain();
 }

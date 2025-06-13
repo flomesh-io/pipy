@@ -29,6 +29,8 @@
 
 #include <limits>
 
+#include "log.hpp"
+
 namespace pipy {
 
 //
@@ -372,6 +374,7 @@ void Mux::Request::on_event(Event *evt) {
 Mux::Queue::Queue(Mux *mux)
   : m_message_key(mux->m_options.message_key_f)
 {
+  allow_queuing(true);
   m_pipeline = mux->sub_pipeline(0, true, EventTarget::input());
   m_pipeline->on_eos([this](StreamEnd *) { Muxer::Session::abort(); });
   m_pipeline->start();
@@ -381,7 +384,14 @@ auto Mux::Queue::alloc(EventTarget::Input *output) -> Request* {
   auto r = new Request();
   r->chain(output);
   Muxer::Session::append(r);
-  if (Muxer::Session::head() == r) r->m_is_sending = true;
+  if (auto back = r->back()) {
+    auto last = static_cast<Request*>(back);
+    if (last->m_is_sending && last->m_ended) {
+      r->m_is_sending = true;
+    }
+  } else {
+    r->m_is_sending = true;
+  }
   return r->retain();
 }
 
