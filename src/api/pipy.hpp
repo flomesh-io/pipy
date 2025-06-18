@@ -31,6 +31,7 @@
 #include "pipeline.hpp"
 #include "codebase.hpp"
 
+#include <chrono>
 #include <functional>
 #include <string>
 #include <vector>
@@ -149,6 +150,25 @@ public:
   //
 
   class Outbound : public pjs::ObjectTemplate<Outbound> {};
+
+  //
+  // Pipy::Performance
+  //
+
+  class Performance : public pjs::ObjectTemplate<Performance> {
+  public:
+    static void init();
+
+    auto time_origin() -> double;
+    auto now() -> double;
+
+  private:
+    Performance() {}
+
+    static std::chrono::system_clock::time_point s_time_origin;
+
+    friend class pjs::ObjectTemplate<Performance>;
+  };
 };
 
 } // namespace pipy

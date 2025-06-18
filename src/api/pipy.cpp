@@ -707,6 +707,28 @@ void Pipy::TTY::set_raw(bool b) {
   }
 }
 
+//
+// Pipy::Performance
+//
+
+std::chrono::system_clock::time_point Pipy::Performance::s_time_origin;
+
+void Pipy::Performance::init() {
+  s_time_origin = std::chrono::system_clock::now();
+}
+
+auto Pipy::Performance::time_origin() -> double {
+  auto t = s_time_origin.time_since_epoch();
+  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t).count();
+  return double(ms);
+}
+
+auto Pipy::Performance::now() -> double {
+  auto t = std::chrono::system_clock::now() - s_time_origin;
+  auto us = std::chrono::duration_cast<std::chrono::microseconds>(t).count();
+  return double(us) / 1000000.0;
+}
+
 } // namespace pipy
 
 namespace pjs {
@@ -720,6 +742,7 @@ template<> void ClassDef<Pipy>::init() {
   variable("tty", class_of<Pipy::TTY>());
   variable("inbound", class_of<Pipy::Inbound>());
   variable("outbound", class_of<Pipy::Outbound>());
+  variable("performance", class_of<Pipy::Performance>());
 
   accessor("version", [](Object *, Value &ret) {
     ret.set(Pipy::version());
@@ -987,6 +1010,18 @@ template<> void ClassDef<Pipy::Outbound>::init() {
         return ctx.ok();
       }
     );
+  });
+}
+
+template<> void ClassDef<Pipy::Performance>::init() {
+  ctor();
+
+  accessor("timeOrigin", [](Object *obj, Value &ret) {
+    ret.set(static_cast<Pipy::Performance*>(obj)->time_origin());
+  });
+
+  method("now", [](Context &, Object *obj, Value &ret) {
+    ret.set(static_cast<Pipy::Performance*>(obj)->now());
   });
 }
 

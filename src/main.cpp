@@ -453,6 +453,7 @@ int pipy_main(int argc, char *argv[]) {
     pjs::Math::init();
     crypto::Crypto::init(opts.openssl_engine);
     tls::TLSSession::init();
+    Pipy::Performance::init();
 
     s_admin_options.cert = opts.admin_tls_cert;
     s_admin_options.key = opts.admin_tls_key;
