@@ -40,7 +40,7 @@ void Timer::schedule(double timeout, const std::function<void()> &handler) {
   cancel();
   pjs::Ref<Handler> h = new Handler(handler);
   m_handler = h;
-  m_timer.expires_after(std::chrono::milliseconds((long long)(timeout * 1000)));
+  m_timer.expires_after(std::chrono::microseconds((long long)(timeout * 1000000)));
   m_timer.async_wait(
     [=](const asio::error_code &ec) {
       InputContext ic;
