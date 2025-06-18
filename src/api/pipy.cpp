@@ -726,7 +726,7 @@ auto Pipy::Performance::time_origin() -> double {
 auto Pipy::Performance::now() -> double {
   auto t = std::chrono::system_clock::now() - s_time_origin;
   auto us = std::chrono::duration_cast<std::chrono::microseconds>(t).count();
-  return double(us) / 1000000.0;
+  return double(us) / 1000.0;
 }
 
 } // namespace pipy
