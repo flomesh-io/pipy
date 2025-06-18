@@ -1078,6 +1078,20 @@ template<> void ClassDef<PipelineDesigner>::init() {
     }
   });
 
+  // PipelineDesigner.muxQueue
+  filter("muxQueue", [](Context &ctx, PipelineDesigner *obj) {
+    Function *session_selector = nullptr;
+    Object *options = nullptr;
+    if (
+      ctx.try_arguments(0, &session_selector, &options) ||
+      ctx.try_arguments(0, &options)
+    ) {
+      obj->mux(session_selector, options);
+    } else {
+      ctx.error_argument_type(0, "a function or an object");
+    }
+  });
+
   // PipelineDesigner.pipe
   filter("pipe", [](Context &ctx, PipelineDesigner *obj) {
     Value target;

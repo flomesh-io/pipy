@@ -29,8 +29,6 @@
 
 #include <limits>
 
-#include "log.hpp"
-
 namespace pipy {
 
 //
