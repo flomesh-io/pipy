@@ -106,6 +106,7 @@ public:
   void mux(pjs::Function *session_selector, pjs::Object *options);
   void mux_fcgi(pjs::Function *session_selector, pjs::Object *options);
   void mux_http(pjs::Function *session_selector, pjs::Object *options);
+  void mux_queue(pjs::Function *session_selector, pjs::Object *options);
   void pipe(const pjs::Value &target, pjs::Object *target_map, pjs::Object *init_args);
   void pipe_next(const pjs::Value &args);
   void print();

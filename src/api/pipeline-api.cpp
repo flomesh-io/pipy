@@ -354,6 +354,10 @@ void PipelineDesigner::mux_http(pjs::Function *session_selector, pjs::Object *op
   require_sub_pipeline(append_filter(new http::Mux(session_selector, options)));
 }
 
+void PipelineDesigner::mux_queue(pjs::Function *session_selector, pjs::Object *options) {
+  require_sub_pipeline(append_filter(new MuxQueue(session_selector, options)));
+}
+
 void PipelineDesigner::read(const pjs::Value &filename, pjs::Object *options) {
   append_filter(new Read(filename, options));
 }
@@ -1086,7 +1090,7 @@ template<> void ClassDef<PipelineDesigner>::init() {
       ctx.try_arguments(0, &session_selector, &options) ||
       ctx.try_arguments(0, &options)
     ) {
-      obj->mux(session_selector, options);
+      obj->mux_queue(session_selector, options);
     } else {
       ctx.error_argument_type(0, "a function or an object");
     }

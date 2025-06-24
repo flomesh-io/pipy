@@ -1671,7 +1671,8 @@ void Mux::HTTPStream::on_event(Event *evt) {
             auto stream = static_cast<HTTPStream*>(s);
             stream->m_is_sending = true;
             stream->m_buffer.flush([&](Event *evt) { input->input(evt); });
-            if (stream->m_ended) s = s->next(); else break;
+            if (!stream->m_ended) break;
+            s = s->next();
           }
         } else {
           m_buffer.push(evt);
@@ -1779,7 +1780,6 @@ Mux::HTTPSession::HTTPSession(Mux *mux)
   : Encoder(false)
   , Decoder(true)
   , http2::Client(mux->m_options)
-  , m_context(mux->context())
   , m_ping_handler(mux->m_options.ping_f)
 {
   Decoder::set_max_header_size(mux->m_options.max_header_size);
@@ -1787,6 +1787,7 @@ Mux::HTTPSession::HTTPSession(Mux *mux)
 
   m_pipeline = mux->sub_pipeline(0, true);
   m_pipeline->on_eos([this](StreamEnd *) { Muxer::Session::abort(); });
+  m_context = m_pipeline->context();
 
   if (auto f = mux->m_options.version_f.get()) {
     pjs::Value version;

@@ -411,7 +411,7 @@ bool Value::is_identical(const Value &a, const Value &b) {
       case Value::Type::Boolean: return a.b() == b.b();
       case Value::Type::Number: return a.n() == b.n();
       case Value::Type::String: return a.s() == b.s();
-      case Value::Type::Object: return a.o() == b.o();
+      case Value::Type::Object: return a.is<Int>() && b.is<Int>() ? a.as<Int>()->eql(b.as<Int>()) : a.o() == b.o();
     }
   }
   return true;
@@ -425,11 +425,9 @@ bool Value::is_equal(const Value &a, const Value &b) {
       case Value::Type::Boolean: return a.b() == b.b();
       case Value::Type::Number: return a.n() == b.n();
       case Value::Type::String: return a.s() == b.s();
-      case Value::Type::Object: return a.o() == b.o();
+      case Value::Type::Object: return a.is<Int>() && b.is<Int>() ? a.as<Int>()->eql(b.as<Int>()) : a.o() == b.o();
       default: return false;
     }
-  } else if (a.is_object() && b.is_object()) {
-    return a.o() == b.o();
   } else if (a.is_nullish() && b.is_nullish()) {
     return true;
   } else if (a.is_nullish() || b.is_nullish()) {

@@ -29,6 +29,7 @@
 #include "filter.hpp"
 #include "event.hpp"
 #include "pipeline.hpp"
+#include "context.hpp"
 #include "list.hpp"
 #include "timer.hpp"
 #include "options.hpp"
@@ -224,11 +225,12 @@ private:
     void discard();
 
   private:
-    Request() {}
+    Request(const pjs::Value &key) : m_key(key) {}
     ~Request() {}
 
     virtual void on_event(Event *evt) override;
 
+    pjs::Value m_key;
     EventBuffer m_buffer;
     bool m_is_sending = false;
     bool m_started = false;
@@ -249,7 +251,7 @@ private:
     public EventTarget
   {
   public:
-    auto alloc(EventTarget::Input *output) -> Request*;
+    auto alloc(EventTarget::Input *output, const pjs::Value &key) -> Request*;
 
   private:
     Queue(Mux *mux);
@@ -258,8 +260,10 @@ private:
     void free(Request *r);
     void free_all();
 
-    pjs::Ref<pjs::Function> m_message_key;
+    pjs::Ref<Context> m_context;
+    pjs::Ref<pjs::Function> m_message_key_f;
     pjs::Ref<Pipeline> m_pipeline;
+    pjs::Ref<Request> m_current_request;
     bool m_started = false;
 
     virtual void on_event(Event *evt) override;
@@ -271,6 +275,116 @@ private:
 
   //
   // Mux::Pool
+  //
+
+  class Pool : public Muxer {
+  public:
+    Pool();
+    Pool(const Options &options);
+
+  private:
+    Options m_options;
+
+    virtual auto on_muxer_session_open(Filter *filter) -> Session* override;
+    virtual void on_muxer_session_close(Session *session) override;
+  };
+
+  pjs::Ref<Pool> m_pool;
+  pjs::Ref<pjs::Function> m_session_selector;
+  pjs::Ref<Queue> m_queue;
+  pjs::Ref<Request> m_request;
+  Options m_options;
+  bool m_has_error = false;
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void shutdown() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
+};
+
+//
+// MuxQueue
+//
+
+class MuxQueue : public Filter {
+public:
+  struct Options : public Muxer::Options {
+    bool blocking = false;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  MuxQueue(pjs::Function *session_selector);
+  MuxQueue(pjs::Function *session_selector, const Options &options);
+
+private:
+  MuxQueue(const MuxQueue &r);
+
+  class Request;
+  class Queue;
+  class Pool;
+
+  //
+  // MuxQueue::Request
+  //
+
+  class Request :
+    public pjs::RefCount<Request>,
+    public pjs::Pooled<Request>,
+    public Muxer::Stream,
+    public EventFunction
+  {
+  public:
+    void discard();
+
+  private:
+    Request() {}
+    ~Request() {}
+
+    virtual void on_event(Event *evt) override;
+
+    EventBuffer m_buffer;
+    bool m_is_sending = false;
+    bool m_started = false;
+    bool m_ended = false;
+
+    friend class pjs::RefCount<Request>;
+    friend class Queue;
+  };
+
+  //
+  // MuxQueue::Queue
+  //
+
+  class Queue :
+    public pjs::RefCount<Queue>,
+    public pjs::Pooled<Queue>,
+    public Muxer::Session,
+    public EventTarget
+  {
+  public:
+    auto alloc(EventTarget::Input *output) -> Request*;
+
+  private:
+    Queue(MuxQueue *mux);
+    ~Queue() {}
+
+    void free(Request *r);
+    void free_all();
+
+    pjs::Ref<Pipeline> m_pipeline;
+    bool m_started = false;
+
+    virtual void on_event(Event *evt) override;
+
+    friend class pjs::RefCount<Queue>;
+    friend class Request;
+    friend class Pool;
+  };
+
+  //
+  // MuxQueue::Pool
   //
 
   class Pool : public Muxer {
