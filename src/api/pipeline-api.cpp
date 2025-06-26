@@ -870,6 +870,13 @@ template<> void ClassDef<PipelineDesigner>::init() {
     obj->demux_http(options);
   });
 
+  // PipelineDesigner.demuxQueue
+  filter("demuxQueue", [](Context &ctx, PipelineDesigner *obj) {
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
+    obj->demux(options);
+  });
+
   // PipelineDesigner.detectProtocol
   filter("detectProtocol", [](Context &ctx, PipelineDesigner *obj) {
     Function *handler;
