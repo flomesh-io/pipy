@@ -40,13 +40,7 @@ namespace pipy {
 
 class Demux : public Filter {
 public:
-  struct Options : public pipy::Options {
-    pjs::Ref<pjs::Function> message_key_f;
-    Options() {}
-    Options(pjs::Object *options);
-  };
-
-  Demux(const Options &options);
+  Demux(bool queued);
 
 private:
   Demux(const Demux &r);
@@ -58,6 +52,7 @@ private:
 
   class Request :
     public pjs::Pooled<Request>,
+    public pjs::RefCount<Request>,
     public List<Request>::Item,
     public EventTarget
   {
@@ -66,19 +61,25 @@ private:
 
     void input(Event *evt);
 
-  private:
   public:
     virtual void on_event(Event *evt) override;
+
+  private:
+    ~Request() {}
 
     Demux* m_demux;
     pjs::Ref<Pipeline> m_pipeline;
     EventBuffer m_buffer;
     bool m_started = false;
     bool m_ended = false;
+
+    friend class pjs::RefCount<Request>;
   };
 
-  Options m_options;
   List<Request> m_requests;
+  pjs::Ref<Request> m_current_request;
+  pjs::Ref<Request> m_current_response;
+  bool m_queued;
   bool m_started = false;
   bool m_has_shutdown = false;
 

@@ -24,7 +24,6 @@ function runOneTest() {
       }
     )
     println('Done.')
-    pipy.exit()
     return
   }
 

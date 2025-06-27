@@ -77,9 +77,10 @@ public:
   void decompress(const pjs::Value &algorithm);
   void decompress_http();
   void deframe(pjs::Object *states);
-  void demux(pjs::Object *options);
+  void demux();
   void demux_fcgi();
   void demux_http(pjs::Object *options);
+  void demux_queue();
   void detect_protocol(pjs::Function *handler);
   void dummy();
   void dump(const pjs::Value &tag);

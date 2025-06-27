@@ -2,10 +2,11 @@ var $msgID
 
 pipy.listen(8000, $=>$
   .split('\n')
-  .demux().to($=>$
+  .demuxQueue().to($=>$
     .replaceMessage(getMessageID)
     .mux(() => Math.floor(Math.random() * 99), {
-      messageKey: () => $msgID
+      maxSessions: 1,
+      messageKey: () => $msgID,
     }).to($=>$
       .replaceMessage(
         msg => msg.body.push('\n')

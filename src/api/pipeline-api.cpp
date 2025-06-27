@@ -234,8 +234,8 @@ void PipelineDesigner::deframe(pjs::Object *states) {
   append_filter(new Deframe(states));
 }
 
-void PipelineDesigner::demux(pjs::Object *options) {
-  require_sub_pipeline(append_filter(new Demux(options)));
+void PipelineDesigner::demux() {
+  require_sub_pipeline(append_filter(new Demux(false)));
 }
 
 void PipelineDesigner::demux_fcgi() {
@@ -244,6 +244,10 @@ void PipelineDesigner::demux_fcgi() {
 
 void PipelineDesigner::demux_http(pjs::Object *options) {
   require_sub_pipeline(append_filter(new http::Demux(options)));
+}
+
+void PipelineDesigner::demux_queue() {
+  require_sub_pipeline(append_filter(new Demux(true)));
 }
 
 void PipelineDesigner::detect_protocol(pjs::Function *handler) {
@@ -839,9 +843,7 @@ template<> void ClassDef<PipelineDesigner>::init() {
 
   // PipelineDesigner.demux
   filter("demux", [](Context &ctx, PipelineDesigner *obj) {
-    Object *options = nullptr;
-    if (!ctx.arguments(0, &options)) return;
-    obj->demux(options);
+    obj->demux();
   });
 
   // PipelineDesigner.demuxFastCGI
@@ -854,6 +856,11 @@ template<> void ClassDef<PipelineDesigner>::init() {
     Object *options = nullptr;
     if (!ctx.arguments(0, &options)) return;
     obj->demux_http(options);
+  });
+
+  // PipelineDesigner.demuxQueue
+  filter("demuxQueue", [](Context &ctx, PipelineDesigner *obj) {
+    obj->demux_queue();
   });
 
   // PipelineDesigner.detectProtocol

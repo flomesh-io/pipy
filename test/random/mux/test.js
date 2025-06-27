@@ -21,7 +21,7 @@ export default function ({ log }) {
           var data = JSON.decode(msg.body)
           var id = data.id
           pendingMsgs[id] = true
-          return new Timeout(Math.random()).wait().then(
+          return new Timeout(Math.random() * 5).wait().then(
             () => {
               if (!$sessionCtrl.aborted) {
                 delete pendingMsgs[id]
@@ -37,7 +37,7 @@ export default function ({ log }) {
       msg => msg.body.push('\n')
     )
     .insert(
-      () => new Timeout(Math.random() * 2 + 1).wait().then(
+      () => new Timeout(Math.random() * 2 + 5).wait().then(
         () => {
           $sessionCtrl.aborted = true
           return new StreamEnd
@@ -62,7 +62,7 @@ export default function ({ log }) {
       })
       return new Message(JSON.encode($msg))
     })
-    .muxQueue(() => sessionIndex++ % 100, { maxIdle: 10 }).to($=>$
+    .muxQueue(() => sessionIndex++ % 10, { maxSessions: 1 }).to($=>$
       .replaceMessage(msg => msg.body.push('\n'))
       .connect('localhost:8000')
       .split('\n')
@@ -94,7 +94,7 @@ export default function ({ log }) {
   }
 
   return run().then(
-    () => new Timeout(3).wait()
+    () => new Timeout(10).wait()
   ).then(
     () => {
       var ok = true
@@ -107,6 +107,9 @@ export default function ({ log }) {
             return
           }
           log('Lost message ID =', r.id)
+          ok = false
+        } else {
+          log('Req/Res mismatch:', r.id, '->', r.response.result)
           ok = false
         }
       })

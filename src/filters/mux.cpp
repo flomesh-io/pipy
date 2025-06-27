@@ -641,7 +641,7 @@ void MuxQueue::Request::on_event(Event *evt) {
 //
 
 MuxQueue::Queue::Queue(MuxQueue *mux) {
-  allow_queuing(mux->m_options.blocking);
+  allow_queuing(!mux->m_options.blocking);
   m_pipeline = mux->sub_pipeline(0, true, EventTarget::input());
   m_pipeline->on_eos([this](StreamEnd *) { Muxer::Session::abort(); });
   m_pipeline->start();
