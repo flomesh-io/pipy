@@ -302,17 +302,15 @@ private:
   class Request :
     public pjs::RefCount<Request>,
     public pjs::Pooled<Request>,
-    public Muxer::Stream,
-    public EventFunction
+    public Muxer::Stream
   {
   public:
+    void input(Event *evt);
     void discard();
 
   private:
-    Request() {}
-    ~Request() {}
-
-    virtual void on_event(Event *evt) override;
+    Request(Client *client, EventTarget::Input *output);
+    ~Request();
 
     EventFunction* m_request = nullptr;
 

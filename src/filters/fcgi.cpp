@@ -767,15 +767,12 @@ void Mux::process(Event *evt) {
           return;
         }
       }
-      if (key.is_nullish()) {
-        key.set(Filter::context()->inbound());
-      }
       m_queue = static_cast<Queue*>(m_pool->alloc(this, key));
       m_request = m_queue->alloc(Filter::output());
     }
 
     if (m_request) {
-      m_request->input()->input(evt);
+      m_request->input(evt);
     }
   }
 }
@@ -784,19 +781,28 @@ void Mux::process(Event *evt) {
 // Mux::Request
 //
 
+Mux::Request::Request(Client *client, EventTarget::Input *output) {
+  m_request = client->open_request();
+  m_request->chain(output);
+}
+
+Mux::Request::~Request() {
+  discard();
+}
+
+void Mux::Request::input(Event *evt) {
+  if (m_request) {
+    m_request->input()->input(evt);
+  }
+}
+
 void Mux::Request::discard() {
   if (m_request) {
+    m_request->chain(nullptr);
     if (auto s = Muxer::Stream::session()) {
       static_cast<Queue*>(s)->Client::close_request(m_request);
     }
     m_request = nullptr;
-  }
-  EventFunction::chain(nullptr);
-}
-
-void Mux::Request::on_event(Event *evt) {
-  if (m_request) {
-    m_request->input()->input(evt);
   }
 }
 
@@ -805,14 +811,15 @@ void Mux::Request::on_event(Event *evt) {
 //
 
 Mux::Queue::Queue(Mux *mux) {
-  m_pipeline = mux->sub_pipeline(0, true, Client::reply());
-  m_pipeline->on_eos([this](StreamEnd *) { Muxer::Session::abort(); });
-  m_pipeline->start();
+  auto p = mux->sub_pipeline(0, true, Client::reply());
+  Client::chain(p->input());
+  m_pipeline = p;
+  p->on_eos([this](StreamEnd *) { Muxer::Session::abort(); });
+  p->start();
 }
 
 auto Mux::Queue::alloc(EventTarget::Input *output) -> Mux::Request* {
-  auto r = new Mux::Request();
-  r->chain(output);
+  auto r = new Mux::Request(this, output);
   Muxer::Session::append(r);
   return r->retain();
 }
