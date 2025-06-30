@@ -304,9 +304,6 @@ void Mux::process(Event *evt) {
             return;
           }
         }
-        if (key.is_nullish()) {
-          key.set(Filter::context()->inbound());
-        }
         m_queue = static_cast<Queue*>(m_pool->alloc(this, key));
         m_request = m_queue->alloc(Filter::output(), msg_key);
       }
@@ -565,9 +562,6 @@ void MuxQueue::process(Event *evt) {
           m_has_error = true;
           return;
         }
-      }
-      if (key.is_nullish()) {
-        key.set(Filter::context()->inbound());
       }
       m_queue = static_cast<Queue*>(m_pool->alloc(this, key));
       m_request = m_queue->alloc(Filter::output());

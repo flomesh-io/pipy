@@ -26,9 +26,7 @@
 #include "http.hpp"
 #include "api/http.hpp"
 #include "api/console.hpp"
-#include "context.hpp"
 #include "pipeline.hpp"
-#include "inbound.hpp"
 #include "str-map.hpp"
 #include "utils.hpp"
 
@@ -1565,9 +1563,6 @@ void Mux::process(Event *evt) {
           m_has_error = true;
           return;
         }
-      }
-      if (key.is_nullish()) {
-        key.set(Filter::context()->inbound());
       }
       m_session = static_cast<HTTPSession*>(m_muxer->alloc(this, key));
       m_stream = m_session->alloc(Filter::output());
