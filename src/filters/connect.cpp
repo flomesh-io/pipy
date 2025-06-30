@@ -34,9 +34,23 @@ namespace pipy {
 //
 
 Connect::Options::Options(pjs::Object *options) {
-  Value(options, "protocol")
-    .get_enum(protocol)
+  Value(options, "domain")
+    .get(domain)
     .check_nullable();
+
+  if (domain > 0) {
+    Value(options, "type")
+      .get_enum(type)
+      .check_nullable();
+    Value(options, "protocol")
+      .get(protocol)
+      .check_nullable();
+  } else {
+    Value(options, "protocol")
+      .get_enum(protocol_inet)
+      .check_nullable();
+  }
+
   Value(options, "netlinkFamily")
     .get(netlink_family)
     .check_nullable();
@@ -188,30 +202,43 @@ void Connect::process(Event *evt) {
       };
     }
 
-    auto protocol = options.protocol;
-    if (ep) {
-      switch (ep->protocol.get()) {
-        case IPEndpoint::Protocol::tcp: protocol = Outbound::Protocol::TCP; break;
-        case IPEndpoint::Protocol::udp: protocol = Outbound::Protocol::UDP; break;
+    if (options.domain > 0) {
+      switch (options.type) {
+        case Outbound::Type::STREAM:
+        case Outbound::Type::DATAGRAM:
+          m_outbound = OutboundDatagram::make(Filter::output(), options);
+          break;
+        case Outbound::Type::RAW:
+          m_outbound = OutboundRaw::make(Filter::output(), options);
+          break;
       }
-    }
 
-    switch (protocol) {
-      case Outbound::Protocol::TCP:
-        m_outbound = OutboundTCP::make(Filter::output(), options);
-        break;
-      case Outbound::Protocol::UDP:
-        m_outbound = OutboundUDP::make(Filter::output(), options);
-        break;
-      case Outbound::Protocol::NETLINK:
-        m_outbound = OutboundNetlink::make(options.netlink_family, Filter::output(), options);
-        break;
+    } else {
+      auto protocol = options.protocol_inet;
+      if (ep) {
+        switch (ep->protocol.get()) {
+          case IPEndpoint::Protocol::tcp: protocol = Outbound::Protocol::TCP; break;
+          case IPEndpoint::Protocol::udp: protocol = Outbound::Protocol::UDP; break;
+        }
+      }
+
+      switch (protocol) {
+        case Outbound::Protocol::TCP:
+          m_outbound = OutboundTCP::make(Filter::output(), options);
+          break;
+        case Outbound::Protocol::UDP:
+          m_outbound = OutboundUDP::make(Filter::output(), options);
+          break;
+        case Outbound::Protocol::NETLINK:
+          m_outbound = OutboundNetlink::make(options.netlink_family, Filter::output(), options);
+          break;
+      }
     }
 
     try {
       if (bind) {
         m_outbound->bind(bind->str());
-      } else if (options.protocol == Outbound::Protocol::NETLINK) {
+      } else if (options.protocol_inet == Outbound::Protocol::NETLINK) {
         m_outbound->bind("");
       }
 

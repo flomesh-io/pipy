@@ -256,6 +256,132 @@ private:
 };
 
 //
+// SocketDatagram
+//
+
+class SocketDatagram :
+  public SocketBase,
+  public InputSource
+{
+protected:
+  SocketDatagram(bool is_inbound, const Options &options)
+    : SocketBase(is_inbound, options)
+    , m_socket(Net::context()) {}
+
+  ~SocketDatagram() {}
+
+  auto socket() -> asio::generic::datagram_protocol::socket& { return m_socket; }
+  auto buffered() const -> size_t { return m_sending_size; }
+
+  void open();
+  void close();
+  void output(Event *evt);
+
+private:
+  asio::generic::datagram_protocol::socket m_socket;
+  asio::generic::datagram_protocol::endpoint m_endpoint;
+  asio::generic::datagram_protocol::endpoint m_from;
+  EventBuffer m_buffer;
+  Congestion m_congestion;
+  int m_sending_size = 0;
+  int m_sending_count = 0;
+  bool m_receiving = false;
+  bool m_opened = false;
+  bool m_paused = false;
+  bool m_ended = false;
+  bool m_closing = false;
+  bool m_closed = false;
+
+  void receive();
+  void send(Data *data);
+  void close_socket();
+  void close_async();
+
+  virtual void on_tap_open() override;
+  virtual void on_tap_close() override;
+
+  void on_receive(Data *data, const std::error_code &ec, std::size_t n);
+  void on_send(Data *data, const std::error_code &ec, std::size_t n);
+
+  struct ReceiveHandler : public SelfDataHandler<SocketDatagram, Data> {
+    using SelfDataHandler::SelfDataHandler;
+    ReceiveHandler(const ReceiveHandler &r) : SelfDataHandler(r) {}
+    void operator()(const std::error_code &ec, std::size_t n) { self->on_receive(data, ec, n); }
+  };
+
+  struct SendHandler : public SelfDataHandler<SocketDatagram, Data> {
+    using SelfDataHandler::SelfDataHandler;
+    SendHandler(const SendHandler &r) : SelfDataHandler(r) {}
+    void operator()(const std::error_code &ec, std::size_t n) { self->on_send(data, ec, n); }
+  };
+
+  static Data::Producer s_dp;
+};
+
+//
+// SocketRaw
+//
+
+class SocketRaw :
+  public SocketBase,
+  public InputSource
+{
+protected:
+  SocketRaw(bool is_inbound, const Options &options)
+    : SocketBase(is_inbound, options)
+    , m_socket(Net::context()) {}
+
+  ~SocketRaw() {}
+
+  auto socket() -> asio::generic::datagram_protocol::socket& { return m_socket; }
+  auto buffered() const -> size_t { return m_sending_size; }
+
+  void open();
+  void close();
+  void output(Event *evt);
+
+private:
+  asio::generic::datagram_protocol::socket m_socket;
+  asio::generic::datagram_protocol::endpoint m_endpoint;
+  asio::generic::datagram_protocol::endpoint m_from;
+  EventBuffer m_buffer;
+  Congestion m_congestion;
+  int m_sending_size = 0;
+  int m_sending_count = 0;
+  bool m_receiving = false;
+  bool m_opened = false;
+  bool m_paused = false;
+  bool m_ended = false;
+  bool m_closing = false;
+  bool m_closed = false;
+
+  void receive();
+  void send(Data *data);
+  void close_socket();
+  void close_async();
+
+  virtual void on_tap_open() override;
+  virtual void on_tap_close() override;
+
+  void on_receive(Data *data, const std::error_code &ec, std::size_t n);
+  void on_send(Data *data, const std::error_code &ec, std::size_t n);
+
+  struct ReceiveHandler : public SelfDataHandler<SocketRaw, Data> {
+    using SelfDataHandler::SelfDataHandler;
+    ReceiveHandler(const ReceiveHandler &r) : SelfDataHandler(r) {}
+    void operator()(const std::error_code &ec, std::size_t n) { self->on_receive(data, ec, n); }
+  };
+
+  struct SendHandler : public SelfDataHandler<SocketRaw, Data> {
+    using SelfDataHandler::SelfDataHandler;
+    SendHandler(const SendHandler &r) : SelfDataHandler(r) {}
+    void operator()(const std::error_code &ec, std::size_t n) { self->on_send(data, ec, n); }
+  };
+
+  static Data::Producer s_dp;
+};
+
+//
 // SocketNetlink
 //
 

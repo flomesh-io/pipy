@@ -79,7 +79,7 @@ auto Outbound::protocol_name() const -> pjs::Str* {
   thread_local static pjs::ConstStr s_TCP("TCP");
   thread_local static pjs::ConstStr s_UDP("UDP");
   thread_local static pjs::ConstStr s_Netlink("Netlink");
-  switch (m_options.protocol) {
+  switch (m_options.protocol_inet) {
     case Protocol::TCP: return s_TCP;
     case Protocol::UDP: return s_UDP;
     case Protocol::NETLINK: return s_Netlink;
@@ -776,6 +776,122 @@ auto OutboundUDP::get_traffic_out() -> size_t {
 }
 
 //
+// OutboundDatagram
+//
+
+OutboundDatagram::OutboundDatagram(EventTarget::Input *output, const Outbound::Options &options)
+  : pjs::ObjectTemplate<OutboundDatagram, Outbound>(output, options)
+  , SocketDatagram(false, Outbound::m_options)
+  , m_domain(options.domain)
+  , m_protocol(options.protocol)
+{
+}
+
+OutboundDatagram::~OutboundDatagram() {
+  Outbound::collect();
+}
+
+void OutboundDatagram::bind(const void *address, size_t size) {
+  asio::generic::datagram_protocol::endpoint ep(address, size);
+  auto &s = SocketDatagram::socket();
+  s.open(asio::generic::datagram_protocol(m_domain, m_protocol));
+  s.bind(ep);
+}
+
+void OutboundDatagram::connect(const void *address, size_t size) {
+  std::error_code ec;
+  asio::generic::datagram_protocol::endpoint ep(address, size);
+  auto &s = SocketDatagram::socket();
+  s.connect(ep, ec);
+  if (ec) throw std::runtime_error(ec.message().c_str());
+  SocketDatagram::open();
+  state(State::connected);
+}
+
+void OutboundDatagram::send(Event *evt) {
+  SocketDatagram::output(evt);
+}
+
+void OutboundDatagram::close() {
+  SocketDatagram::close();
+  state(Outbound::State::closed);
+}
+
+auto OutboundDatagram::wrap_socket() -> Socket* {
+  return Socket::make(SocketDatagram::socket().native_handle());
+}
+
+auto OutboundDatagram::get_traffic_in() -> size_t {
+  auto n = SocketDatagram::m_traffic_read;
+  SocketDatagram::m_traffic_read = 0;
+  return n;
+}
+
+auto OutboundDatagram::get_traffic_out() -> size_t {
+  auto n = SocketDatagram::m_traffic_write;
+  SocketDatagram::m_traffic_write = 0;
+  return n;
+}
+
+//
+// OutboundRaw
+//
+
+OutboundRaw::OutboundRaw(EventTarget::Input *output, const Outbound::Options &options)
+  : pjs::ObjectTemplate<OutboundRaw, Outbound>(output, options)
+  , SocketRaw(false, Outbound::m_options)
+  , m_domain(options.domain)
+  , m_protocol(options.protocol)
+{
+}
+
+OutboundRaw::~OutboundRaw() {
+  Outbound::collect();
+}
+
+void OutboundRaw::bind(const void *address, size_t size) {
+  asio::generic::datagram_protocol::endpoint ep(address, size);
+  auto &s = SocketRaw::socket();
+  s.open(asio::generic::datagram_protocol(m_domain, m_protocol));
+  s.bind(ep);
+}
+
+void OutboundRaw::connect(const void *address, size_t size) {
+  std::error_code ec;
+  asio::generic::datagram_protocol::endpoint ep(address, size);
+  auto &s = SocketRaw::socket();
+  s.connect(ep, ec);
+  if (ec) throw std::runtime_error(ec.message().c_str());
+  SocketRaw::open();
+  state(State::connected);
+}
+
+void OutboundRaw::send(Event *evt) {
+  SocketRaw::output(evt);
+}
+
+void OutboundRaw::close() {
+  SocketRaw::close();
+  state(Outbound::State::closed);
+}
+
+auto OutboundRaw::wrap_socket() -> Socket* {
+  return Socket::make(SocketRaw::socket().native_handle());
+}
+
+auto OutboundRaw::get_traffic_in() -> size_t {
+  auto n = SocketRaw::m_traffic_read;
+  SocketRaw::m_traffic_read = 0;
+  return n;
+}
+
+auto OutboundRaw::get_traffic_out() -> size_t {
+  auto n = SocketRaw::m_traffic_write;
+  SocketRaw::m_traffic_write = 0;
+  return n;
+}
+
+//
 // OutboundNetlink
 //
 
@@ -872,6 +988,12 @@ namespace pjs {
 
 using namespace pipy;
 
+template<> void EnumDef<Outbound::Type>::init() {
+  define(Outbound::Type::STREAM, "stream");
+  define(Outbound::Type::DATAGRAM, "datagram");
+  define(Outbound::Type::RAW, "raw");
+}
+
 template<> void EnumDef<Outbound::Protocol>::init() {
   define(Outbound::Protocol::TCP, "tcp");
   define(Outbound::Protocol::UDP, "udp");
@@ -905,6 +1027,14 @@ template<> void ClassDef<OutboundTCP>::init() {
 }
 
 template<> void ClassDef<OutboundUDP>::init() {
+  super<Outbound>();
+}
+
+template<> void ClassDef<OutboundDatagram>::init() {
+  super<Outbound>();
+}
+
+template<> void ClassDef<OutboundRaw>::init() {
   super<Outbound>();
 }
 

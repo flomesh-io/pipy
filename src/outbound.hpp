@@ -50,6 +50,12 @@ class Outbound :
   public List<Outbound>::Item
 {
 public:
+  enum class Type {
+    STREAM,
+    DATAGRAM,
+    RAW,
+  };
+
   enum class Protocol {
     TCP,
     UDP,
@@ -65,8 +71,11 @@ public:
     closed,
   };
 
-  struct Options : public SocketTCP::Options {
-    Protocol  protocol = Protocol::TCP;
+  struct Options : public SocketBase::Options {
+    int       domain = 0;
+    Type      type = Type::STREAM;
+    int       protocol = 0;
+    Protocol  protocol_inet = Protocol::TCP;
     int       netlink_family = 0;
     size_t    max_packet_size = 16 * 1024;
     int       retry_count = 0;
@@ -90,7 +99,7 @@ public:
   }
 
   auto get_socket() -> Socket*;
-  auto protocol() const -> Protocol { return m_options.protocol; }
+  auto protocol() const -> Protocol { return m_options.protocol_inet; }
   auto protocol_name() const -> pjs::Str*;
   auto address() -> pjs::Str*;
   auto host() const -> const std::string& { return m_host; }
@@ -104,8 +113,10 @@ public:
   auto connection_time() const -> double { return m_connection_time; }
 
   virtual void bind(const std::string &address) = 0;
+  virtual void bind(const void *address, size_t size) {};
   virtual void connect(const std::string &address) = 0;
   virtual void connect(IP *ip, int port) = 0;
+  virtual void connect(const void *address, size_t size) {};
   virtual void send(Event *evt) = 0;
   virtual void close() = 0;
 
@@ -249,6 +260,77 @@ private:
   friend class pjs::ObjectTemplate<OutboundUDP, Outbound>;
 };
 
+//
+// OutboundDatagram
+//
+
+class OutboundDatagram :
+  public pjs::ObjectTemplate<OutboundDatagram, Outbound>,
+  public SocketDatagram
+{
+public:
+  virtual void bind(const std::string &address) override {}
+  virtual void bind(const void *address, size_t size) override;
+  virtual void connect(const std::string &address) override {}
+  virtual void connect(IP *ip, int port) override {}
+  virtual void connect(const void *address, size_t size) override;
+  virtual void send(Event *evt) override;
+  virtual void close() override;
+
+private:
+  OutboundDatagram(EventTarget::Input *output, const Outbound::Options &options);
+  ~OutboundDatagram();
+
+  virtual auto wrap_socket() -> Socket* override;
+  virtual auto get_buffered() const -> size_t override { return SocketDatagram::buffered(); }
+  virtual auto get_traffic_in() -> size_t override;
+  virtual auto get_traffic_out() -> size_t override;
+
+  virtual void on_socket_input(Event *evt) override { Outbound::input(evt); }
+  virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
+  virtual void on_socket_close() override { release(); }
+
+  int m_domain;
+  int m_protocol;
+
+  friend class pjs::ObjectTemplate<OutboundDatagram, Outbound>;
+};
+
+//
+// OutboundRaw
+//
+
+class OutboundRaw :
+  public pjs::ObjectTemplate<OutboundRaw, Outbound>,
+  public SocketRaw
+{
+public:
+  virtual void bind(const std::string &address) override {}
+  virtual void bind(const void *address, size_t size) override;
+  virtual void connect(const std::string &address) override {}
+  virtual void connect(IP *ip, int port) override {}
+  virtual void connect(const void *address, size_t size) override;
+  virtual void send(Event *evt) override;
+  virtual void close() override;
+
+private:
+  OutboundRaw(EventTarget::Input *output, const Outbound::Options &options);
+  ~OutboundRaw();
+
+  virtual auto wrap_socket() -> Socket* override;
+  virtual auto get_buffered() const -> size_t override { return OutboundRaw::buffered(); }
+  virtual auto get_traffic_in() -> size_t override;
+  virtual auto get_traffic_out() -> size_t override;
+
+  virtual void on_socket_input(Event *evt) override { Outbound::input(evt); }
+  virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
+  virtual void on_socket_close() override { release(); }
+
+  int m_domain;
+  int m_protocol;
+
+  friend class pjs::ObjectTemplate<OutboundRaw, Outbound>;
+};
 //
 // OutboundNetlink
 //
