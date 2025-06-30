@@ -1719,9 +1719,11 @@ struct hash<pjs::Value> {
     } else if (v.is_object()) {
       hash<pjs::Object*> h;
       return h(v.o());
-    } else {
+    } else if (v.is_number()) {
       hash<double> h;
       return h(v.n());
+    } else {
+      return 0;
     }
   }
 };
