@@ -774,114 +774,6 @@ auto OutboundUDP::get_traffic_out() -> size_t {
   return n;
 }
 
-//
-// OutboundDatagram
-//
-
-OutboundDatagram::OutboundDatagram(EventTarget::Input *output, const Outbound::Options &options)
-  : pjs::ObjectTemplate<OutboundDatagram, Outbound>(output, options)
-  , SocketDatagram(false, Outbound::m_options)
-{
-  SocketDatagram::socket().open(asio::generic::datagram_protocol(options.domain, options.protocol));
-}
-
-OutboundDatagram::~OutboundDatagram() {
-  Outbound::collect();
-}
-
-void OutboundDatagram::bind(const void *address, size_t size) {
-  asio::generic::datagram_protocol::endpoint ep(address, size);
-  SocketDatagram::socket().bind(ep);
-}
-
-void OutboundDatagram::connect(const void *address, size_t size) {
-  std::error_code ec;
-  asio::generic::datagram_protocol::endpoint ep(address, size);
-  SocketDatagram::socket().connect(ep, ec);
-  if (ec) throw std::runtime_error(ec.message().c_str());
-  SocketDatagram::open();
-  state(State::connected);
-}
-
-void OutboundDatagram::send(Event *evt) {
-  SocketDatagram::output(evt);
-}
-
-void OutboundDatagram::close() {
-  SocketDatagram::close();
-  state(Outbound::State::closed);
-}
-
-auto OutboundDatagram::wrap_socket() -> Socket* {
-  return Socket::make(SocketDatagram::socket().native_handle());
-}
-
-auto OutboundDatagram::get_traffic_in() -> size_t {
-  auto n = SocketDatagram::m_traffic_read;
-  SocketDatagram::m_traffic_read = 0;
-  return n;
-}
-
-auto OutboundDatagram::get_traffic_out() -> size_t {
-  auto n = SocketDatagram::m_traffic_write;
-  SocketDatagram::m_traffic_write = 0;
-  return n;
-}
-
-//
-// OutboundRaw
-//
-
-OutboundRaw::OutboundRaw(EventTarget::Input *output, const Outbound::Options &options)
-  : pjs::ObjectTemplate<OutboundRaw, Outbound>(output, options)
-  , SocketRaw(false, Outbound::m_options)
-{
-  SocketRaw::socket().open(asio::generic::raw_protocol(options.domain, options.protocol));
-}
-
-OutboundRaw::~OutboundRaw() {
-  Outbound::collect();
-}
-
-void OutboundRaw::bind(const void *address, size_t size) {
-  asio::generic::raw_protocol::endpoint ep(address, size);
-  SocketRaw::socket().bind(ep);
-}
-
-void OutboundRaw::connect(const void *address, size_t size) {
-  std::error_code ec;
-  asio::generic::raw_protocol::endpoint ep(address, size);
-  SocketRaw::socket().connect(ep, ec);
-  if (ec) throw std::runtime_error(ec.message().c_str());
-  SocketRaw::open();
-  state(State::connected);
-}
-
-void OutboundRaw::send(Event *evt) {
-  SocketRaw::output(evt);
-}
-
-void OutboundRaw::close() {
-  SocketRaw::close();
-  state(Outbound::State::closed);
-}
-
-auto OutboundRaw::wrap_socket() -> Socket* {
-  return Socket::make(SocketRaw::socket().native_handle());
-}
-
-auto OutboundRaw::get_traffic_in() -> size_t {
-  auto n = SocketRaw::m_traffic_read;
-  SocketRaw::m_traffic_read = 0;
-  return n;
-}
-
-auto OutboundRaw::get_traffic_out() -> size_t {
-  auto n = SocketRaw::m_traffic_write;
-  SocketRaw::m_traffic_write = 0;
-  return n;
-}
-
 } // namespace pipy
 
 namespace pjs {
@@ -926,6 +818,10 @@ template<> void ClassDef<OutboundTCP>::init() {
 }
 
 template<> void ClassDef<OutboundUDP>::init() {
+  super<Outbound>();
+}
+
+template<> void ClassDef<OutboundStream>::init() {
   super<Outbound>();
 }
 

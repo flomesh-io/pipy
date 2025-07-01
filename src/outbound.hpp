@@ -120,9 +120,9 @@ public:
   virtual void close() = 0;
 
   virtual auto wrap_socket() -> Socket* = 0;
-  virtual auto get_buffered() const -> size_t = 0;
-  virtual auto get_traffic_in() ->size_t = 0;
-  virtual auto get_traffic_out() ->size_t = 0;
+  virtual auto get_buffered() const -> size_t { return 0; }
+  virtual auto get_traffic_in() ->size_t { return 0; }
+  virtual auto get_traffic_out() ->size_t { return 0; }
 
   void close(StreamEnd *eos);
 
@@ -260,70 +260,66 @@ private:
 };
 
 //
-// OutboundDatagram
+// OutboundGeneric
 //
 
-class OutboundDatagram :
-  public pjs::ObjectTemplate<OutboundDatagram, Outbound>,
-  public SocketDatagram
+template<class SocketT, class ProtocolT>
+class OutboundGeneric :
+  public pjs::ObjectTemplate<OutboundGeneric<SocketT, ProtocolT>, Outbound>,
+  public SocketT
 {
 public:
   virtual void bind(const std::string &address) override {}
-  virtual void bind(const void *address, size_t size) override;
   virtual void connect(const std::string &address) override {}
   virtual void connect(IP *ip, int port) override {}
-  virtual void connect(const void *address, size_t size) override;
-  virtual void send(Event *evt) override;
-  virtual void close() override;
+
+  virtual void bind(const void *address, size_t size) override {
+    typename ProtocolT::endpoint ep(address, size);
+    SocketT::socket().bind(ep);
+  }
+
+  virtual void connect(const void *address, size_t size) override {
+    std::error_code ec;
+    typename ProtocolT::endpoint ep(address, size);
+    SocketT::socket().connect(ep, ec);
+    if (ec) throw std::runtime_error(ec.message().c_str());
+    SocketT::open();
+    Outbound::state(Outbound::State::connected);
+  }
+
+  virtual void send(Event *evt) override {
+    SocketT::output(evt);
+  }
+
+  virtual void close() override {
+    SocketT::close();
+    Outbound::state(Outbound::State::closed);
+  }
 
 private:
-  OutboundDatagram(EventTarget::Input *output, const Outbound::Options &options);
-  ~OutboundDatagram();
+  OutboundGeneric(EventTarget::Input *output, const Outbound::Options &options)
+    : pjs::ObjectTemplate<OutboundGeneric<SocketT, ProtocolT>, Outbound>(output, options)
+    , SocketT(false, Outbound::m_options)
+  {
+    SocketT::socket().open(ProtocolT(options.domain, options.protocol));
+  }
 
-  virtual auto wrap_socket() -> Socket* override;
-  virtual auto get_buffered() const -> size_t override { return SocketDatagram::buffered(); }
-  virtual auto get_traffic_in() -> size_t override;
-  virtual auto get_traffic_out() -> size_t override;
+  ~OutboundGeneric() { Outbound::collect(); }
 
-  virtual void on_socket_input(Event *evt) override { Outbound::input(evt); }
-  virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
-  virtual void on_socket_close() override { release(); }
-
-  friend class pjs::ObjectTemplate<OutboundDatagram, Outbound>;
-};
-
-//
-// OutboundRaw
-//
-
-class OutboundRaw :
-  public pjs::ObjectTemplate<OutboundRaw, Outbound>,
-  public SocketRaw
-{
-public:
-  virtual void bind(const std::string &address) override {}
-  virtual void bind(const void *address, size_t size) override;
-  virtual void connect(const std::string &address) override {}
-  virtual void connect(IP *ip, int port) override {}
-  virtual void connect(const void *address, size_t size) override;
-  virtual void send(Event *evt) override;
-  virtual void close() override;
-
-private:
-  OutboundRaw(EventTarget::Input *output, const Outbound::Options &options);
-  ~OutboundRaw();
-
-  virtual auto wrap_socket() -> Socket* override;
-  virtual auto get_buffered() const -> size_t override { return OutboundRaw::buffered(); }
-  virtual auto get_traffic_in() -> size_t override;
-  virtual auto get_traffic_out() -> size_t override;
+  virtual auto wrap_socket() -> Socket* override {
+    return Socket::make(SocketT::socket().native_handle());
+  }
 
   virtual void on_socket_input(Event *evt) override { Outbound::input(evt); }
-  virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
-  virtual void on_socket_close() override { release(); }
+  virtual void on_socket_describe(char *buf, size_t len) override { Outbound::describe(buf, len); }
+  virtual void on_socket_close() override { Outbound::release(); }
 
-  friend class pjs::ObjectTemplate<OutboundRaw, Outbound>;
+  friend class pjs::ObjectTemplate<OutboundGeneric<SocketT, ProtocolT>, Outbound>;
 };
+
+typedef OutboundGeneric<SocketStream, asio::generic::stream_protocol> OutboundStream;
+typedef OutboundGeneric<SocketDatagram, asio::generic::datagram_protocol> OutboundDatagram;
+typedef OutboundGeneric<SocketRaw, asio::generic::raw_protocol> OutboundRaw;
 
 } // namespace pipy
 

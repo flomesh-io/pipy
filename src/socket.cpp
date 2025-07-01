@@ -700,6 +700,169 @@ void SocketUDP::Peer::close() {
 }
 
 //
+// SocketStream
+//
+
+Data::Producer SocketStream::s_dp("Stream Socket");
+
+void SocketStream::open() {
+  m_endpoint = m_socket.local_endpoint();
+  m_opened = true;
+
+  if (!m_buffer.empty()) {
+    m_buffer.flush(
+      [this](Event *evt) {
+        if (auto data = evt->as<Data>()) {
+          send(data);
+        }
+      }
+    );
+  }
+
+  receive();
+}
+
+void SocketStream::close() {
+  m_closing = true;
+  close_socket();
+  close_async();
+}
+
+void SocketStream::output(Event *evt) {
+  if (auto data = evt->as<Data>()) {
+    if (!data->empty()) {
+      if (m_opened) {
+        send(data);
+      } else {
+        m_buffer.push(data);
+      }
+    }
+  } else if (evt->is<StreamEnd>()) {
+    if (m_sending_count > 0) {
+      m_ended = true;
+    } else {
+      on_socket_input(StreamEnd::make());
+      close();
+    }
+  }
+}
+
+void SocketStream::receive() {
+  if (m_closing) return;
+  if (m_receiving) return;
+  if (m_paused) return;
+
+  auto *buf = Data::make(RECEIVE_BUFFER_SIZE, &s_dp);
+  buf->retain();
+
+  m_socket.async_receive(
+    DataChunks(buf->chunks()),
+    ReceiveHandler(this, buf)
+  );
+
+  m_receiving = true;
+}
+
+void SocketStream::send(Data *data) {
+  if (m_closing) return;
+
+  data->retain();
+  m_sending_size += data->size();
+  m_sending_count++;
+
+  m_socket.async_send(
+    DataChunks(data->chunks()),
+    SendHandler(this, data)
+  );
+}
+
+void SocketStream::close_socket() {
+  if (m_socket.is_open()) {
+    std::error_code ec;
+    m_socket.close(ec);
+    if (ec) {
+      log_warn("error closing socket", ec);
+    } else {
+      log_debug("socket closed");
+    }
+  }
+}
+
+void SocketStream::close_async() {
+  if (m_closed) return;
+  if (m_receiving) return;
+  if (m_sending_count > 0) return;
+  if (m_closing) {
+    m_closed = true;
+    if (m_opened) on_socket_close();
+  }
+}
+
+void SocketStream::on_tap_open() {
+  m_paused = false;
+  receive();
+}
+
+void SocketStream::on_tap_close() {
+  m_paused = true;
+}
+
+void SocketStream::on_receive(Data *data, const std::error_code &ec, std::size_t n) {
+  InputContext ic(this);
+
+  m_receiving = false;
+
+  if (ec != asio::error::operation_aborted && !m_closing) {
+    if (n > 0) {
+      data->pop(data->size() - n);
+      auto size = data->size();
+      m_traffic_read += size;
+      on_socket_input(data);
+    }
+
+    if (ec) {
+      log_warn("error receiving from socket", ec);
+      m_closing = true;
+      close_socket();
+
+    } else {
+      receive();
+    }
+  }
+
+  data->release();
+  close_async();
+}
+
+void SocketStream::on_send(Data *data, const std::error_code &ec, std::size_t n) {
+  m_sending_count--;
+
+  if (ec != asio::error::operation_aborted && !m_closing) {
+    m_sending_size -= data->size();
+    m_traffic_write += n;
+
+    auto limit = m_options.congestion_limit;
+    if (limit > 0 && m_sending_size < limit) {
+      m_congestion.end();
+    }
+
+    if (ec) {
+      log_warn("error writing to socket", ec);
+      m_closing = true;
+      close_socket();
+    }
+  }
+
+  if (!m_sending_count && m_ended) {
+    InputContext ic(this);
+    on_socket_input(StreamEnd::make());
+  }
+
+  data->release();
+  close_async();
+}
+
+//
 // SocketDatagram
 //
 

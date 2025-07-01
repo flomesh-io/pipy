@@ -219,6 +219,8 @@ void Connect::process(Event *evt) {
     if (options.domain > 0) {
       switch (options.type) {
         case Outbound::Type::STREAM:
+          m_outbound = OutboundStream::make(Filter::output(), options);
+          break;
         case Outbound::Type::DATAGRAM:
           m_outbound = OutboundDatagram::make(Filter::output(), options);
           break;
