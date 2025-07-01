@@ -45,19 +45,24 @@ Connect::Options::Options(pjs::Object *options) {
     Value(options, "protocol")
       .get(protocol)
       .check_nullable();
+    Value(options, "bind")
+      .get(bind_d)
+      .get(bind_f)
+      .check_nullable();
   } else {
     Value(options, "protocol")
       .get_enum(protocol_inet)
+      .check_nullable();
+    Value(options, "bind")
+      .get(bind)
+      .get(bind_f)
       .check_nullable();
   }
 
   Value(options, "netlinkFamily")
     .get(netlink_family)
     .check_nullable();
-  Value(options, "bind")
-    .get(bind)
-    .get(bind_f)
-    .check_nullable();
+
   Value(options, "onState")
     .get(on_state_f)
     .check_nullable();
@@ -152,12 +157,16 @@ void Connect::process(Event *evt) {
     if (!eval(m_target, target)) return;
 
     IPEndpoint *ep = nullptr;
+    Data *addr_data = nullptr;
+
     if (target.is<IPEndpoint>()) {
       ep = target.as<IPEndpoint>();
       if (!ep->ip) {
         Filter::error("invalid IP address");
         return;
       }
+    } else if (target.is<Data>()) {
+      addr_data = target.as<Data>();
     } else if (!target.is_string()) {
       Filter::error("invalid target");
       return;
@@ -182,15 +191,20 @@ void Connect::process(Event *evt) {
     auto &options = m_options_f ? eval_options : m_options;
 
     pjs::Ref<pjs::Str> bind(options.bind);
+    pjs::Ref<Data> bind_data(options.bind_d);
+
     if (options.bind_f) {
       pjs::Value ret;
       if (!Filter::eval(options.bind_f, ret)) return;
       if (!ret.is_undefined()) {
-        if (!ret.is_string()) {
+        if (ret.is_string()) {
+          bind = ret.s();
+        } else if (ret.is<Data>()) {
+          bind_data = ret.as<Data>();
+        } else {
           Filter::error("invalid bind address");
           return;
         }
-        bind = ret.s();
       }
     }
 
@@ -238,12 +252,20 @@ void Connect::process(Event *evt) {
     try {
       if (bind) {
         m_outbound->bind(bind->str());
+      } else if (bind_data) {
+        pjs::vl_array<uint8_t, 1000> addr_buf(bind_data->size());
+        bind_data->to_bytes(addr_buf.data());
+        m_outbound->bind(addr_buf, bind_data->size());
       } else if (options.protocol_inet == Outbound::Protocol::NETLINK) {
         m_outbound->bind("");
       }
 
       if (ep) {
         m_outbound->connect(ep->ip, ep->port);
+      } else if (addr_data) {
+        pjs::vl_array<uint8_t, 1000> addr_buf(addr_data->size());
+        addr_data->to_bytes(addr_buf.data());
+        m_outbound->connect(addr_buf, addr_data->size());
       } else {
         m_outbound->connect(target.s()->str());
       }

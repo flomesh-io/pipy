@@ -40,6 +40,7 @@ class Connect : public Filter {
 public:
   struct Options : public pipy::Options, public Outbound::Options {
     pjs::Ref<pjs::Str> bind;
+    pjs::Ref<Data> bind_d;
     pjs::Ref<pjs::Function> bind_f;
     pjs::Ref<pjs::Function> on_state_f;
     Options() {}
