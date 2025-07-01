@@ -243,9 +243,6 @@ void Connect::process(Event *evt) {
         case Outbound::Protocol::UDP:
           m_outbound = OutboundUDP::make(Filter::output(), options);
           break;
-        case Outbound::Protocol::NETLINK:
-          m_outbound = OutboundNetlink::make(options.netlink_family, Filter::output(), options);
-          break;
       }
     }
 
@@ -256,8 +253,6 @@ void Connect::process(Event *evt) {
         pjs::vl_array<uint8_t, 1000> addr_buf(bind_data->size());
         bind_data->to_bytes(addr_buf.data());
         m_outbound->bind(addr_buf, bind_data->size());
-      } else if (options.protocol_inet == Outbound::Protocol::NETLINK) {
-        m_outbound->bind("");
       }
 
       if (ep) {

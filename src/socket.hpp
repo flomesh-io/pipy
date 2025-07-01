@@ -333,7 +333,7 @@ protected:
 
   ~SocketRaw() {}
 
-  auto socket() -> asio::generic::datagram_protocol::socket& { return m_socket; }
+  auto socket() -> asio::generic::raw_protocol::socket& { return m_socket; }
   auto buffered() const -> size_t { return m_sending_size; }
 
   void open();
@@ -341,9 +341,9 @@ protected:
   void output(Event *evt);
 
 private:
-  asio::generic::datagram_protocol::socket m_socket;
-  asio::generic::datagram_protocol::endpoint m_endpoint;
-  asio::generic::datagram_protocol::endpoint m_from;
+  asio::generic::raw_protocol::socket m_socket;
+  asio::generic::raw_protocol::endpoint m_endpoint;
+  asio::generic::raw_protocol::endpoint m_from;
   EventBuffer m_buffer;
   Congestion m_congestion;
   int m_sending_size = 0;

@@ -82,7 +82,6 @@ auto Outbound::protocol_name() const -> pjs::Str* {
   switch (m_options.protocol_inet) {
     case Protocol::TCP: return s_TCP;
     case Protocol::UDP: return s_UDP;
-    case Protocol::NETLINK: return s_Netlink;
   }
   return nullptr;
 }
@@ -782,9 +781,8 @@ auto OutboundUDP::get_traffic_out() -> size_t {
 OutboundDatagram::OutboundDatagram(EventTarget::Input *output, const Outbound::Options &options)
   : pjs::ObjectTemplate<OutboundDatagram, Outbound>(output, options)
   , SocketDatagram(false, Outbound::m_options)
-  , m_domain(options.domain)
-  , m_protocol(options.protocol)
 {
+  SocketDatagram::socket().open(asio::generic::datagram_protocol(options.domain, options.protocol));
 }
 
 OutboundDatagram::~OutboundDatagram() {
@@ -793,16 +791,13 @@ OutboundDatagram::~OutboundDatagram() {
 
 void OutboundDatagram::bind(const void *address, size_t size) {
   asio::generic::datagram_protocol::endpoint ep(address, size);
-  auto &s = SocketDatagram::socket();
-  s.open(asio::generic::datagram_protocol(m_domain, m_protocol));
-  s.bind(ep);
+  SocketDatagram::socket().bind(ep);
 }
 
 void OutboundDatagram::connect(const void *address, size_t size) {
   std::error_code ec;
   asio::generic::datagram_protocol::endpoint ep(address, size);
-  auto &s = SocketDatagram::socket();
-  s.connect(ep, ec);
+  SocketDatagram::socket().connect(ep, ec);
   if (ec) throw std::runtime_error(ec.message().c_str());
   SocketDatagram::open();
   state(State::connected);
@@ -840,9 +835,8 @@ auto OutboundDatagram::get_traffic_out() -> size_t {
 OutboundRaw::OutboundRaw(EventTarget::Input *output, const Outbound::Options &options)
   : pjs::ObjectTemplate<OutboundRaw, Outbound>(output, options)
   , SocketRaw(false, Outbound::m_options)
-  , m_domain(options.domain)
-  , m_protocol(options.protocol)
 {
+  SocketRaw::socket().open(asio::generic::raw_protocol(options.domain, options.protocol));
 }
 
 OutboundRaw::~OutboundRaw() {
@@ -850,17 +844,14 @@ OutboundRaw::~OutboundRaw() {
 }
 
 void OutboundRaw::bind(const void *address, size_t size) {
-  asio::generic::datagram_protocol::endpoint ep(address, size);
-  auto &s = SocketRaw::socket();
-  s.open(asio::generic::datagram_protocol(m_domain, m_protocol));
-  s.bind(ep);
+  asio::generic::raw_protocol::endpoint ep(address, size);
+  SocketRaw::socket().bind(ep);
 }
 
 void OutboundRaw::connect(const void *address, size_t size) {
   std::error_code ec;
-  asio::generic::datagram_protocol::endpoint ep(address, size);
-  auto &s = SocketRaw::socket();
-  s.connect(ep, ec);
+  asio::generic::raw_protocol::endpoint ep(address, size);
+  SocketRaw::socket().connect(ep, ec);
   if (ec) throw std::runtime_error(ec.message().c_str());
   SocketRaw::open();
   state(State::connected);
@@ -891,97 +882,6 @@ auto OutboundRaw::get_traffic_out() -> size_t {
   return n;
 }
 
-//
-// OutboundNetlink
-//
-
-OutboundNetlink::OutboundNetlink(int family, EventTarget::Input *output, const Outbound::Options &options)
-  : pjs::ObjectTemplate<OutboundNetlink, Outbound>(output, options)
-  , SocketNetlink(false, Outbound::m_options)
-  , m_family(family)
-{
-}
-
-OutboundNetlink::~OutboundNetlink() {
-  Outbound::collect();
-}
-
-void OutboundNetlink::bind(const std::string &address) {
-#ifdef __linux__
-  int pid = 0, groups = 0;
-  to_nl_addr(address, pid, groups);
-  auto &s = SocketNetlink::socket();
-  sockaddr_nl addr;
-  std::memset(&addr, 0, sizeof(addr));
-  addr.nl_family = AF_NETLINK;
-  addr.nl_pid = pid;
-  addr.nl_groups = groups;
-  asio::generic::raw_protocol::endpoint ep(&addr, sizeof(addr));
-  s.open(asio::generic::raw_protocol(AF_NETLINK, m_family));
-  s.bind(ep);
-  m_local_addr = "localhost";
-  m_local_port = 0;
-  m_local_addr_str = nullptr;
-#else // !__linux__
-  throw std::runtime_error("netlink not supported on this platform");
-#endif // __linux__
-}
-
-void OutboundNetlink::connect(const std::string &address) {
-  int pid = 0, groups = 0;
-  to_nl_addr(address, pid, groups);
-  pjs::Str *keys[2];
-  keys[0] = protocol_name();
-  keys[1] = Outbound::address();
-  m_metric_traffic_out = Outbound::s_metric_traffic_out->with_labels(keys, 2);
-  m_metric_traffic_in = Outbound::s_metric_traffic_in->with_labels(keys, 2);
-
-  retain();
-  SocketNetlink::open();
-  state(State::connected);
-}
-
-void OutboundNetlink::send(Event *evt) {
-  SocketNetlink::output(evt);
-}
-
-void OutboundNetlink::close() {
-  SocketNetlink::close();
-  state(Outbound::State::closed);
-}
-
-auto OutboundNetlink::wrap_socket() -> Socket* {
-  return Socket::make(SocketNetlink::socket().native_handle());
-}
-
-auto OutboundNetlink::get_traffic_in() -> size_t {
-  auto n = SocketNetlink::m_traffic_read;
-  SocketNetlink::m_traffic_read = 0;
-  return n;
-}
-
-auto OutboundNetlink::get_traffic_out() -> size_t {
-  auto n = SocketNetlink::m_traffic_write;
-  SocketNetlink::m_traffic_write = 0;
-  return n;
-}
-
-void OutboundNetlink::to_nl_addr(const std::string &address, int &pid, int &groups) {
-  utils::get_prop_list(
-    address, ';', '=',
-    [&](const std::string &k, const std::string &v) {
-      if (k == "pid") {
-        pid = std::atoi(v.c_str());
-      } else if (k == "groups") {
-        groups = std::atoi(v.c_str());
-      } else {
-        std::string msg("invalid address field for Netlink: ");
-        throw std::runtime_error(msg + k);
-      }
-    }
-  );
-}
-
 } // namespace pipy
 
 namespace pjs {
@@ -997,7 +897,6 @@ template<> void EnumDef<Outbound::Type>::init() {
 template<> void EnumDef<Outbound::Protocol>::init() {
   define(Outbound::Protocol::TCP, "tcp");
   define(Outbound::Protocol::UDP, "udp");
-  define(Outbound::Protocol::NETLINK, "netlink");
 }
 
 template<> void EnumDef<Outbound::State>::init() {
@@ -1035,10 +934,6 @@ template<> void ClassDef<OutboundDatagram>::init() {
 }
 
 template<> void ClassDef<OutboundRaw>::init() {
-  super<Outbound>();
-}
-
-template<> void ClassDef<OutboundNetlink>::init() {
   super<Outbound>();
 }
 

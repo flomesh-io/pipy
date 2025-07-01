@@ -1,3 +1,11 @@
+// struct sockaddr_nl (linux/netlink.h)
+var sockaddr_nl = new CStruct({
+  family: 'uint16',
+  pad: 'uint16',
+  pid: 'uint32',
+  groups: 'uint32',
+})
+
 // struct rtattr (linux/rtnetlink.h)
 var rtattr = new CStruct({
   len: 'uint16',
@@ -180,21 +188,45 @@ export default function(cb) {
   var query = pipeline($=>$
     .onStart(msg => msg)
     .encodeNetlink()
-    .connect('pid=0;groups=0', {
-      protocol: 'netlink',
-      netlinkFamily: 0,
-    })
+    .connect(
+      sockaddr_nl.encode({
+        family: 16, // AF_NETLINK
+        pid: 0,
+        groups: 0,
+      }), {
+        domain: 16, // AF_NETLINK
+	type: 'raw',
+	protocol: 0,
+	bind: sockaddr_nl.encode({
+          family: 16, // AF_NETLINK
+          pid: 0,
+          groups: 0,
+	}),
+      }
+    )
     .decodeNetlink()
     .handleMessage(handle)
   )
 
   var watch = pipeline($=>$
     .onStart(new Data)
-    .connect('pid=0;groups=0', {
-      protocol: 'netlink',
-      netlinkFamily: 0,
-      bind: `pid=0;groups=${1|4|0x40|0x400}`, // groups = RTMGRP_LINK | RTMGRP_NEIGH | RTMGRP_IPV4_ROUTE | RTMGRP_IPV6_ROUTE
-    })
+    .connect(
+      sockaddr_nl.encode({
+        family: 16, // AF_NETLINK
+        pid: 0,
+        groups: 0,
+      }), {
+        domain: 16, // AF_NETLINK
+	type: 'raw',
+	protocol: 0,
+	bind: sockaddr_nl.encode({
+          family: 16, // AF_NETLINK
+          pid: 0,
+          groups: 1|4|0x40|0x400, // RTMGRP_LINK | RTMGRP_NEIGH | RTMGRP_IPV4_ROUTE | RTMGRP_IPV6_ROUTE
+
+	}),
+      }
+    )
     .decodeNetlink()
     .handleMessage(handle)
   )

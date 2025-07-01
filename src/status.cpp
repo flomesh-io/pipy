@@ -380,10 +380,6 @@ void Status::update_local() {
         protocol = Protocol::UDP;
         m = &outbound_udp;
         break;
-      case Outbound::Protocol::NETLINK:
-        protocol = Protocol::NETLINK;
-        m = &outbound_netlink;
-        break;
     }
     if (m) {
       auto port = outbound->port();

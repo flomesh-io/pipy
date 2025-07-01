@@ -59,7 +59,6 @@ public:
   enum class Protocol {
     TCP,
     UDP,
-    NETLINK,
   };
 
   enum class State {
@@ -290,9 +289,6 @@ private:
   virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
   virtual void on_socket_close() override { release(); }
 
-  int m_domain;
-  int m_protocol;
-
   friend class pjs::ObjectTemplate<OutboundDatagram, Outbound>;
 };
 
@@ -326,44 +322,7 @@ private:
   virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
   virtual void on_socket_close() override { release(); }
 
-  int m_domain;
-  int m_protocol;
-
   friend class pjs::ObjectTemplate<OutboundRaw, Outbound>;
-};
-//
-// OutboundNetlink
-//
-
-class OutboundNetlink :
-  public pjs::ObjectTemplate<OutboundNetlink, Outbound>,
-  public SocketNetlink
-{
-public:
-  virtual void bind(const std::string &address) override;
-  virtual void connect(const std::string &address) override;
-  virtual void connect(IP *ip, int port) override {}
-  virtual void send(Event *evt) override;
-  virtual void close() override;
-
-private:
-  OutboundNetlink(int family, EventTarget::Input *output, const Outbound::Options &options);
-  ~OutboundNetlink();
-
-  virtual auto wrap_socket() -> Socket* override;
-  virtual auto get_buffered() const -> size_t override { return SocketNetlink::buffered(); }
-  virtual auto get_traffic_in() -> size_t override;
-  virtual auto get_traffic_out() -> size_t override;
-
-  virtual void on_socket_input(Event *evt) override { Outbound::input(evt); }
-  virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
-  virtual void on_socket_close() override { release(); }
-
-  int m_family;
-
-  static void to_nl_addr(const std::string &address, int &pid, int &groups);
-
-  friend class pjs::ObjectTemplate<OutboundNetlink, Outbound>;
 };
 
 } // namespace pipy
