@@ -111,6 +111,10 @@ auto Outbound::address() -> pjs::Str* {
   return m_address;
 }
 
+void Outbound::open() {
+  state(State::open);
+}
+
 void Outbound::close(StreamEnd *eos) {
   InputContext ic;
   retain();

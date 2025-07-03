@@ -140,73 +140,36 @@ void Connect::reset() {
     m_outbound->close();
     m_outbound = nullptr;
   }
+  m_has_error = false;
   m_end_input = false;
 }
 
 void Connect::process(Event *evt) {
-  if (m_end_input) return;
+  if (m_has_error || m_end_input) return;
 
   if (!m_outbound) {
     if (evt->is<StreamEnd>()) {
       Filter::output(evt);
-      m_end_input = true;
-      return;
-    }
-
-    pjs::Value target;
-    if (!eval(m_target, target)) return;
-
-    IPEndpoint *ep = nullptr;
-    Data *addr_data = nullptr;
-
-    if (target.is<IPEndpoint>()) {
-      ep = target.as<IPEndpoint>();
-      if (!ep->ip) {
-        Filter::error("invalid IP address");
-        return;
-      }
-    } else if (target.is<Data>()) {
-      addr_data = target.as<Data>();
-    } else if (!target.is_string()) {
-      Filter::error("invalid target");
-      return;
+      return end();
     }
 
     Options eval_options;
     if (auto f = m_options_f.get()) {
       pjs::Value ret;
-      if (!Filter::eval(f, ret)) return;
+      if (!Filter::eval(f, ret)) return error();
       if (!ret.is_object()) {
         Filter::error("invalid options");
-        return;
+        return error();
       }
       try {
         eval_options = Options(ret.o());
       } catch (std::runtime_error &err) {
         Filter::error(err.what());
-        return;
+        return error();
       }
     }
 
     auto &options = m_options_f ? eval_options : m_options;
-
-    pjs::Ref<pjs::Str> bind(options.bind);
-    pjs::Ref<Data> bind_data(options.bind_d);
-
-    if (options.bind_f) {
-      pjs::Value ret;
-      if (!Filter::eval(options.bind_f, ret)) return;
-      if (!ret.is_undefined()) {
-        if (ret.is_string()) {
-          bind = ret.s();
-        } else if (ret.is<Data>()) {
-          bind_data = ret.as<Data>();
-        } else {
-          Filter::error("invalid bind address");
-          return;
-        }
-      }
-    }
 
     if (options.on_state_f) {
       pjs::Ref<pjs::Function> f = options.on_state_f;
@@ -218,33 +181,44 @@ void Connect::process(Event *evt) {
 
     if (options.domain > 0) {
       switch (options.type) {
-        case Outbound::Type::STREAM:
-          m_outbound = OutboundStream::make(Filter::output(), options);
-          break;
-        case Outbound::Type::DATAGRAM:
-          m_outbound = OutboundDatagram::make(Filter::output(), options);
-          break;
-        case Outbound::Type::RAW:
-          m_outbound = OutboundRaw::make(Filter::output(), options);
-          break;
+      case Outbound::Type::STREAM:
+        m_outbound = OutboundStream::make(Filter::output(), options);
+        break;
+      case Outbound::Type::DATAGRAM:
+        m_outbound = OutboundDatagram::make(Filter::output(), options);
+        break;
+      case Outbound::Type::RAW:
+        m_outbound = OutboundRaw::make(Filter::output(), options);
+        break;
       }
+      if (m_outbound) m_outbound->open();
 
     } else {
-      auto protocol = options.protocol_inet;
-      if (ep) {
-        switch (ep->protocol.get()) {
-          case IPEndpoint::Protocol::tcp: protocol = Outbound::Protocol::TCP; break;
-          case IPEndpoint::Protocol::udp: protocol = Outbound::Protocol::UDP; break;
-        }
+      switch (options.protocol_inet) {
+      case Outbound::Protocol::TCP:
+        m_outbound = OutboundTCP::make(Filter::output(), options);
+        break;
+      case Outbound::Protocol::UDP:
+        m_outbound = OutboundUDP::make(Filter::output(), options);
+        break;
       }
+    }
 
-      switch (protocol) {
-        case Outbound::Protocol::TCP:
-          m_outbound = OutboundTCP::make(Filter::output(), options);
-          break;
-        case Outbound::Protocol::UDP:
-          m_outbound = OutboundUDP::make(Filter::output(), options);
-          break;
+    pjs::Ref<pjs::Str> bind(options.bind);
+    pjs::Ref<Data> bind_data(options.bind_d);
+
+    if (options.bind_f) {
+      pjs::Value ret;
+      if (!Filter::eval(options.bind_f, ret)) return error();
+      if (!ret.is_undefined()) {
+        if (ret.is_string()) {
+          bind = ret.s();
+        } else if (ret.is<Data>()) {
+          bind_data = ret.as<Data>();
+        } else {
+          Filter::error("invalid bind address");
+          return error();
+        }
       }
     }
 
@@ -256,7 +230,33 @@ void Connect::process(Event *evt) {
         bind_data->to_bytes(addr_buf.data());
         m_outbound->bind(addr_buf, bind_data->size());
       }
+    } catch (std::runtime_error &e) {
+      Filter::error("%s", e.what());
+      return error();
+    }
 
+    IPEndpoint *ep = nullptr;
+    Data *addr_data = nullptr;
+
+    pjs::Value target;
+    if (!eval(m_target, target)) {
+      return error();
+    }
+
+    if (target.is<IPEndpoint>()) {
+      ep = target.as<IPEndpoint>();
+      if (!ep->ip) {
+        Filter::error("invalid IP address");
+        return error();
+      }
+    } else if (target.is<Data>()) {
+      addr_data = target.as<Data>();
+    } else if (!target.is_string()) {
+      Filter::error("invalid target");
+      return error();
+    }
+
+    try {
       if (ep) {
         m_outbound->connect(ep->ip, ep->port);
       } else if (addr_data) {
@@ -268,9 +268,8 @@ void Connect::process(Event *evt) {
       }
 
     } catch (std::runtime_error &e) {
-      m_outbound = nullptr;
       Filter::error("%s", e.what());
-      return;
+      return error();
     }
   }
 

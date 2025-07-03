@@ -112,10 +112,10 @@ public:
   auto connection_time() const -> double { return m_connection_time; }
 
   virtual void bind(const std::string &address) = 0;
-  virtual void bind(const void *address, size_t size) {};
+  virtual void bind(const void *address, size_t size) {}
   virtual void connect(const std::string &address) = 0;
   virtual void connect(IP *ip, int port) = 0;
-  virtual void connect(const void *address, size_t size) {};
+  virtual void connect(const void *address, size_t size) {}
   virtual void send(Event *evt) = 0;
   virtual void close() = 0;
 
@@ -124,6 +124,7 @@ public:
   virtual auto get_traffic_in() ->size_t { return 0; }
   virtual auto get_traffic_out() ->size_t { return 0; }
 
+  void open();
   void close(StreamEnd *eos);
 
 protected:
