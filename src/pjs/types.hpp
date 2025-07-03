@@ -2589,7 +2589,7 @@ private:
   bool get_arg(bool set_error, int i, int *n) {
     auto &a = arg(i);
     if (a.is_number()) {
-      *n = int(a.n());
+      *n = int64_t(a.n());
       return true;
     } else if (a.is<Number>() || a.is<Int>()) {
       *n = a.to_int32();
