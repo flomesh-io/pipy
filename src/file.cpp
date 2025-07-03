@@ -49,12 +49,7 @@ void File::open_read(size_t seek, const std::function<void(FileStream*)> &cb) {
 void File::open_read(size_t seek, size_t size, const std::function<void(FileStream*)> &cb) {
   if (m_f.valid() || m_closed) return;
 
-  m_open_signal = std::unique_ptr<Signal>(new Signal(
-    [=]() {
-      cb(m_stream);
-      release();
-    }
-  ));
+  m_open_signal = std::unique_ptr<Signal>(new Signal);
 
   retain();
 
@@ -73,14 +68,18 @@ void File::open_read(size_t seek, size_t size, const std::function<void(FileStre
             m_f = f;
             m_stream = FileStream::make(size, f, &s_dp);
             if (is_std) m_stream->set_no_close();
+            cb(m_stream);
             sig->fire();
+            release();
           }
         );
       } else {
         net->post(
           [=]() {
             Log::error("[file] cannot open file for reading: %s", m_path.c_str());
+            cb(nullptr);
             sig->fire();
+            release();
           }
         );
       }
@@ -91,20 +90,7 @@ void File::open_read(size_t seek, size_t size, const std::function<void(FileStre
 void File::open_write(bool append) {
   if (m_f.valid() || m_closed) return;
 
-  m_open_signal = std::unique_ptr<Signal>(new Signal(
-    [=]() {
-      if (m_stream) {
-        if (!m_buffer.empty()) {
-          m_stream->input()->input(Data::make(m_buffer));
-          m_buffer.clear();
-        }
-        if (m_closed) {
-          close();
-        }
-      }
-      release();
-    }
-  ));
+  m_open_signal = std::unique_ptr<Signal>(new Signal);
 
   retain();
 
@@ -140,7 +126,15 @@ void File::open_write(bool append) {
               m_writing = true;
               m_stream = FileStream::make(0, f, &s_dp);
               if (is_std) m_stream->set_no_close();
+              if (!m_buffer.empty()) {
+                m_stream->input()->input(Data::make(m_buffer));
+                m_buffer.clear();
+              }
+              if (m_closed) {
+                close();
+              }
               sig->fire();
+              release();
             }
           );
         } else {
@@ -148,6 +142,7 @@ void File::open_write(bool append) {
             [=]() {
               Log::error("[file] cannot open file for writing: %s", m_path.c_str());
               sig->fire();
+              release();
             }
           );
         }
