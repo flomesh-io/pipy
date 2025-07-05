@@ -33,6 +33,7 @@
 #include "api/http.hpp"
 #include "http2.hpp"
 #include "options.hpp"
+#include "timer.hpp"
 
 namespace pipy {
 namespace http {
@@ -333,7 +334,7 @@ protected:
 // Mux
 //
 
-class Mux : public Filter {
+class Mux : public Filter, public Ticker::Watcher {
 public:
   struct Options :
     public Muxer::Options,
@@ -342,6 +343,7 @@ public:
     size_t buffer_size = DATA_CHUNK_SIZE;
     size_t max_header_size = DATA_CHUNK_SIZE;
     int version = 1;
+    double timeout = 0;
     pjs::Ref<pjs::Str> version_s;
     pjs::Ref<pjs::Function> version_f;
     pjs::Ref<pjs::Function> ping_f;
@@ -485,6 +487,7 @@ private:
   pjs::Ref<HTTPSession> m_session;
   pjs::Ref<HTTPStream> m_stream;
   Options m_options;
+  double m_start_time = 0;
   bool m_has_error = false;
 
   virtual auto clone() -> Filter* override;
@@ -492,6 +495,7 @@ private:
   virtual void shutdown() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
+  virtual void on_tick(double tick) override;
 };
 
 //
