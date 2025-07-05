@@ -323,7 +323,11 @@ void PipelineDesigner::handle_body(pjs::Function *callback, pjs::Object *options
 }
 
 void PipelineDesigner::handle_message(pjs::Function *callback, pjs::Object *options) {
-  append_filter(new OnMessage(callback, options));
+  append_filter(new OnMessage(callback, false, options));
+}
+
+void PipelineDesigner::handle_message_one(pjs::Function *callback, pjs::Object *options) {
+  append_filter(new OnMessage(callback, true, options));
 }
 
 void PipelineDesigner::handle_start(pjs::Function *callback) {
@@ -379,7 +383,11 @@ void PipelineDesigner::replace_body(pjs::Object *replacement, pjs::Object *optio
 }
 
 void PipelineDesigner::replace_message(pjs::Object *replacement, pjs::Object *options) {
-  append_filter(new ReplaceMessage(replacement, options));
+  append_filter(new ReplaceMessage(replacement, false, options));
+}
+
+void PipelineDesigner::replace_message_one(pjs::Object *replacement, pjs::Object *options) {
+  append_filter(new ReplaceMessage(replacement, true, options));
 }
 
 void PipelineDesigner::replace_start(pjs::Object *replacement) {
@@ -1006,6 +1014,14 @@ template<> void ClassDef<PipelineDesigner>::init() {
     obj->handle(Event::Type::MessageStart, handler);
   });
 
+  // PipelineDesigner.handleOneMessage
+  filter("handleOneMessage", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &handler, &options)) return;
+    obj->handle_message_one(handler, options);
+  });
+
   // PipelineDesigner.handleStreamEnd
   filter("handleStreamEnd", [](Context &ctx, PipelineDesigner *obj) {
     Function *handler;
@@ -1206,6 +1222,14 @@ template<> void ClassDef<PipelineDesigner>::init() {
     Object *replacement = nullptr;
     if (!ctx.arguments(0, &replacement)) return;
     obj->replace(Event::Type::MessageStart, replacement);
+  });
+
+  // PipelineDesigner.replaceOneMessage
+  filter("replaceOneMessage", [](Context &ctx, PipelineDesigner *obj) {
+    Object *replacement = nullptr;
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &replacement, &options)) return;
+    obj->replace_message_one(replacement, options);
   });
 
   // PipelineDesigner.replaceStreamEnd

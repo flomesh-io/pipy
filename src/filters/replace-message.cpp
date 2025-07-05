@@ -32,15 +32,17 @@ namespace pipy {
 // ReplaceMessage
 //
 
-ReplaceMessage::ReplaceMessage(pjs::Object *replacement, const DataBuffer::Options &options)
+ReplaceMessage::ReplaceMessage(pjs::Object *replacement, bool one, const DataBuffer::Options &options)
   : Replace(replacement)
   , m_body_buffer(options, Filter::buffer_stats())
+  , m_one(one)
 {
 }
 
 ReplaceMessage::ReplaceMessage(const ReplaceMessage &r)
   : Replace(r)
   , m_body_buffer(r.m_body_buffer)
+  , m_one(r.m_one)
 {
 }
 
@@ -50,7 +52,7 @@ ReplaceMessage::~ReplaceMessage()
 
 void ReplaceMessage::dump(Dump &d) {
   Filter::dump(d);
-  d.name = "replaceMessage";
+  d.name = m_one ? "replaceOneMessage" : "replaceMessage";
 }
 
 auto ReplaceMessage::clone() -> Filter* {
@@ -61,16 +63,25 @@ void ReplaceMessage::reset() {
   Replace::reset();
   m_start = nullptr;
   m_body_buffer.clear();
+  m_ended = false;
 }
 
 void ReplaceMessage::handle(Event *evt) {
   if (!m_start) {
     if (auto start = evt->as<MessageStart>()) {
-      m_start = start;
-      m_body_buffer.clear();
-    } else {
-      Replace::pass(evt);
+      if (!m_one || !m_ended) {
+        m_start = start;
+        m_body_buffer.clear();
+        return;
+      }
+    } else if (auto eos = evt->as<StreamEnd>()) {
+      if (m_one && !m_ended) {
+        m_ended = true;
+        Replace::callback(eos);
+        return;
+      }
     }
+    Replace::pass(evt);
 
   } else {
     if (auto data = evt->as<Data>()) {
@@ -85,6 +96,7 @@ void ReplaceMessage::handle(Event *evt) {
       }
       pjs::Ref<Message> msg(Message::make(m_start->head(), m_body_buffer.flush(), tail, payload));
       m_start = nullptr;
+      m_ended = true;
       if (!Replace::callback(msg)) return;
     }
   }

@@ -32,15 +32,17 @@ namespace pipy {
 // OnMessage
 //
 
-OnMessage::OnMessage(pjs::Function *callback, const DataBuffer::Options &options)
+OnMessage::OnMessage(pjs::Function *callback, bool one, const DataBuffer::Options &options)
   : Handle(callback)
   , m_body_buffer(options, Filter::buffer_stats())
+  , m_one(one)
 {
 }
 
 OnMessage::OnMessage(const OnMessage &r)
   : Handle(r)
   , m_body_buffer(r.m_body_buffer)
+  , m_one(r.m_one)
 {
 }
 
@@ -50,7 +52,7 @@ OnMessage::~OnMessage()
 
 void OnMessage::dump(Dump &d) {
   Filter::dump(d);
-  d.name = "handleMessage";
+  d.name = m_one ? "handleOneMessage" : "handleMessage";
 }
 
 auto OnMessage::clone() -> Filter* {
@@ -61,6 +63,7 @@ void OnMessage::reset() {
   Handle::reset();
   m_start = nullptr;
   m_body_buffer.clear();
+  m_ended = false;
 }
 
 void OnMessage::handle(Event *evt) {
@@ -74,17 +77,27 @@ void OnMessage::handle(Event *evt) {
     }
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+    auto end = evt->as<MessageEnd>();
     if (m_start) {
-      pjs::Object *tail = nullptr;
-      pjs::Value payload;
-      if (auto *end = evt->as<MessageEnd>()) {
-        tail = end->tail();
-        payload = end->payload();
+      if (!m_one || !m_ended) {
+        pjs::Object *tail = nullptr;
+        pjs::Value payload;
+        if (end) {
+          tail = end->tail();
+          payload = end->payload();
+        }
+        auto body = m_body_buffer.flush();
+        pjs::Ref<Message> msg(Message::make(m_start->head(), body, tail, payload)), result;
+        m_start = nullptr;
+        m_ended = true;
+        if (Handle::callback(msg)) {
+          Handle::defer(evt);
+        }
+        return;
       }
-      auto body = m_body_buffer.flush();
-      pjs::Ref<Message> msg(Message::make(m_start->head(), body, tail, payload)), result;
-      m_start = nullptr;
-      if (Handle::callback(msg)) {
+    } else if (!end && m_one && !m_ended) {
+      m_ended = true;
+      if (Handle::callback(evt->as<StreamEnd>())) {
         Handle::defer(evt);
       }
       return;

@@ -100,6 +100,7 @@ public:
   void handle(Event::Type type, pjs::Function *handler);
   void handle_body(pjs::Function *handler, pjs::Object *options);
   void handle_message(pjs::Function *handler, pjs::Object *options);
+  void handle_message_one(pjs::Function *handler, pjs::Object *options);
   void handle_start(pjs::Function *handler);
   void handle_tls_client_hello(pjs::Function *handler);
   void insert(pjs::Object *events);
@@ -116,6 +117,7 @@ public:
   void replace(Event::Type type, pjs::Object *replacement);
   void replace_body(pjs::Object *replacement, pjs::Object *options);
   void replace_message(pjs::Object *replacement, pjs::Object *options);
+  void replace_message_one(pjs::Object *replacement, pjs::Object *options);
   void replace_start(pjs::Object *replacement);
   void serve_http(pjs::Object *handler, pjs::Object *options);
   void split(const pjs::Value &separator);
