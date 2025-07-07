@@ -46,7 +46,7 @@ public:
     size_t buffer_limit = 0;
     double read_timeout = 0;
     double write_timeout = 0;
-    double idle_timeout = 60;
+    double idle_timeout = 0;
     bool keep_alive = true;
     bool no_delay = true;
   };
