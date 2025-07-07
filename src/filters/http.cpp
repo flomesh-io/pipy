@@ -1839,9 +1839,12 @@ void TunnelServer::reset() {
   Filter::reset();
   m_pipeline = nullptr;
   m_request_head = nullptr;
-  m_promise_callback = nullptr;
   m_buffer.clear();
   m_message_reader.reset();
+  if (m_promise_callback) {
+    m_promise_callback->discard();
+    m_promise_callback = nullptr;
+  }
 }
 
 void TunnelServer::process(Event *evt) {
