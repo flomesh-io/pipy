@@ -1501,6 +1501,7 @@ Mux::Options::Options(pjs::Object *options)
     .check_nullable();
   Value(options, "timeout")
     .get(timeout)
+    .get(timeout_f)
     .check_nullable();
   Value(options, "ping")
     .get(ping_f)
@@ -1572,7 +1573,16 @@ void Mux::process(Event *evt) {
       }
       m_session = static_cast<HTTPSession*>(m_muxer->alloc(this, key));
       m_stream = m_session->alloc(Filter::output());
-      if (m_options.timeout > 0) {
+      m_timeout = m_options.timeout;
+      if (auto *f = m_options.timeout_f.get()) {
+        pjs::Value ret;
+        if (!Filter::eval(f, ret)) {
+          m_has_error = true;
+          return;
+        }
+        m_timeout = ret.to_number();
+      }
+      if (m_timeout > 0) {
         auto ticker = Ticker::get();
         m_start_time = ticker->tick();
         ticker->watch(this);
@@ -1586,7 +1596,7 @@ void Mux::process(Event *evt) {
 }
 
 void Mux::on_tick(double tick) {
-  if (tick - m_start_time >= m_options.timeout) {
+  if (tick - m_start_time >= m_timeout) {
     m_has_error = true;
     Ticker::get()->unwatch(this);
     Filter::output(StreamEnd::make(StreamEnd::READ_TIMEOUT));

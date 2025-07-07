@@ -344,6 +344,7 @@ public:
     size_t max_header_size = DATA_CHUNK_SIZE;
     int version = 1;
     double timeout = 0;
+    pjs::Ref<pjs::Function> timeout_f;
     pjs::Ref<pjs::Str> version_s;
     pjs::Ref<pjs::Function> version_f;
     pjs::Ref<pjs::Function> ping_f;
@@ -487,6 +488,7 @@ private:
   pjs::Ref<HTTPSession> m_session;
   pjs::Ref<HTTPStream> m_stream;
   Options m_options;
+  double m_timeout = 0;
   double m_start_time = 0;
   bool m_has_error = false;
 
