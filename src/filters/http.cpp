@@ -1572,7 +1572,7 @@ void Mux::process(Event *evt) {
         }
       }
       m_session = static_cast<HTTPSession*>(m_muxer->alloc(this, key));
-      m_stream = m_session->alloc(Filter::output());
+      m_stream = m_session->alloc(EventSource::reply());
       m_timeout = m_options.timeout;
       if (auto *f = m_options.timeout_f.get()) {
         pjs::Value ret;
@@ -1593,6 +1593,13 @@ void Mux::process(Event *evt) {
       m_stream->input()->input(evt);
     }
   }
+}
+
+void Mux::on_reply(Event *evt) {
+  if (m_timeout > 0 && evt->is<MessageEnd>()) {
+    Ticker::get()->unwatch(this);
+  }
+  Filter::output(evt);
 }
 
 void Mux::on_tick(double tick) {

@@ -334,7 +334,7 @@ protected:
 // Mux
 //
 
-class Mux : public Filter, public Ticker::Watcher {
+class Mux : public Filter, public EventSource, public Ticker::Watcher {
 public:
   struct Options :
     public Muxer::Options,
@@ -497,6 +497,7 @@ private:
   virtual void shutdown() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
+  virtual void on_reply(Event *evt) override;
   virtual void on_tick(double tick) override;
 };
 
