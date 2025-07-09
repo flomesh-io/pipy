@@ -25,6 +25,7 @@
 
 #include "detect-protocol.hpp"
 #include "data.hpp"
+#include "message.hpp"
 #include "str-map.hpp"
 
 namespace pipy {
@@ -272,7 +273,11 @@ void ProtocolDetector::process(Event *evt) {
 void ProtocolDetector::done() {
   pjs::Value arg, ret;
   arg.set(m_result);
-  Filter::callback(m_callback, 1, &arg, ret);
+  if (Filter::callback(m_callback, 1, &arg, ret)) {
+    if (!ret.is_nullish()) {
+      Message::output(ret, Filter::output());
+    }
+  }
 }
 
 } // namespace pipy
