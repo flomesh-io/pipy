@@ -87,7 +87,7 @@ public:
   void demux_fcgi();
   void demux_http(pjs::Object *options);
   void deposit_message(const pjs::Value &filename, pjs::Object *options);
-  void detect_protocol(pjs::Function *callback);
+  void detect_protocol(pjs::Function *callback, pjs::Object *timeout);
   void dummy();
   void dump(const pjs::Value &tag);
   void encode_bgp(pjs::Object *options);

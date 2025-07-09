@@ -246,8 +246,8 @@ void FilterConfigurator::deposit_message(const pjs::Value &filename, pjs::Object
   append_filter(new DepositMessage(filename, options));
 }
 
-void FilterConfigurator::detect_protocol(pjs::Function *callback) {
-  append_filter(new ProtocolDetector(callback));
+void FilterConfigurator::detect_protocol(pjs::Function *callback, pjs::Object *options) {
+  append_filter(new ProtocolDetector(callback, options));
 }
 
 void FilterConfigurator::dummy() {
@@ -1546,9 +1546,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("detectProtocol", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *callback;
-    if (!ctx.arguments(1, &callback)) return;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &callback, &options)) return;
     try {
-      config->detect_protocol(callback);
+      config->detect_protocol(callback, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

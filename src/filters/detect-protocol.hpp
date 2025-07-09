@@ -27,12 +27,20 @@
 #define DETECT_PROTOCOL_HPP
 
 #include "filter.hpp"
+#include "timer.hpp"
+#include "options.hpp"
 
 namespace pipy {
 
 class ProtocolDetector : public Filter {
 public:
-  ProtocolDetector(pjs::Function *callback);
+  struct Options : public pipy::Options {
+    double timeout = 1;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  ProtocolDetector(pjs::Function *callback, const Options &options);
 
   class Detector {
   public:
@@ -52,10 +60,14 @@ private:
   virtual void dump(Dump &d) override;
 
   pjs::Ref<pjs::Function> m_callback;
+  Options m_options;
+  Timer m_timer;
   Detector* m_detectors[MAX_DETECTORS];
   int m_num_detectors = 0;
   int m_negatives = 0;
   pjs::Ref<pjs::Str> m_result;
+
+  void done();
 };
 
 } // namespace pipy

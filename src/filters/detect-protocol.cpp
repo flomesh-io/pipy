@@ -174,17 +174,29 @@ class TLSDetector :
 };
 
 //
+// ProtocolDetector::Options
+//
+
+ProtocolDetector::Options::Options(pjs::Object *options) {
+  Value(options, "timeout")
+    .get(timeout)
+    .check_nullable();
+}
+
+//
 // ProtocolDetector
 //
 
-ProtocolDetector::ProtocolDetector(pjs::Function *callback)
+ProtocolDetector::ProtocolDetector(pjs::Function *callback, const Options &options)
   : m_callback(callback)
+  , m_options(options)
 {
 }
 
 ProtocolDetector::ProtocolDetector(const ProtocolDetector &r)
   : Filter(r)
   , m_callback(r.m_callback)
+  , m_options(r.m_options)
 {
 }
 
@@ -202,6 +214,7 @@ void ProtocolDetector::reset() {
     delete m_detectors[i];
     m_detectors[i] = nullptr;
   }
+  m_timer.cancel();
   m_negatives = 0;
   m_result = nullptr;
   m_num_detectors = 3;
@@ -217,6 +230,14 @@ void ProtocolDetector::dump(Dump &d) {
 
 void ProtocolDetector::process(Event *evt) {
   if (!m_result) {
+    if (m_options.timeout > 0 && !m_timer.is_scheduled()) {
+      m_timer.schedule(m_options.timeout, [this]() {
+        if (!m_result) {
+          m_result = pjs::Str::empty;
+          done();
+        }
+      });
+    }
     if (auto data = evt->as<Data>()) {
       for (const auto c : data->chunks()) {
         auto data = std::get<0>(c);
@@ -241,15 +262,17 @@ void ProtocolDetector::process(Event *evt) {
         if (m_result) break;
       }
 
-      if (m_result) {
-        pjs::Value arg, ret;
-        arg.set(m_result);
-        callback(m_callback, 1, &arg, ret);
-      }
+      if (m_result) done();
     }
   }
 
   output(evt);
+}
+
+void ProtocolDetector::done() {
+  pjs::Value arg, ret;
+  arg.set(m_result);
+  Filter::callback(m_callback, 1, &arg, ret);
 }
 
 } // namespace pipy
