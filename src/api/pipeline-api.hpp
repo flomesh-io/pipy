@@ -81,7 +81,7 @@ public:
   void demux_fcgi();
   void demux_http(pjs::Object *options);
   void demux_queue();
-  void detect_protocol(pjs::Function *handler);
+  void detect_protocol(pjs::Function *handler, pjs::Object *options);
   void dummy();
   void dump(const pjs::Value &tag);
   void encode_bgp(pjs::Object *options);

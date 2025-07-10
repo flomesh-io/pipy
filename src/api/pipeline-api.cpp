@@ -250,8 +250,8 @@ void PipelineDesigner::demux_queue() {
   require_sub_pipeline(append_filter(new Demux(true)));
 }
 
-void PipelineDesigner::detect_protocol(pjs::Function *handler) {
-  append_filter(new ProtocolDetector(handler));
+void PipelineDesigner::detect_protocol(pjs::Function *handler, pjs::Object *options) {
+  append_filter(new ProtocolDetector(handler, options));
 }
 
 void PipelineDesigner::dummy() {
@@ -874,8 +874,9 @@ template<> void ClassDef<PipelineDesigner>::init() {
   // PipelineDesigner.detectProtocol
   filter("detectProtocol", [](Context &ctx, PipelineDesigner *obj) {
     Function *handler;
+    Object *options = nullptr;
     if (!ctx.arguments(1, &handler)) return;
-    obj->detect_protocol(handler);
+    obj->detect_protocol(handler, options);
   });
 
   // PipelineDesigner.dummy

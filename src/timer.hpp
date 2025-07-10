@@ -48,6 +48,8 @@ public:
     cancel();
   }
 
+  bool is_scheduled() const { return m_handler; }
+
   void schedule(double timeout, const std::function<void()> &handler);
   void cancel();
 
