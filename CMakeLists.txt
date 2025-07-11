@@ -290,6 +290,7 @@ set(PIPY_SRC
   src/filters/decompress.cpp
   src/filters/deframe.cpp
   src/filters/demux.cpp
+  src/filters/detect-idler.cpp
   src/filters/detect-protocol.cpp
   src/filters/dubbo.cpp
   src/filters/dummy.cpp

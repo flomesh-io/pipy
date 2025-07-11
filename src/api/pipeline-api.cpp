@@ -35,6 +35,7 @@
 #include "filters/decompress.hpp"
 #include "filters/deframe.hpp"
 #include "filters/demux.hpp"
+#include "filters/detect-idler.hpp"
 #include "filters/detect-protocol.hpp"
 #include "filters/dubbo.hpp"
 #include "filters/dummy.hpp"
@@ -248,6 +249,10 @@ void PipelineDesigner::demux_http(pjs::Object *options) {
 
 void PipelineDesigner::demux_queue() {
   require_sub_pipeline(append_filter(new Demux(true)));
+}
+
+void PipelineDesigner::detect_idler(double timeout, pjs::Function *handler) {
+  require_sub_pipeline(append_filter(new DetectIdler(timeout, handler)));
 }
 
 void PipelineDesigner::detect_protocol(pjs::Function *handler, pjs::Object *options) {
@@ -869,6 +874,14 @@ template<> void ClassDef<PipelineDesigner>::init() {
   // PipelineDesigner.demuxQueue
   filter("demuxQueue", [](Context &ctx, PipelineDesigner *obj) {
     obj->demux_queue();
+  });
+
+  // PipelineDesigner.detectIdler
+  filter("detectIdler", [](Context &ctx, PipelineDesigner *obj) {
+    double timeout;
+    Function *handler;
+    if (!ctx.arguments(2, &timeout, &handler)) return;
+    obj->detect_idler(timeout, handler);
   });
 
   // PipelineDesigner.detectProtocol
