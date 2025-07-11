@@ -447,6 +447,7 @@ private:
     ~HTTPSession();
 
     void free_all();
+    void close();
 
     int m_version = 0;
     pjs::Ref<Pipeline> m_pipeline;

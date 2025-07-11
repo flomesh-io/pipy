@@ -1869,6 +1869,10 @@ void Mux::HTTPSession::free_all() {
   HTTPQueue::free_all();
 }
 
+void Mux::HTTPSession::close() {
+  m_pipeline->input()->input(StreamEnd::make());
+}
+
 void Mux::HTTPSession::select_protocol(const pjs::Value &version) {
   thread_local static const pjs::ConstStr s_http_1("http/1");
   thread_local static const pjs::ConstStr s_http_2("http/2");
@@ -1968,6 +1972,7 @@ auto Mux::HTTPMuxer::on_muxer_session_open(Filter *filter) -> Session* {
 void Mux::HTTPMuxer::on_muxer_session_close(Session *session) {
   auto s = static_cast<HTTPSession*>(session);
   s->free_all();
+  s->close();
   s->release();
 }
 

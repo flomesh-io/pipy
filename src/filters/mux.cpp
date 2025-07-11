@@ -405,6 +405,10 @@ auto Mux::Queue::alloc(EventTarget::Input *output, const pjs::Value &key) -> Req
   return r->retain();
 }
 
+void Mux::Queue::close() {
+  m_pipeline->input()->input(StreamEnd::make());
+}
+
 void Mux::Queue::free(Request *r) {
   r->discard();
   Muxer::Session::remove(r);
@@ -488,6 +492,7 @@ auto Mux::Pool::on_muxer_session_open(Filter *filter) -> Session* {
 void Mux::Pool::on_muxer_session_close(Session *session) {
   auto s = static_cast<Queue*>(session);
   s->free_all();
+  s->close();
   s->release();
 }
 
@@ -656,6 +661,10 @@ auto MuxQueue::Queue::alloc(EventTarget::Input *output) -> Request* {
   return r->retain();
 }
 
+void MuxQueue::Queue::close() {
+  m_pipeline->input()->input(StreamEnd::make());
+}
+
 void MuxQueue::Queue::free(Request *r) {
   r->discard();
   Muxer::Session::remove(r);
@@ -724,6 +733,7 @@ auto MuxQueue::Pool::on_muxer_session_open(Filter *filter) -> Session* {
 void MuxQueue::Pool::on_muxer_session_close(Session *session) {
   auto s = static_cast<Queue*>(session);
   s->free_all();
+  s->close();
   s->release();
 }
 

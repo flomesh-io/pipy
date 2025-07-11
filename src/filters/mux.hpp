@@ -252,6 +252,7 @@ private:
   {
   public:
     auto alloc(EventTarget::Input *output, const pjs::Value &key) -> Request*;
+    void close();
 
   private:
     Queue(Mux *mux);
@@ -365,6 +366,7 @@ private:
   {
   public:
     auto alloc(EventTarget::Input *output) -> Request*;
+    void close();
 
   private:
     Queue(MuxQueue *mux);
