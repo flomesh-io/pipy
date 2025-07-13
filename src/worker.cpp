@@ -43,6 +43,7 @@
 #include "api/configuration.hpp"
 #include "api/console.hpp"
 #include "api/crypto.hpp"
+#include "api/c-string.hpp"
 #include "api/c-struct.hpp"
 #include "api/dns.hpp"
 #include "api/hessian.hpp"
@@ -97,6 +98,9 @@ using namespace pipy;
 
 template<> void ClassDef<pipy::Global>::init() {
   super<pjs::Global>();
+
+  // CString
+  variable("CString", class_of<Constructor<CString>>());
 
   // CStruct
   variable("CStruct", class_of<Constructor<CStruct>>());

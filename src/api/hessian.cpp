@@ -24,6 +24,7 @@
  */
 
 #include "hessian.hpp"
+#include "api/c-string.hpp"
 
 //
 // Bytecode Map
@@ -171,18 +172,29 @@
 namespace pipy {
 
 //
+// JSON::DecodeOptions
+//
+
+Hessian::DecodeOptions::DecodeOptions(pjs::Object *options) {
+  Value(options, "maxStringSize")
+    .get(max_string_size)
+    .check_nullable();
+}
+
+//
 // Hessian
 //
 
 static Data::Producer s_dp("Hessian");
 
-auto Hessian::decode(const Data &data) -> pjs::Array* {
+auto Hessian::decode(const Data &data, const DecodeOptions &options) -> pjs::Array* {
   pjs::Array *a = pjs::Array::make();
   StreamParser sp(
     [=](const pjs::Value &value) {
       a->push(value);
     }
   );
+  sp.set_max_string_size(options.max_string_size);
   Data buf(data);
   sp.parse(buf);
   return a;
@@ -234,12 +246,55 @@ void Hessian::encode(const pjs::Value &value, Data::Builder &db) {
         auto l = std::min(n - i, 0xffff);
         auto a = value->chr_to_pos(i);
         auto b = value->chr_to_pos(i + l);
-        if (b == value->size()) db.push('S'); else db.push('R');
+        // if (b == value->size()) db.push('S'); else db.push('R');
+        db.push(b == value->size() ? 'S' : 'R');
         db.push(l >> 8);
         db.push(l >> 0);
         db.push(value->c_str() + a, b - a);
         i += l;
       }
+    }
+  };
+
+  auto write_c_string = [&](CString *value) {
+    char buf[1024 * 4];
+    int n = 0, p = 0, end = value->data()->size();
+    Data chunk;
+    Data::Builder chunk_db(chunk, &s_dp);
+    auto flush_chunk = [&](int n) {
+      chunk_db.flush();
+      chunk_db.reset();
+      db.push(p == end ? 'S' : 'R');
+      db.push(n >> 8);
+      db.push(n >> 0);
+      db.push(std::move(chunk));
+    };
+    pjs::Utf8Decoder decoder(
+      [&](int) {
+        if (++n >= 1024) {
+          if (n == 1024) chunk_db.push(buf, p);
+          if (n % 0xffff == 0) flush_chunk(0xffff);
+        }
+      }
+    );
+    for (const auto chk : value->data()->chunks()) {
+      auto str = std::get<0>(chk);
+      auto len = std::get<1>(chk);
+      for (int i = 0; i < len; i++, p++) {
+        auto c = str[i];
+        if (n < 1023 && p < sizeof(buf)) buf[p] = c;
+        decoder.input(c);
+      }
+    }
+    if (n < 32) {
+      db.push(n);
+      db.push(buf, p);
+    } else if (n < 1024) {
+      db.push(0x30 + (n >> 8));
+      db.push(n);
+      db.push(buf, p);
+    } else if (chunk_db.size() > 0) {
+      flush_chunk(n % 0xffff);
     }
   };
 
@@ -331,6 +386,9 @@ void Hessian::encode(const pjs::Value &value, Data::Builder &db) {
 
     } else if (value.is_string()) {
       write_string(value.s());
+
+    } else if (value.is<CString>()) {
+      write_c_string(value.as<CString>());
 
     } else if (value.is<pjs::Date>()) {
       uint64_t t = value.as<pjs::Date>()->getTime();
@@ -812,9 +870,15 @@ void Hessian::Parser::push_utf8_char(int c) {
 }
 
 auto Hessian::Parser::push_string() -> State {
-  std::string s = m_read_data->to_string();
-  m_read_data->clear();
-  return push(pjs::Str::make(std::move(s)));
+  if (m_max_string_size >= 0 && m_read_data->size() > m_max_string_size) {
+    auto s = CString::make(*m_read_data);
+    m_read_data->clear();
+    return push(s);
+  } else {
+    std::string s = m_read_data->to_string();
+    m_read_data->clear();
+    return push(pjs::Str::make(std::move(s)));
+  }
 }
 
 auto Hessian::Parser::push(const pjs::Value &value, CollectionState state, int length, Collection *class_def) -> State {
@@ -979,9 +1043,10 @@ template<> void ClassDef<Hessian>::init() {
 
   method("decode", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data;
-    if (!ctx.arguments(1, &data)) return;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &data, &options)) return;
     if (!data) { ret = Value::null; return; }
-    ret.set(Hessian::decode(*data));
+    ret.set(Hessian::decode(*data, options));
   });
 
   method("encode", [](Context &ctx, Object *obj, Value &ret) {

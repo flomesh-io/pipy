@@ -29,6 +29,7 @@
 #include "pjs/pjs.hpp"
 #include "data.hpp"
 #include "deframer.hpp"
+#include "options.hpp"
 
 namespace pipy {
 
@@ -40,7 +41,18 @@ class Data;
 
 class Hessian : public pjs::ObjectTemplate<Hessian> {
 public:
-  static auto decode(const Data &data) -> pjs::Array*;
+
+  //
+  // Hessian::DecodeOptions
+  //
+
+  struct DecodeOptions : pipy::Options {
+    int max_string_size = -1;
+    DecodeOptions() {}
+    DecodeOptions(pjs::Object *options);
+  };
+
+  static auto decode(const Data &data, const DecodeOptions &options = DecodeOptions()) -> pjs::Array*;
   static void encode(const pjs::Value &value, Data &data);
   static void encode(const pjs::Value &value, Data::Builder &db);
 
@@ -117,6 +129,8 @@ public:
   public:
     Parser();
 
+    void set_max_string_size(int size) { m_max_string_size = size; }
+
     void reset();
     void parse(Data &data);
 
@@ -163,6 +177,7 @@ public:
       int count = 0;
     };
 
+    int m_max_string_size = -1;
     Level* m_stack = nullptr;
     pjs::Value m_root;
     pjs::Ref<Data> m_read_data;

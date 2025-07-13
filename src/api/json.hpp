@@ -28,6 +28,7 @@
 
 #include "pjs/pjs.hpp"
 #include "data.hpp"
+#include "options.hpp"
 
 #include <functional>
 
@@ -64,6 +65,16 @@ public:
   static bool visit(const Data &data, Visitor *visitor);
   static bool visit(const Data &data, Visitor *visitor, std::string &err);
 
+  //
+  // JSON::DecodeOptions
+  //
+
+  struct DecodeOptions : pipy::Options {
+    int max_string_size = -1;
+    DecodeOptions() {}
+    DecodeOptions(pjs::Object *options);
+  };
+
   static bool parse(
     const std::string &str,
     const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
@@ -86,14 +97,16 @@ public:
   static bool decode(
     const Data &data,
     const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
-    pjs::Value &val
+    pjs::Value &val,
+    const DecodeOptions &options = DecodeOptions()
   );
 
   static bool decode(
     const Data &data,
     const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
     pjs::Value &val,
-    std::string &err
+    std::string &err,
+    const DecodeOptions &options = DecodeOptions()
   );
 
   static bool encode(

@@ -261,6 +261,7 @@ SET(PIPY_SRC
   src/api/configuration.cpp
   src/api/console.cpp
   src/api/crypto.cpp
+  src/api/c-string.cpp
   src/api/c-struct.cpp
   src/api/dns.cpp
   src/api/hessian.cpp

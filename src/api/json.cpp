@@ -26,6 +26,7 @@
 #include "json.hpp"
 #include "utils.hpp"
 #include "yajl/yajl_parse.h"
+#include "api/c-string.hpp"
 
 #include <stack>
 
@@ -88,7 +89,8 @@ template<> void ClassDef<JSON>::init() {
   method("decode", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data;
     Function *reviver = nullptr;
-    if (!ctx.arguments(1, &data, &reviver)) return;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &data, &reviver, &options)) return;
     std::function<bool(pjs::Object*, const pjs::Value&, Value&)> rev;
     if (reviver) {
       rev = [&](pjs::Object *obj, const pjs::Value &key, Value &val) -> bool {
@@ -101,7 +103,7 @@ template<> void ClassDef<JSON>::init() {
       };
     }
     std::string err;
-    if (!data || !JSON::decode(*data, rev, ret, err)) {
+    if (!data || !JSON::decode(*data, rev, ret, err, options)) {
       ctx.error(err);
       ret = Value::undefined;
     }
@@ -220,6 +222,16 @@ yajl_callbacks JSONVisitor::s_callbacks = {
 };
 
 //
+// JSON::DecodeOptions
+//
+
+JSON::DecodeOptions::DecodeOptions(pjs::Object *options) {
+  Value(options, "maxStringSize")
+    .get(max_string_size)
+    .check_nullable();
+}
+
+//
 // JSONParser
 //
 
@@ -236,6 +248,8 @@ public:
       delete level;
     }
   }
+
+  void set_max_string_size(int size) { m_max_string_size = size; }
 
   bool parse(const std::string &str, pjs::Value &val, std::string &err) {
     if (!visit(str, err)) return false;
@@ -256,6 +270,7 @@ private:
     pjs::Ref<pjs::Str> key;
   };
 
+  int m_max_string_size = -1;
   Level* m_stack = nullptr;
   pjs::Value m_root;
   const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)>& m_reviver;
@@ -265,7 +280,15 @@ private:
   void boolean(bool b) { value(b); }
   void integer(int64_t i) { value(double(i)); }
   void number(double n) { value(n); }
-  void string(const char *s, size_t len) { value(std::string(s, len)); }
+
+  void string(const char *s, size_t len) {
+    if (m_max_string_size >= 0 && len > m_max_string_size) {
+      Data data(s, len, &s_dp);
+      value(CString::make(data));
+    } else {
+      value(std::string(s, len));
+    }
+  }
 
   void map_start() {
     if (!m_aborted) {
@@ -398,10 +421,12 @@ auto JSON::stringify(
 bool JSON::decode(
   const Data &data,
   const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
-  pjs::Value &val
+  pjs::Value &val,
+  const DecodeOptions &options
 ) {
   std::string err;
   JSONParser parser(reviver);
+  parser.set_max_string_size(options.max_string_size);
   return parser.parse(data, val, err);
 }
 
@@ -409,9 +434,11 @@ bool JSON::decode(
   const Data &data,
   const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
   pjs::Value &val,
-  std::string &err
+  std::string &err,
+  const DecodeOptions &options
 ) {
   JSONParser parser(reviver);
+  parser.set_max_string_size(options.max_string_size);
   return parser.parse(data, val, err);
 }
 
@@ -476,6 +503,17 @@ bool JSON::encode(
         v.s()->str(),
         [&](char c) { db.push(c); }
       );
+      db.push('"');
+    } else if (v.is<CString>()) {
+      db.push('"');
+      auto data = v.as<CString>()->data();
+      for (const auto chk : data->chunks()) {
+        utils::escape(
+          (const char *)std::get<0>(chk),
+          std::get<1>(chk),
+          [&](char c) { db.push(c); }
+        );
+      }
       db.push('"');
     } else if (v.is_object()) {
       if (obj_level == sizeof(objs) / sizeof(objs[0])) {
