@@ -100,7 +100,7 @@ auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
   s_active_pipeline_count++;
   if (Log::is_enabled(Log::PIPELINE)) {
     Log::debug(
-      Log::PIPELINE, "[pipeline] %p ++ %s, active = %d, pooled = %d, context = %llu",
+      Log::PIPELINE, "[pipeline] %p ++ layout = %s, active = %d, pooled = %d, context = %llu",
       pipeline,
       name()->c_str(),
       m_active,
@@ -132,7 +132,7 @@ void PipelineLayout::free(Pipeline *pipeline) {
     s_active_pipeline_count--;
     if (Log::is_enabled(Log::PIPELINE)) {
       Log::debug(
-        Log::PIPELINE, "[pipeline] %p -- %s, active = %d, pooled = %d",
+        Log::PIPELINE, "[pipeline] %p -- layout = %s, active = %d, pooled = %d",
         pipeline,
         name()->c_str(),
         m_active,
@@ -140,6 +140,8 @@ void PipelineLayout::free(Pipeline *pipeline) {
       );
     }
     release();
+  } else {
+    Log::error("[pipeline] %p double free layout = %s", pipeline, name()->c_str());
   }
 }
 
@@ -177,6 +179,16 @@ Pipeline::~Pipeline() {
     auto f = p;
     p = p->next();
     delete f;
+  }
+}
+
+void Pipeline::auto_release(Pipeline *p) {
+  if (p) {
+    if (p->m_allocated) {
+      p->AutoReleased::auto_release();
+    } else {
+      Log::error("[pipeline] %p double release, layout = %s", p, p->layout()->name()->c_str());
+    }
   }
 }
 
@@ -219,21 +231,25 @@ auto Pipeline::start(int argc, pjs::Value *argv) -> Pipeline* {
 }
 
 void Pipeline::on_input(Event *evt) {
-  if (m_started) {
-    EventProxy::forward(evt);
-  } else {
-    m_pending_events.push(evt);
+  if (m_allocated) {
+    if (m_started) {
+      EventProxy::forward(evt);
+    } else {
+      m_pending_events.push(evt);
+    }
   }
 }
 
 void Pipeline::on_reply(Event *evt) {
-  auto_release(this);
-  if (m_on_eos) {
-    if (auto eos = evt->as<StreamEnd>()) {
-      m_on_eos(eos);
+  if (m_allocated) {
+    auto_release(this);
+    if (m_on_eos) {
+      if (auto eos = evt->as<StreamEnd>()) {
+        m_on_eos(eos);
+      }
     }
+    EventProxy::output(evt);
   }
-  EventProxy::output(evt);
 }
 
 void Pipeline::on_auto_release() {
@@ -247,23 +263,27 @@ void Pipeline::on_auto_release() {
 }
 
 void Pipeline::wait(pjs::Promise *promise) {
-  auto cb = StartingPromiseCallback::make(this);
+  auto cb = pjs::Promise::Callback::make([this](pjs::Promise::State state, const pjs::Value &value) {
+    if (state == pjs::Promise::State::RESOLVED) {
+      resolve(value);
+    } else {
+      reject(value);
+    }
+  });
   promise->then(nullptr, cb->resolved(), cb->rejected());
   m_starting_promise_callback = cb;
 }
 
 void Pipeline::resolve(const pjs::Value &value) {
-  if (value.is_promise()) {
-    m_starting_promise_callback->close();
-    m_starting_promise_callback = nullptr;
-    wait(value.as<pjs::Promise>());
-  } else {
+  if (m_allocated) {
     start_with(value);
   }
 }
 
 void Pipeline::reject(const pjs::Value &value) {
-  EventProxy::forward(StreamEnd::make(value));
+  if (m_allocated) {
+    EventProxy::forward(StreamEnd::make(value));
+  }
 }
 
 void Pipeline::start_with(const pjs::Value &starting_events) {
@@ -307,35 +327,9 @@ void Pipeline::reset() {
   m_started = false;
   m_pending_events.clear();
   if (m_starting_promise_callback) {
-    m_starting_promise_callback->close();
+    m_starting_promise_callback->discard();
     m_starting_promise_callback = nullptr;
   }
 }
 
-//
-// Pipeline::StartingPromiseCallback
-//
-
-void Pipeline::StartingPromiseCallback::on_resolved(const pjs::Value &value) {
-  if (m_pipeline) {
-    m_pipeline->resolve(value);
-  }
-}
-
-void Pipeline::StartingPromiseCallback::on_rejected(const pjs::Value &error) {
-  if (m_pipeline) {
-    m_pipeline->reject(error);
-  }
-}
-
 } // namespace pipy
-
-namespace pjs {
-
-using namespace pipy;
-
-template<> void ClassDef<Pipeline::StartingPromiseCallback>::init() {
-  super<Promise::Callback>();
-}
-
-} // namespace pjs

@@ -139,19 +139,7 @@ public:
     return layout->alloc(ctx);
   }
 
-  //
-  // Pipeline::StartingPromiseCallback
-  //
-
-  class StartingPromiseCallback : public pjs::ObjectTemplate<StartingPromiseCallback, pjs::Promise::Callback> {
-    StartingPromiseCallback(Pipeline *pipeline) : m_pipeline(pipeline) {}
-    virtual void on_resolved(const pjs::Value &value) override;
-    virtual void on_rejected(const pjs::Value &error) override;
-    friend class pjs::ObjectTemplate<StartingPromiseCallback, pjs::Promise::Callback>;
-    Pipeline* m_pipeline;
-  public:
-    void close() { m_pipeline = nullptr; }
-  };
+  static void auto_release(Pipeline *p);
 
   //
   // Pipeline::ResultCallback
@@ -186,7 +174,7 @@ private:
   Pipeline* m_next_free = nullptr;
   List<Filter> m_filters;
   pjs::Ref<Context> m_context;
-  pjs::Ref<StartingPromiseCallback> m_starting_promise_callback;
+  pjs::Ref<pjs::Promise::Callback> m_starting_promise_callback;
   pjs::Ref<PipelineLayout::Chain> m_chain;
   pjs::Value m_chain_args;
   EventBuffer m_pending_events;

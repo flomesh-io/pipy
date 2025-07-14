@@ -186,14 +186,15 @@ private:
 //
 
 class AutoReleased : public pjs::RefCount<AutoReleased> {
-public:
-  static void auto_release(AutoReleased *obj) {
-    if (obj) obj->auto_release();
-  }
-
 protected:
   void reset() {
     m_auto_release = false;
+  }
+
+  void auto_release() {
+    if (!m_auto_release) {
+      InputContext::auto_release(this);
+    }
   }
 
 private:
@@ -201,12 +202,6 @@ private:
 
   AutoReleased* m_next_auto_release = nullptr;
   bool m_auto_release = false;
-
-  void auto_release() {
-    if (!m_auto_release) {
-      InputContext::auto_release(this);
-    }
-  }
 
   void finalize() {
     on_auto_release();
