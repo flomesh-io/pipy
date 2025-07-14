@@ -82,7 +82,7 @@ namespace pipy {
 
 auto PipelineDesigner::make_pipeline_layout(pjs::Context &ctx, pjs::Function *builder) -> PipelineLayout* {
   auto worker = static_cast<Worker*>(ctx.instance());
-  auto pl = PipelineLayout::make(worker);
+  auto pl = PipelineLayout::make(worker, builder->method()->name());
   auto pd = PipelineDesigner::make(pl);
   try {
     pjs::Value arg(pd), ret;

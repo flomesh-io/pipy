@@ -39,19 +39,17 @@ namespace pipy {
 thread_local List<PipelineLayout> PipelineLayout::s_all_pipeline_layouts;
 thread_local size_t PipelineLayout::s_active_pipeline_count = 0;
 
-PipelineLayout::PipelineLayout(Worker *worker, int index, const std::string &name, const std::string &label)
-  : m_index(index)
-  , m_name(pjs::Str::make(name))
-  , m_label(pjs::Str::make(label))
+PipelineLayout::PipelineLayout(Worker *worker, pjs::Str *name)
+  : m_name(name)
   , m_worker(worker ? worker : Worker::current())
 {
   s_all_pipeline_layouts.push(this);
   if (m_worker) m_worker->append_pipeline_template(this);
-  Log::debug(Log::PIPELINE, "[pipeline] create layout: %s", name_or_label()->c_str());
+  Log::debug(Log::PIPELINE, "[pipeline] create layout: %s", name->c_str());
 }
 
 PipelineLayout::~PipelineLayout() {
-  Log::debug(Log::PIPELINE, "[pipeline] delete layout: %s", name_or_label()->c_str());
+  Log::debug(Log::PIPELINE, "[pipeline] delete layout: %s", name()->c_str());
   auto *ptr = m_pool;
   while (ptr) {
     auto *pipeline = ptr;
@@ -78,12 +76,6 @@ auto PipelineLayout::new_context() -> Context* {
   return m_worker->new_context();
 }
 
-auto PipelineLayout::name_or_label() const -> pjs::Str* {
-  if (m_name != pjs::Str::empty) return m_name;
-  if (m_label) return m_label;
-  return pjs::Str::empty;
-}
-
 auto PipelineLayout::append(Filter *filter) -> Filter* {
   m_filters.emplace_back(filter);
   filter->m_pipeline_layout = this;
@@ -101,14 +93,16 @@ auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
     m_allocated++;
   }
   pipeline->m_context = ctx;
+  pipeline->m_allocated = true;
   pipeline->m_started = m_on_start ? false : true;
   m_pipelines.push(pipeline);
   m_active++;
   s_active_pipeline_count++;
   if (Log::is_enabled(Log::PIPELINE)) {
     Log::debug(
-      Log::PIPELINE, "[pipeline] ++ %s, active = %d, pooled = %d, context = %llu",
-      name_or_label()->c_str(),
+      Log::PIPELINE, "[pipeline] %p ++ %s, active = %d, pooled = %d, context = %llu",
+      pipeline,
+      name()->c_str(),
       m_active,
       m_allocated - m_active,
       ctx->id()
@@ -129,20 +123,24 @@ void PipelineLayout::end(Pipeline *pipeline, pjs::Value &result) {
 }
 
 void PipelineLayout::free(Pipeline *pipeline) {
-  m_pipelines.remove(pipeline);
-  pipeline->m_next_free = m_pool;
-  m_pool = pipeline;
-  m_active--;
-  s_active_pipeline_count--;
-  if (Log::is_enabled(Log::PIPELINE)) {
-    Log::debug(
-      Log::PIPELINE, "[pipeline] -- %s, active = %d, pooled = %d",
-      name_or_label()->c_str(),
-      m_active,
-      m_allocated - m_active
-    );
+  if (pipeline->m_allocated) {
+    m_pipelines.remove(pipeline);
+    pipeline->m_allocated = false;
+    pipeline->m_next_free = m_pool;
+    m_pool = pipeline;
+    m_active--;
+    s_active_pipeline_count--;
+    if (Log::is_enabled(Log::PIPELINE)) {
+      Log::debug(
+        Log::PIPELINE, "[pipeline] %p -- %s, active = %d, pooled = %d",
+        pipeline,
+        name()->c_str(),
+        m_active,
+        m_allocated - m_active
+      );
+    }
+    release();
   }
-  release();
 }
 
 //

@@ -65,11 +65,15 @@ public:
   };
 
   static auto make() -> PipelineLayout* {
-    return new PipelineLayout(nullptr, -1, std::string(), std::string());
+    return new PipelineLayout(nullptr, pjs::Str::empty);
   }
 
   static auto make(Worker *worker) -> PipelineLayout* {
-    return new PipelineLayout(worker, -1, std::string(), std::string());
+    return new PipelineLayout(worker, pjs::Str::empty);
+  }
+
+  static auto make(Worker *worker, pjs::Str *name) -> PipelineLayout* {
+    return new PipelineLayout(worker, name);
   }
 
   static auto active_pipeline_count() -> size_t {
@@ -83,10 +87,7 @@ public:
   }
 
   auto worker() const -> Worker* { return m_worker; }
-  auto index() const -> int { return m_index; }
   auto name() const -> pjs::Str* { return m_name; }
-  auto label() const -> pjs::Str* { return m_label; }
-  auto name_or_label() const -> pjs::Str*;
   auto allocated() const -> size_t { return m_allocated; }
   auto active() const -> size_t { return m_pipelines.size(); }
   void on_start_location(pjs::Location &loc) { m_on_start_location = loc; }
@@ -98,16 +99,14 @@ public:
   auto new_context() -> Context*;
 
 private:
-  PipelineLayout(Worker *worker, int index, const std::string &name, const std::string &label);
+  PipelineLayout(Worker *worker, pjs::Str *name);
   ~PipelineLayout();
 
   auto alloc(Context *ctx) -> Pipeline*;
   void end(Pipeline *pipeline, pjs::Value &result);
   void free(Pipeline *pipeline);
 
-  int m_index;
   pjs::Ref<pjs::Str> m_name;
-  pjs::Ref<pjs::Str> m_label;
   pjs::Ref<Worker> m_worker;
   pjs::Ref<pjs::Object> m_on_start;
   pjs::Ref<pjs::Function> m_on_end;
@@ -193,6 +192,7 @@ private:
   EventBuffer m_pending_events;
   ResultCallback* m_result_cb = nullptr;
   std::function<void(StreamEnd *)> m_on_eos;
+  bool m_allocated = false;
   bool m_started = false;
 
   void wait(pjs::Promise *promise);
