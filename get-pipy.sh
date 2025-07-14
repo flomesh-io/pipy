@@ -177,12 +177,8 @@ while [[ $# -gt 0 ]]; do
        shift
        if [[ $# -ne 0 ]]; then
            export DESIRED_VERSION="${1}"
-           if [[ "$1" != "v"* ]]; then
-               echo "Expected version arg ('${DESIRED_VERSION}') to begin with 'v', fixing..."
-               export DESIRED_VERSION="v${1}"
-           fi
        else
-           echo -e "Please provide the desired version. e.g. --version v3.0.0 or -v canary"
+           echo -e "Please provide the desired version. e.g. --version 3.0.0"
            exit 0
        fi
        ;;
