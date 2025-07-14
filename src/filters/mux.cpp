@@ -390,6 +390,12 @@ Mux::Queue::Queue(Mux *mux)
   p->start();
 }
 
+Mux::Queue::~Queue() {
+  if (m_pipeline) {
+    m_pipeline->on_eos(nullptr);
+  }
+}
+
 auto Mux::Queue::alloc(EventTarget::Input *output, const pjs::Value &key) -> Request* {
   auto r = new Request(key);
   r->chain(output);
@@ -644,6 +650,12 @@ MuxQueue::Queue::Queue(MuxQueue *mux) {
   m_pipeline = mux->sub_pipeline(0, true, EventTarget::input());
   m_pipeline->on_eos([this](StreamEnd *) { Muxer::Session::abort(); });
   m_pipeline->start();
+}
+
+MuxQueue::Queue::~Queue() {
+  if (m_pipeline) {
+    m_pipeline->on_eos(nullptr);
+  }
 }
 
 auto MuxQueue::Queue::alloc(EventTarget::Input *output) -> Request* {

@@ -256,7 +256,7 @@ private:
 
   private:
     Queue(Mux *mux);
-    ~Queue() {}
+    ~Queue();
 
     void free(Request *r);
     void free_all();
@@ -370,7 +370,7 @@ private:
 
   private:
     Queue(MuxQueue *mux);
-    ~Queue() {}
+    ~Queue();
 
     void free(Request *r);
     void free_all();

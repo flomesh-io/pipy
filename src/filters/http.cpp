@@ -1854,6 +1854,7 @@ Mux::HTTPSession::HTTPSession(Mux *mux)
 }
 
 Mux::HTTPSession::~HTTPSession() {
+  if (m_pipeline) m_pipeline->on_eos(nullptr);
   if (m_version_callback) m_version_callback->discard();
   if (m_ping_callback) m_ping_callback->discard();
 }
