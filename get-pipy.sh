@@ -14,7 +14,9 @@ HAS_TAR="$(type "tar" &> /dev/null && echo true || echo false)"
 initArch() {
   ARCH=$(uname -m)
   case $ARCH in
+    arm64) ARCH="aarch64";;
     aarch64) ARCH="aarch64";;
+    amd64) ARCH="x86_64";;
     x86_64) ARCH="x86_64";;
   esac
 }
@@ -61,7 +63,7 @@ verifySupported() {
   fi
 
   if [ "${HAS_TAR}" != "true" ]; then
-    echo "[ERROR] Could not find tar. It is required to extract the helm binary archive."
+    echo "[ERROR] Could not find tar. It is required to extract the pipy binary archive."
     exit 1
   fi
 }
@@ -87,7 +89,7 @@ checkDesiredVersion() {
 # downloadFile downloads the binary package of specified version
 downloadFile() {
   PIPY_DIST="pipy-$TAG-$OS-$ARCH.tar.gz"
-  DOWNLOAD_URL="https://github.com/flomesh-io/pipy/releases/download/$TAG/get.helm.sh/$PIPY_DIST"
+  DOWNLOAD_URL="https://github.com/flomesh-io/pipy/releases/download/$TAG/$PIPY_DIST"
   PIPY_TMP_ROOT="$(mktemp -dt pipy-installer-XXXXXX)"
   PIPY_TMP_FILE="$PIPY_TMP_ROOT/$PIPY_DIST"
 
@@ -104,7 +106,9 @@ installFile() {
   PIPY_TMP="$PIPY_TMP_ROOT/$BINARY_NAME"
   mkdir -p "$PIPY_TMP"
   tar xf "$PIPY_TMP_FILE" -C "$PIPY_TMP"
-  PIPY_TMP_BIN="$PIPY_TMP/$OS-$ARCH/helm"
+  ls -l "$PIPY_TMP"
+  PIPY_TMP_BIN="$PIPY_TMP/usr/local/bin/pipy"
+  ls -l $PIPY_TMP_BIN
   echo "Preparing to install $BINARY_NAME into ${PIPY_INSTALL_DIR}"
   runAsRoot cp "$PIPY_TMP_BIN" "$PIPY_INSTALL_DIR/$BINARY_NAME"
   echo "$BINARY_NAME installed into $PIPY_INSTALL_DIR/$BINARY_NAME"
@@ -146,7 +150,7 @@ help () {
   echo -e "\t[--no-sudo]  ->> install without sudo"
 }
 
-# cleanup temporary files to avoid https://github.com/helm/helm/issues/2977
+# cleanup temporary files
 cleanup() {
   if [[ -d "${PIPY_TMP_ROOT:-}" ]]; then
     rm -rf "$PIPY_TMP_ROOT"
