@@ -918,15 +918,25 @@ auto Hessian::Parser::push(const pjs::Value &value, CollectionState state, int l
               break;
             case Collection::Kind::class_def:
               if (m_is_ref) return ERROR;
-              if (!v.is_string()) return ERROR;
-              c->elements->as<pjs::Array>()->set(i, v.s());
+              if (v.is_string()) {
+                c->elements->as<pjs::Array>()->set(i, v.s());
+              } else if (v.is<CString>()) {
+                c->elements->as<pjs::Array>()->set(i, v.o());
+              } else {
+                return ERROR;
+              }
               break;
             case Collection::Kind::object:
               if (auto *d = l->class_def.get()) {
                 pjs::Value k;
                 d->elements->as<pjs::Array>()->get(i, k);
-                if (!k.is_string()) return ERROR;
-                c->elements->set(k.s(), v);
+                if (k.is_string()) {
+                  c->elements->set(k.s(), v);
+                } else if (k.is<CString>()) {
+                  c->elements->set(k.as<CString>()->to_str(), v);
+                } else {
+                  return ERROR;
+                }
               } else {
                 return ERROR;
               }
@@ -950,6 +960,7 @@ auto Hessian::Parser::push(const pjs::Value &value, CollectionState state, int l
         case CollectionState::TYPE:
         case CollectionState::TYPE_LENGTH:
           if (m_is_ref) return ERROR;
+          if (v.is<CString>()) v.set(v.as<CString>()->to_str());
           if (v.is_string()) {
             c->type = v.s();
             if (

@@ -40,6 +40,8 @@ public:
   auto size() const -> int { return m_data->size(); }
   auto data() const -> Data* { return m_data; }
 
+  auto to_str() -> pjs::Str*;
+
   virtual auto to_string() const -> std::string override {
     return m_data->to_string();
   }
@@ -51,6 +53,7 @@ protected:
 
 private:
   pjs::Ref<Data> m_data;
+  pjs::Ref<pjs::Str> m_str;
 
   friend class pjs::ObjectTemplate<CString>;
 };

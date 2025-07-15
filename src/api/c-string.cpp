@@ -44,6 +44,13 @@ CString::CString(const Data &data)
 {
 }
 
+auto CString::to_str() -> pjs::Str* {
+  if (!m_str) {
+    m_str = pjs::Str::make(m_data->to_string());
+  }
+  return m_str.get();
+}
+
 } // namespace pipy
 
 namespace pjs {
