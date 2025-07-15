@@ -103,9 +103,11 @@ private:
   pjs::Object* respond_log(const std::string &path);
   pjs::Object* respond_dump(const std::string &path, Status &status);
   pjs::Object* respond_dump_objects(const std::map<std::string, size_t> &counts);
+  pjs::Object* respond_metrics(const stats::MetricData &metric_data);
 
   static const std::string s_path_log;
   static const std::string s_path_dump;
+  static const std::string s_path_metrics;
   static const std::string s_prefix_log;
   static const std::string s_prefix_dump;
   static const std::string s_prefix_dump_objects;
@@ -115,6 +117,7 @@ private:
 
 const std::string AdminService::s_path_log("/log");
 const std::string AdminService::s_path_dump("/dump");
+const std::string AdminService::s_path_metrics("/metrics");
 const std::string AdminService::s_prefix_log("/log/");
 const std::string AdminService::s_prefix_dump("/dump/");
 const std::string AdminService::s_prefix_dump_objects("/dump/objects/");
@@ -152,6 +155,19 @@ void AdminService::open(const std::string &ip, int port, WorkerThread *wt) {
             promise->settle(true, respond_dump(path, *status));
             promise->release();
             delete status;
+          });
+        });
+        promise->retain();
+        return promise;
+      } else if (path == s_path_metrics) {
+        auto promise = pjs::Promise::make();
+        auto metric_data = new stats::MetricData;
+        wt->stats(*metric_data, [=]() {
+          net->post([=]() {
+            InputContext ic;
+            promise->settle(true, respond_metrics(*metric_data));
+            promise->release();
+            delete metric_data;
           });
         });
         promise->retain();
@@ -270,10 +286,14 @@ pjs::Object* AdminService::respond_dump(const std::string &path, Status &status)
     status.dump_outbound(db);
   } else {
     auto name = path.substr(s_prefix_dump.length());
-    if (name == "pools") {
-      status.dump_pools(db);
-    } else if (name == "objects") {
+    if (name == "objects") {
       status.dump_objects(db);
+    } else if (name == "memory") {
+      status.dump_pools(db);
+      status.dump_chunks(db);
+      status.dump_buffers(db);
+    } else if (name == "pools") {
+      status.dump_pools(db);
     } else if (name == "chunks") {
       status.dump_chunks(db);
     } else if (name == "buffers") {
@@ -303,6 +323,16 @@ pjs::Object* AdminService::respond_dump_objects(const std::map<std::string, size
     db.push(p.first);
     db.push('\n');
   }
+  db.flush();
+  return Message::make(Data::make(std::move(buf)));
+}
+
+pjs::Object* AdminService::respond_metrics(const stats::MetricData &metric_data) {
+  Data buf;
+  Data::Builder db(buf, &s_dp);
+  metric_data.to_prometheus(std::string(), [&](const void *str, size_t len) {
+    db.push(str, len);
+  });
   db.flush();
   return Message::make(Data::make(std::move(buf)));
 }
