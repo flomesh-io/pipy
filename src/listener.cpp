@@ -525,7 +525,7 @@ void Listener::AcceptorUDP::start(const asio::ip::udp::endpoint &endpoint) {
   retain();
   SocketUDP::open();
 
-  m_socket = Socket::make(SocketUDP::socket().native_handle());
+  m_socket = Socket::make(this, SocketUDP::socket().native_handle());
 }
 
 void Listener::AcceptorUDP::accept() {

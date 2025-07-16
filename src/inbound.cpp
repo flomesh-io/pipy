@@ -284,7 +284,7 @@ void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
 
 auto InboundTCP::get_socket() -> Socket* {
   if (!m_socket) {
-    m_socket = Socket::make(SocketTCP::socket().native_handle());
+    m_socket = Socket::make(this, SocketTCP::socket().native_handle());
   }
   return m_socket;
 }

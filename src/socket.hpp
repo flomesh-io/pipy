@@ -51,6 +51,8 @@ public:
     bool no_delay = true;
   };
 
+  virtual void bind(const std::string &ip, int port) = 0;
+
 protected:
   SocketBase(bool is_inbound, const Options &options)
     : m_is_inbound(is_inbound)
@@ -118,6 +120,8 @@ private:
   bool m_sending = false;
   bool m_paused = false;
   bool m_closed = false;
+
+  virtual void bind(const std::string &ip, int port) override;
 
   void receive();
   void send();
@@ -225,6 +229,8 @@ private:
   bool m_closing = false;
   bool m_closed = false;
 
+  virtual void bind(const std::string &ip, int port) override;
+
   void output(Event *evt, Peer *peer);
   void receive();
   void send(Data *data);
@@ -292,6 +298,8 @@ private:
   bool m_closing = false;
   bool m_closed = false;
 
+  virtual void bind(const std::string &ip, int port) override {}
+
   void receive();
   void send(Data *data);
   void close_socket();
@@ -324,13 +332,16 @@ private:
 
 class Socket : public pjs::ObjectTemplate<Socket> {
 public:
+  void bind(const std::string &ip_port);
+  void bind(const std::string &ip, int port);
   auto get_raw_option(int level, int option, Data *data) -> int;
   auto set_raw_option(int level, int option, Data *data) -> int;
-  void discard() { m_fd = 0; }
+  void discard() { m_socket = nullptr; m_fd = 0; }
 
 private:
-  Socket(int fd) : m_fd(fd) {}
+  Socket(SocketBase *s, int fd) : m_socket(s), m_fd(fd) {}
 
+  SocketBase* m_socket;
   int m_fd;
 
   friend class pjs::ObjectTemplate<Socket>;

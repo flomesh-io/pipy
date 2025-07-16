@@ -496,7 +496,7 @@ void OutboundTCP::connect_error(StreamEnd::Error err) {
 }
 
 auto OutboundTCP::wrap_socket() -> Socket* {
-  return Socket::make(SocketTCP::socket().native_handle());
+  return Socket::make(this, SocketTCP::socket().native_handle());
 }
 
 auto OutboundTCP::get_traffic_in() -> size_t {
@@ -760,7 +760,7 @@ void OutboundUDP::connect_error(StreamEnd::Error err) {
 }
 
 auto OutboundUDP::wrap_socket() -> Socket* {
-  return Socket::make(SocketUDP::socket().native_handle());
+  return Socket::make(this, SocketUDP::socket().native_handle());
 }
 
 auto OutboundUDP::get_traffic_in() -> size_t {
@@ -835,7 +835,7 @@ void OutboundNetlink::close() {
 }
 
 auto OutboundNetlink::wrap_socket() -> Socket* {
-  return Socket::make(SocketNetlink::socket().native_handle());
+  return Socket::make(this, SocketNetlink::socket().native_handle());
 }
 
 auto OutboundNetlink::get_traffic_in() -> size_t {

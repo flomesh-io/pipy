@@ -142,6 +142,11 @@ void SocketTCP::close() {
   close_async();
 }
 
+void SocketTCP::bind(const std::string &ip, int port) {
+  tcp::endpoint ep(asio::ip::make_address(ip), port);
+  m_socket.bind(ep);
+}
+
 void SocketTCP::receive() {
   if (m_state != OPEN && m_state != HALF_CLOSED_LOCAL) return;
   if (m_receiving) return;
@@ -404,6 +409,11 @@ void SocketUDP::output(Event *evt) {
       }
     }
   }
+}
+
+void SocketUDP::bind(const std::string &ip, int port) {
+  udp::endpoint ep(asio::ip::make_address(ip), port);
+  m_socket.bind(ep);
 }
 
 void SocketUDP::output(Event *evt, Peer *peer) {
@@ -880,6 +890,24 @@ void SocketNetlink::on_send(Data *data, const std::error_code &ec, std::size_t n
 // Socket
 //
 
+void Socket::bind(const std::string &ip_port) {
+  if (m_socket) {
+    std::string ip;
+    int port;
+    if (utils::get_host_port(ip_port, ip, port)) {
+      m_socket->bind(ip, port);
+    } else {
+      throw std::runtime_error("Invalid [ip]:port format");
+    }
+  }
+}
+
+void Socket::bind(const std::string &ip, int port) {
+  if (m_socket) {
+    m_socket->bind(ip, port);
+  }
+}
+
 auto Socket::get_raw_option(int level, int option, Data *data) -> int {
   if (!m_fd) throw std::runtime_error("socket is gone");
   char buf[256];
@@ -909,6 +937,22 @@ namespace pjs {
 using namespace pipy;
 
 template<> void ClassDef<Socket>::init() {
+  method("bind", [](Context &ctx, Object *obj, Value &ret) {
+    Str *ip;
+    int port;
+    try {
+      if (ctx.argc() > 1) {
+        if (!ctx.arguments(2, &ip, &port)) return;
+        obj->as<Socket>()->bind(ip->str(), port);
+      } else {
+        if (!ctx.arguments(1, &ip)) return;
+        obj->as<Socket>()->bind(ip->str());
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   method("getRawOption", [](Context &ctx, Object *obj, Value &ret) {
     int level, option;
     pipy::Data *data;
