@@ -1219,7 +1219,11 @@ auto Socket::io_control(int64_t op, const Data &input, Data *output) -> int {
   auto len = std::max(input.size(), 1000);
   pjs::vl_array<char, 1000> buf(len);
   input.to_bytes((uint8_t *)buf.data());
+#ifdef WIN32
+  auto ret = ioctlsocket(m_fd, op, (u_long *)buf.data());
+#else
   auto ret = ioctl(m_fd, op, buf.data());
+#endif // WIN32
   if (output) output->push(buf.data(), len, nullptr);
   return ret;
 }
