@@ -1647,6 +1647,7 @@ void Mux::HTTPStream::discard() {
     if (auto s = Muxer::Stream::session()) {
       auto session = static_cast<HTTPSession*>(s);
       session->http2::Client::close(m_http2_stream);
+      m_http2_stream = nullptr;
     }
   }
   EventFunction::chain(nullptr);
@@ -1865,6 +1866,7 @@ void Mux::HTTPSession::free_all() {
     for (auto s = HTTPQueue::head(); s; s = s->next()) {
       auto stream = static_cast<HTTPStream*>(s);
       http2::Client::discard(stream->m_http2_stream);
+      stream->m_http2_stream = nullptr;
     }
   }
   HTTPQueue::free_all();
