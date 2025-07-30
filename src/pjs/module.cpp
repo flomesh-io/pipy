@@ -149,7 +149,7 @@ void Module::resolve(const std::function<Module*(Module*, Str*)> &resolver) {
     }
   }
 
-  m_exports_class = Class::make("", nullptr, fields);
+  m_exports_class = Class::make("Module Exports", nullptr, fields);
   m_exports_object = ExportsObjectBase::make(m_exports_class);
 
   for (auto &imp : m_imports) {

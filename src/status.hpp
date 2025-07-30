@@ -111,23 +111,19 @@ public:
   };
 
   struct PipelineInfo {
-    std::string module;
     std::string name;
-    bool stale;
-    mutable int active;
+    mutable int layouts;
     mutable int allocated;
+    mutable int active;
 
     bool operator<(const PipelineInfo &r) const {
-      if (stale < r.stale) return true;
-      if (stale > r.stale) return false;
-      if (module < r.module) return true;
-      if (module > r.module) return false;
       return name < r.name;
     }
 
     auto operator+=(const PipelineInfo &r) const -> const PipelineInfo& {
-      active += r.active;
+      layouts += r.layouts;
       allocated += r.allocated;
+      active += r.active;
       return *this;
     }
   };
@@ -199,20 +195,19 @@ public:
   std::set<BufferInfo> buffers;
   std::set<InboundInfo> inbounds;
   std::set<OutboundInfo> outbounds;
+  std::set<PipelineInfo> pipelines;
   std::set<std::string> log_names;
 
   void update_global();
   void update_local();
   void merge(const Status &other);
-  bool from_json(const Data &data, Data *metrics = nullptr);
-  void to_json(Data::Builder &db, Data *metrics = nullptr) const;
   void dump_pools(Data::Builder &db);
   void dump_objects(Data::Builder &db);
   void dump_chunks(Data::Builder &db);
   void dump_buffers(Data::Builder &db);
   void dump_inbound(Data::Builder &db);
   void dump_outbound(Data::Builder &db);
-  void dump_json(Data::Builder &db);
+  void dump_pipelines(Data::Builder &db);
 };
 
 } // namespace pipy

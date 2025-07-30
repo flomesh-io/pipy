@@ -272,7 +272,7 @@ ObjectLiteral::ObjectLiteral(std::list<std::pair<std::unique_ptr<Expr>, std::uni
     }
     m_entries.emplace_back(std::move(ent));
   }
-  m_class = Class::make("", class_of<Object>(), fields);
+  m_class = Class::make("pjs::Object", class_of<Object>(), fields);
   for (auto &e : m_entries) {
     if (auto *s = dynamic_cast<StringLiteral*>(e.key.get())) {
       auto f = m_class->field(m_class->find_field(s->s()));
@@ -326,6 +326,7 @@ bool ObjectLiteral::unpack(Context &ctx, const Value &src, Value *dst, int &idx)
 }
 
 bool ObjectLiteral::eval(Context &ctx, Value &result) {
+  ctx.trace(source(), line(), column());
   auto obj = Object::make(m_class);
   auto data = obj->data();
   result.set(obj);
@@ -481,6 +482,7 @@ bool ArrayLiteral::unpack(Context &ctx, const Value &src, Value *dst, int &idx) 
 }
 
 bool ArrayLiteral::eval(Context &ctx, Value &result) {
+  ctx.trace(source(), line(), column());
   auto obj = Array::make(m_list.size());
   result.set(obj);
   int i = 0;
@@ -592,6 +594,7 @@ FunctionLiteral::FunctionLiteral(Expr *inputs, Stmt *output)
 }
 
 bool FunctionLiteral::eval(Context &ctx, Value &result) {
+  ctx.trace(source(), line(), column());
   result.set(Function::make(m_method, nullptr, ctx.scope()));
   return true;
 }
@@ -612,8 +615,14 @@ bool FunctionLiteral::declare(Module *module, Scope &, Error &error, bool is_lva
 }
 
 void FunctionLiteral::resolve(Module *module, Context &ctx) {
-  char name[100];
-  std::sprintf(name, "(anonymous function at line %d column %d)", line(), column());
+  std::string name("function @");
+  if (auto src = source()) {
+    name += src->filename;
+    name += ':';
+  }
+  name += std::to_string(line());
+  name += ':';
+  name += std::to_string(column());
   m_method = Method::make(
     name, [this](Context &ctx, Object*, Value &result) {
       auto scope = m_scope.instantiate(ctx);

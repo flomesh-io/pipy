@@ -707,9 +707,11 @@ void Class::trace(Object *obj) {
       m_objects_head = obj;
       m_objects_tail = obj;
     }
-    if (auto ctx = Context::current()) {
-      if (auto caller = ctx->caller()) {
-        obj->m_location = caller->call_site();
+    for (auto ctx = Context::current(); ctx; ctx = ctx->caller()) {
+      const auto &loc = ctx->call_site();
+      if (loc.line > 0) {
+        obj->m_location = loc;
+        break;
       }
     }
   }
@@ -746,7 +748,7 @@ void Class::assign(Object *obj, Object *src) {
 template<> void ClassDef<Object>::init() {
   method("toString", [](Context &ctx, Object *obj, Value &ret) { ret.set(obj->to_string()); });
   method("valueOf", [](Context &ctx, Object *obj, Value &ret) { obj->value_of(ret); });
-  m_c = Class::make("Object", nullptr, m_init_data->fields);
+  m_c = Class::make("pjs::Object", nullptr, m_init_data->fields);
   m_c->set_ctor([](Context &ctx) -> Object* { return Object::make(); });
 }
 

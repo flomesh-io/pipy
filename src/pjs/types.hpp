@@ -1036,6 +1036,14 @@ public:
 
   auto all() -> const std::map<std::string, Class*>& { return m_class_map; }
 
+  void for_each(const std::function<void(Class *)> &cb) {
+    for (const auto &slot : m_class_slots) {
+      if (auto c = slot.class_ptr) {
+        cb(c);
+      }
+    }
+  }
+
   auto add(Class *c) -> size_t;
   void remove(Class *c);
 
@@ -1074,6 +1082,10 @@ public:
 
   static auto get(size_t id) -> Class* {
     return ClassMap::get()->get(id);
+  }
+
+  static void for_each(const std::function<void(Class *)> &cb) {
+    return ClassMap::get()->for_each(cb);
   }
 
   auto name() const -> pjs::Str* { return m_name; }

@@ -27,10 +27,12 @@
 #define WORKER_HPP
 
 #include "context.hpp"
+#include "pipeline.hpp"
 #include "listener.hpp"
 #include "message.hpp"
 #include "signal.hpp"
 
+#include <functional>
 #include <list>
 #include <memory>
 #include <set>
@@ -64,6 +66,12 @@ public:
   void add_listener(Listener *listener);
   void remove_listener(Listener *listener);
   void stop(bool force);
+
+  void for_each_pipeline_layout(const std::function<void(PipelineLayout *)> &cb) {
+    for (auto pl : m_pipeline_templates) {
+      cb(pl);
+    }
+  }
 
 private:
   Worker(pjs::Promise::Period *period);

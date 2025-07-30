@@ -305,6 +305,8 @@ pjs::Object* AdminService::respond_dump(const std::string &path, Status &status)
       status.dump_inbound(db);
     } else if (name == "out") {
       status.dump_outbound(db);
+    } else if (name == "pipelines") {
+      status.dump_pipelines(db);
     } else {
       return nullptr;
     }
@@ -318,7 +320,7 @@ pjs::Object* AdminService::respond_dump_objects(const std::map<std::string, size
   Data::Builder db(buf, &s_dp);
   for (const auto &p : counts) {
     char str[100];
-    auto len = std::snprintf(str, sizeof(str), "%llu ", (unsigned long long)p.second);
+    auto len = std::snprintf(str, sizeof(str), "%10llu ", (unsigned long long)p.second);
     db.push(str, len);
     db.push(p.first);
     db.push('\n');

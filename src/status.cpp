@@ -297,6 +297,7 @@ void Status::update_local() {
   buffers.clear();
   inbounds.clear();
   outbounds.clear();
+  pipelines.clear();
 
   for (const auto &p : pjs::Pool::all()) {
     auto *c = p.second;
@@ -309,6 +310,18 @@ void Status::update_local() {
       });
     }
   }
+
+  pjs::Class::for_each([&](pjs::Class *c) {
+    static const std::string prefix("pjs::Constructor");
+    if (utils::starts_with(c->name()->str(), prefix)) return;
+    ObjectInfo oi{ c->name()->str(), (int)c->object_count() };
+    auto i = objects.find(oi);
+    if (i != objects.end()) {
+      *i += oi;
+    } else {
+      objects.insert(oi);
+    }
+  });
 
   for (const auto &i : pjs::Class::all()) {
     static const std::string prefix("pjs::Constructor");
@@ -365,7 +378,7 @@ void Status::update_local() {
     return true;
   });
 
-  std::map<int, OutboundInfo> outbound_tcp, outbound_udp, outbound_netlink;
+  std::map<int, OutboundInfo> outbound_tcp, outbound_udp;
   Outbound::for_each([&](Outbound *outbound) {
     std::map<int, OutboundInfo> *m = nullptr;
     auto protocol = Protocol::UNKNOWN;
@@ -393,7 +406,18 @@ void Status::update_local() {
   });
   for (auto &p : outbound_tcp) outbounds.insert(p.second);
   for (auto &p : outbound_udp) outbounds.insert(p.second);
-  for (auto &p : outbound_netlink) outbounds.insert(p.second);
+
+  if (auto worker = Worker::current()) {
+    worker->for_each_pipeline_layout([&](PipelineLayout *pl) {
+      PipelineInfo pi{ pl->name()->str(), 1, (int)pl->allocated(), (int)pl->active() };
+      auto i = pipelines.find(pi);
+      if (i != pipelines.end()) {
+        *i += pi;
+      } else {
+        pipelines.insert(pi);
+      }
+    });
+  }
 }
 
 template<class T>
@@ -415,50 +439,7 @@ void Status::merge(const Status &other) {
   merge_sets(buffers, other.buffers);
   merge_sets(inbounds, other.inbounds);
   merge_sets(outbounds, other.outbounds);
-}
-
-bool Status::from_json(const Data &data, Data *metrics) {
-  StatusDeserializer sd(*this);
-  if (!JSON::visit(data, &sd)) return false;
-  if (metrics && sd.metrics) *metrics = std::move(*sd.metrics);
-  return true;
-}
-
-void Status::to_json(Data::Builder &db, Data *metrics) const {
-  bool first;
-
-  auto push_uint = [&](uint64_t i) {
-    char str[100];
-    auto len = std::snprintf(str, sizeof(str), "%llu", (unsigned long long)i);
-    db.push(str, len);
-  };
-
-  auto push_str = [&](const std::string &s) {
-    db.push('"');
-    utils::escape(s, [&](char c) {
-      db.push(c);
-    });
-    db.push('"');
-  };
-
-  db.push("{\"timestamp\":"); push_uint(timestamp);
-  db.push(",\"since\":"); push_uint(since);
-  db.push(",\"uuid\":"); push_str(uuid);
-  db.push(",\"name\":"); push_str(name);
-  db.push(",\"ip\":"); push_str(ip);
-  db.push(",\"version\":"); push_str(version);
-
-  if (metrics) {
-    db.push(",\"metrics\":");
-    db.push(std::move(*metrics));
-  }
-
-  db.push(",\"logs\":["); first = true;
-  for (const auto &name : log_names) {
-    if (first) first = false; else db.push(',');
-    push_str(name);
-  }
-  db.push("]}");
+  merge_sets(pipelines, other.pipelines);
 }
 
 template<class T>
@@ -596,90 +577,17 @@ void Status::dump_outbound(Data::Builder &db) {
   print_table(db, { "OUTBOUND", "PORT", "#CONNECTIONS", "BUFFERED(KB)" }, rows);
 }
 
-void Status::dump_json(Data::Builder &db) {
-  bool first;
-  db.push('{');
-  db.push("\"pools\":{");
-  first = true;
-  for (const auto &i : pools) {
-    if (first) first = false; else db.push(',');
-    db.push('"');
-    db.push(i.name);
-    db.push("\":{\"size\":");
-    db.push(std::to_string(i.size * (i.allocated + i.pooled)));
-    db.push(",\"allocated\":");
-    db.push(std::to_string(i.allocated));
-    db.push(",\"pooled\":");
-    db.push(std::to_string(i.pooled));
-    db.push('}');
+void Status::dump_pipelines(Data::Builder &db) {
+  std::list<std::array<std::string, 4>> rows;
+  for (const auto &p : pipelines) {
+    rows.push_back({
+      p.name,
+      std::to_string(p.layouts),
+      std::to_string(p.allocated),
+      std::to_string(p.active),
+    });
   }
-  db.push("},\"chunks\":{");
-  first = true;
-  for (const auto &i : chunks) {
-    if (first) first = false; else db.push(',');
-    db.push('"');
-    db.push(i.name);
-    db.push("\":");
-    db.push(std::to_string(DATA_CHUNK_SIZE * i.count / 1024));
-  }
-  db.push("},\"buffers\":{");
-  first = true;
-  for (const auto &i : buffers) {
-    if (first) first = false; else db.push(',');
-    db.push('"');
-    db.push(i.name);
-    db.push("\":");
-    db.push(std::to_string(i.size / 1024));
-  }
-  db.push("},\"objects\":{");
-  first = true;
-  for (const auto &i : objects) {
-    if (first) first = false; else db.push(',');
-    db.push('"');
-    db.push(i.name);
-    db.push("\":");
-    db.push(std::to_string(i.count));
-  }
-  db.push("],\"inbound\":[");
-  first = true;
-  for (const auto &i : inbounds) {
-    if (first) first = false; else db.push(',');
-    db.push("{\"ip\":\"");
-    db.push(i.ip);
-    db.push("\",\"port\":");
-    db.push(std::to_string(i.port));
-    db.push(",\"protocol\":\"");
-    switch (i.protocol) {
-      case Protocol::TCP: db.push("TCP"); break;
-      case Protocol::UDP: db.push("UDP"); break;
-      default: break;
-    }
-    db.push("\",\"connections\":");
-    db.push(std::to_string(i.connections));
-    db.push(",\"buffered\":");
-    db.push(std::to_string(i.buffered/1024));
-    db.push('}');
-  }
-  db.push("],\"outbound\":[");
-  first = true;
-  for (const auto &i : outbounds) {
-    if (first) first = false; else db.push(',');
-    db.push("{\"port\":");
-    db.push(std::to_string(i.port));
-    db.push(",\"protocol\":\"");
-    switch (i.protocol) {
-      case Protocol::TCP: db.push("TCP"); break;
-      case Protocol::UDP: db.push("UDP"); break;
-      default: break;
-    }
-    db.push("\",\"connections\":");
-    db.push(std::to_string(i.connections));
-    db.push(",\"buffered\":");
-    db.push(std::to_string(i.buffered/1024));
-    db.push('}');
-  }
-  db.push(']');
-  db.push('}');
+  print_table(db, { "PIPELINE", "LAYOUTS", "#ALLOCATED", "#ACTIVE" }, rows);
 }
 
 } // namespace pipy

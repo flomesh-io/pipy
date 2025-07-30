@@ -158,7 +158,8 @@ void WorkerThread::stats(stats::MetricData &metric_data, const std::vector<std::
 void WorkerThread::dump_objects(const std::string &class_name, std::map<std::string, size_t> &counts, const std::function<void()> &cb) {
   m_net->post(
     [&, class_name, cb]() {
-      if (auto c = pjs::Class::get(class_name)) {
+      pjs::Class::for_each([&](pjs::Class *c) {
+        if (c->name()->str() != class_name) return;
         c->iterate(
           [&](pjs::Object *obj) {
             auto &l = obj->location();
@@ -171,7 +172,7 @@ void WorkerThread::dump_objects(const std::string &class_name, std::map<std::str
             return true;
           }
         );
-      }
+      });
       cb();
     }
   );
