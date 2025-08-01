@@ -2891,7 +2891,7 @@ protected:
 
   Ref<Method> m_method;
   Ref<Object> m_this;
-  Closure* m_closure;
+  Closure* m_closure = nullptr;
 
   friend class ObjectTemplate<Function>;
 };
