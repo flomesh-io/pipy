@@ -113,8 +113,10 @@ public:
     auto size() const -> size_t { return m_size; }
     auto args() const -> const std::vector<Ref<Str>> & { return m_args; }
     auto vars() const -> const std::vector<Ref<Str>> & { return m_vars; }
-    auto variables() -> std::vector<pjs::Scope::Variable>& { init_variables(); return m_variables; }
-    auto instantiate(Context &ctx) -> pjs::Scope*;
+    auto variables() -> std::vector<Stack::Variable>& { init_variables(); return m_variables; }
+    auto capture(Scope *source, int i) -> int;
+    auto new_closure(Context &ctx) -> Closure*;
+    auto new_stack(Context &ctx) -> Stack*;
 
   private:
     struct InitArg {
@@ -133,7 +135,8 @@ public:
     Kind m_kind;
     Scope* m_parent;
     Ref<Str> m_label;
-    std::vector<pjs::Scope::Variable> m_variables;
+    std::vector<Stack::Variable> m_variables;
+    std::vector<Stack::Variable> m_closure;
     std::vector<Ref<Str>> m_args, m_vars;
     std::map<Ref<Str>, int> m_fiber_vars;
     std::list<InitArg> m_init_args;
@@ -170,7 +173,7 @@ public:
   //
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval = false) { return true; }
-  virtual void resolve(Module *module, Context &ctx) {}
+  virtual void resolve(Module *module, Scope &scope, Error &error) {}
 
 private:
   const Source* m_source = nullptr;

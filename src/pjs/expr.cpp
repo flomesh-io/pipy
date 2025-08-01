@@ -70,8 +70,8 @@ bool Discard::declare(Module *module, Scope &scope, Error &error, bool is_lval) 
   return m_x->declare(module, scope, error);
 }
 
-void Discard::resolve(Module *module, Context &ctx) {
-  m_x->resolve(module, ctx);
+void Discard::resolve(Module *module, Scope &scope, Error &error) {
+  m_x->resolve(module, scope, error);
 }
 
 void Discard::dump(std::ostream &out, const std::string &indent) {
@@ -118,9 +118,9 @@ bool Compound::declare(Module *module, Scope &scope, Error &error, bool is_lval)
   return true;
 }
 
-void Compound::resolve(Module *module, Context &ctx) {
+void Compound::resolve(Module *module, Scope &scope, Error &error) {
   for (const auto &p : m_exprs) {
-    p->resolve(module, ctx);
+    p->resolve(module, scope, error);
   }
 }
 
@@ -156,9 +156,9 @@ bool Concatenation::declare(Module *module, Scope &scope, Error &error, bool is_
   return true;
 }
 
-void Concatenation::resolve(Module *module, Context &ctx) {
+void Concatenation::resolve(Module *module, Scope &scope, Error &error) {
   for (const auto &p : m_exprs) {
-    p->resolve(module, ctx);
+    p->resolve(module, scope, error);
   }
 }
 
@@ -308,14 +308,14 @@ void ObjectLiteral::unpack(std::vector<Ref<Str>> &vars) const {
   }
 }
 
-bool ObjectLiteral::unpack(Context &ctx, const Value &src, Value *dst, int &idx) {
-  auto obj = src.to_object();
+bool ObjectLiteral::unpack(Context &ctx, const Value &val, const std::function<void(const Value &)> &out) {
+  auto obj = val.to_object();
   if (!obj) return error(ctx, "cannot destruct null");
   for (const auto &e : m_entries) {
     if (auto *key = dynamic_cast<StringLiteral*>(e.key.get())) {
       Value val;
       obj->get(key->s(), val);
-      if (!e.value->unpack(ctx, val, dst, idx)) {
+      if (!e.value->unpack(ctx, val, out)) {
         obj->release();
         return false;
       }
@@ -355,7 +355,7 @@ bool ObjectLiteral::eval(Context &ctx, Value &result) {
 
 bool ObjectLiteral::assign(Context &ctx, Value &value) {
   int idx = 0;
-  unpack(ctx, value, m_unpack_vals.data(), idx);
+  unpack(ctx, value, [&](const Value &val) { m_unpack_vals[idx++] = val; });
   for (size_t i = 0, n = m_unpack_vals.size(); i < n; i++) {
     if (!m_unpack_vars[i]->assign(ctx, m_unpack_vals[i])) {
       return false;
@@ -390,17 +390,17 @@ bool ObjectLiteral::declare(Module *module, Scope &scope, Error &error, bool is_
   return true;
 }
 
-void ObjectLiteral::resolve(Module *module, Context &ctx) {
+void ObjectLiteral::resolve(Module *module, Scope &scope, Error &error) {
   if (m_is_left_value) {
     for (const auto &v : m_unpack_vars) {
-      v->resolve(module, ctx);
+      v->resolve(module, scope, error);
     }
   } else {
     for (const auto &e : m_entries) {
       auto k = e.key.get();
       auto v = e.value.get();
-      if (k) k->resolve(module, ctx);
-      if (v) v->resolve(module, ctx);
+      if (k) k->resolve(module, scope, error);
+      if (v) v->resolve(module, scope, error);
     }
   }
 }
@@ -431,8 +431,8 @@ bool ArrayExpansion::declare(Module *module, Scope &scope, Error &error, bool is
   return true;
 }
 
-void ArrayExpansion::resolve(Module *module, Context &ctx) {
-  m_array->resolve(module, ctx);
+void ArrayExpansion::resolve(Module *module, Scope &scope, Error &error) {
+  m_array->resolve(module, scope, error);
 }
 
 void ArrayExpansion::dump(std::ostream &out, const std::string &indent) {
@@ -469,14 +469,14 @@ void ArrayLiteral::unpack(std::vector<Ref<Str>> &vars) const {
   }
 }
 
-bool ArrayLiteral::unpack(Context &ctx, const Value &src, Value *dst, int &idx) {
-  if (!src.is_array()) return error(ctx, "cannot destruct");
-  auto *a = src.as<Array>();
+bool ArrayLiteral::unpack(Context &ctx, const Value &val, const std::function<void(const Value &)> &out) {
+  if (!val.is_array()) return error(ctx, "cannot destruct");
+  auto *a = val.as<Array>();
   int i = 0;
   for (const auto &p : m_list) {
     Value val;
     a->get(i++, val);
-    if (!p->unpack(ctx, val, dst, idx)) return false;
+    if (!p->unpack(ctx, val, out)) return false;
   }
   return true;
 }
@@ -523,7 +523,7 @@ bool ArrayLiteral::eval(Context &ctx, Value &result) {
 
 bool ArrayLiteral::assign(Context &ctx, Value &value) {
   int idx = 0;
-  unpack(ctx, value, m_unpack_vals.data(), idx);
+  unpack(ctx, value, [&](const Value &val) { m_unpack_vals[idx++] = val; });
   for (size_t i = 0, n = m_unpack_vals.size(); i < n; i++) {
     if (!m_unpack_vars[i]->assign(ctx, m_unpack_vals[i])) {
       return false;
@@ -555,9 +555,9 @@ bool ArrayLiteral::declare(Module *module, Scope &scope, Error &error, bool is_l
   return true;
 }
 
-void ArrayLiteral::resolve(Module *module, Context &ctx) {
+void ArrayLiteral::resolve(Module *module, Scope &scope, Error &error) {
   for (const auto &p : m_list) {
-    p->resolve(module, ctx);
+    p->resolve(module, scope, error);
   }
 }
 
@@ -595,7 +595,8 @@ FunctionLiteral::FunctionLiteral(Expr *inputs, Stmt *output)
 
 bool FunctionLiteral::eval(Context &ctx, Value &result) {
   ctx.trace(source(), line(), column());
-  result.set(Function::make(m_method, nullptr, ctx.scope()));
+  auto closure = m_scope.new_closure(ctx);
+  result.set(Function::make(m_method, nullptr, closure));
   return true;
 }
 
@@ -614,7 +615,7 @@ bool FunctionLiteral::declare(Module *module, Scope &, Error &error, bool is_lva
   return m_output->declare(module, m_scope, error);
 }
 
-void FunctionLiteral::resolve(Module *module, Context &ctx) {
+void FunctionLiteral::resolve(Module *module, Scope &scope, Error &error) {
   std::string name("function @");
   if (auto src = source()) {
     name += src->filename;
@@ -625,9 +626,8 @@ void FunctionLiteral::resolve(Module *module, Context &ctx) {
   name += std::to_string(column());
   m_method = Method::make(
     name, [this](Context &ctx, Object*, Value &result) {
-      auto scope = m_scope.instantiate(ctx);
-      if (!scope) return;
       Stmt::Result res;
+      m_scope.new_stack(ctx);
       m_output->execute(ctx, res);
       if (ctx.ok()) {
         if (res.is_return()) {
@@ -636,13 +636,12 @@ void FunctionLiteral::resolve(Module *module, Context &ctx) {
           result = Value::undefined;
         }
       }
-      scope->clear();
     }
   );
 
-  Context fctx(ctx, 0, nullptr, pjs::Scope::make(ctx.instance(), ctx.scope(), m_scope.size(), m_scope.variables()));
-  for (auto &i : m_inputs) i->resolve(module, fctx);
-  m_output->resolve(module, fctx);
+  m_scope.parent(&scope);
+  for (auto &i : m_inputs) i->resolve(module, m_scope, error);
+  m_output->resolve(module, m_scope, error);
 }
 
 auto FunctionLiteral::reduce(Reducer &r) -> Reducer::Value* {
@@ -674,6 +673,7 @@ bool GlobalVariable::is_left_value() const { return true; }
 
 bool GlobalVariable::eval(Context &ctx, Value &result) {
   m_cache.get(ctx.g(), m_key, result);
+  if (result.is_undefined()) return error(ctx, "unresolved identifier");
   return true;
 }
 
@@ -746,16 +746,12 @@ void ExportedVariable::dump(std::ostream &out, const std::string &indent) {
 bool LocalVariable::is_left_value() const { return true; }
 
 bool LocalVariable::eval(Context &ctx, Value &result) {
-  auto *scope = ctx.scope();
-  for (int i = 0; i < m_level; i++) scope = scope->parent();
-  result = scope->value(m_i);
+  result = ctx.stack()->value(m_i);
   return true;
 }
 
 bool LocalVariable::assign(Context &ctx, Value &value) {
-  auto *scope = ctx.scope();
-  for (int i = 0; i < m_level; i++) scope = scope->parent();
-  scope->value(m_i) = value;
+  ctx.stack()->value(m_i) = value;
   return true;
 }
 
@@ -810,70 +806,54 @@ bool Identifier::is_argument() const { return true; }
 void Identifier::to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>>&) const { args.push_back(m_key); }
 void Identifier::unpack(std::vector<Ref<Str>> &vars) const { vars.push_back(m_key); }
 
-bool Identifier::unpack(Context &ctx, const Value &src, Value *dst, int &idx) {
-  dst[idx++] = src;
+bool Identifier::unpack(Context &ctx, const Value &val, const std::function<void(const Value &)> &out) {
+  out(val);
   return true;
 }
 
 bool Identifier::eval(Context &ctx, Value &result) {
-  if (!m_resolved) resolve(ctx);
-  if (!m_resolved) return error(ctx, "unresolved identifier");
   return m_resolved->eval(ctx, result);
 }
 
 bool Identifier::assign(Context &ctx, Value &value) {
-  if (!m_resolved) resolve(ctx);
-  if (!m_resolved) return error(ctx, "unresolved identifier");
   return m_resolved->assign(ctx, value);
 }
 
 bool Identifier::clear(Context &ctx, Value &result) {
-  if (!m_resolved) resolve(ctx);
-  if (!m_resolved) return error(ctx, "unresolved identifier");
   return m_resolved->clear(ctx, result);
 }
 
-void Identifier::resolve(Module *module, Context &ctx) {
-  m_module = module;
-  resolve(ctx);
-}
-
-void Identifier::resolve(Context &ctx) {
-  auto *scope = ctx.scope();
-  for (int level = 0; scope; scope = scope->parent(), level++) {
-    auto &variables = scope->variables();
+void Identifier::resolve(Module *module, Scope &scope, Error &error) {
+  for (auto *s = &scope; s; s = s->parent()) {
+    auto &variables = s->variables();
     for (size_t i = 0, n = variables.size(); i < n; i++) {
       auto &v = variables[i];
       if (v.name == m_key) {
         if (v.is_fiber) {
-          m_resolved.reset(locate(new FiberVariable(v.index, m_module)));
+          m_resolved.reset(locate(new FiberVariable(v.index, module)));
+        } else if (s != &scope) {
+          m_resolved.reset(locate(new LocalVariable(scope.capture(s, i))));
         } else {
-          m_resolved.reset(locate(new LocalVariable(i, level)));
-          if (scope != ctx.scope()) {
-            v.is_closure = true;
-          }
+          m_resolved.reset(locate(new LocalVariable(i)));
         }
         return;
       }
     }
   }
 
-  if (m_module) {
-    if (auto i = m_module->find_import(m_key)) {
+  if (module) {
+    if (auto i = module->find_import(m_key)) {
       m_resolved.reset(locate(new ImportedVariable(i)));
       return;
     }
-    int i = m_module->find_export(m_key);
+    int i = module->find_export(m_key);
     if (i >= 0) {
-      m_resolved.reset(locate(new ExportedVariable(i, m_module)));
+      m_resolved.reset(locate(new ExportedVariable(i, module)));
       return;
     }
   }
 
-  if (ctx.g()->has(m_key)) {
-    m_resolved.reset(locate(new GlobalVariable(m_key)));
-    return;
-  }
+  m_resolved.reset(locate(new GlobalVariable(m_key)));
 }
 
 auto Identifier::reduce(Reducer &r) -> Reducer::Value* {
@@ -966,9 +946,9 @@ bool Property::declare(Module *module, Scope &scope, Error &error, bool is_lval)
   return true;
 }
 
-void Property::resolve(Module *module, Context &ctx) {
-  m_obj->resolve(module, ctx);
-  m_key->resolve(module, ctx);
+void Property::resolve(Module *module, Scope &scope, Error &error) {
+  m_obj->resolve(module, scope, error);
+  m_key->resolve(module, scope, error);
 }
 
 auto Property::reduce(Reducer &r) -> Reducer::Value* {
@@ -1016,9 +996,9 @@ bool OptionalProperty::declare(Module *module, Scope &scope, Error &error, bool 
   return true;
 }
 
-void OptionalProperty::resolve(Module *module, Context &ctx) {
-  m_obj->resolve(module, ctx);
-  m_key->resolve(module, ctx);
+void OptionalProperty::resolve(Module *module, Scope &scope, Error &error) {
+  m_obj->resolve(module, scope, error);
+  m_key->resolve(module, scope, error);
 }
 
 void OptionalProperty::dump(std::ostream &out, const std::string &indent) {
@@ -1055,11 +1035,11 @@ bool Construction::declare(Module *module, Scope &scope, Error &error, bool is_l
   return true;
 }
 
-void Construction::resolve(Module *module, Context &ctx) {
+void Construction::resolve(Module *module, Scope &scope, Error &error) {
   m_module = module;
-  m_func->resolve(module, ctx);
+  m_func->resolve(module, scope, error);
   for (const auto &p : m_argv) {
-    p->resolve(module, ctx);
+    p->resolve(module, scope, error);
   }
 }
 
@@ -1097,11 +1077,11 @@ bool Invocation::declare(Module *module, Scope &scope, Error &error, bool is_lva
   return true;
 }
 
-void Invocation::resolve(Module *module, Context &ctx) {
+void Invocation::resolve(Module *module, Scope &scope, Error &error) {
   m_module = module;
-  m_func->resolve(module, ctx);
+  m_func->resolve(module, scope, error);
   for (const auto &p : m_argv) {
-    p->resolve(module, ctx);
+    p->resolve(module, scope, error);
   }
 }
 
@@ -1152,11 +1132,11 @@ bool OptionalInvocation::declare(Module *module, Scope &scope, Error &error, boo
   return true;
 }
 
-void OptionalInvocation::resolve(Module *module, Context &ctx) {
+void OptionalInvocation::resolve(Module *module, Scope &scope, Error &error) {
   m_module = module;
-  m_func->resolve(module, ctx);
+  m_func->resolve(module, scope, error);
   for (const auto &p : m_argv) {
-    p->resolve(module, ctx);
+    p->resolve(module, scope, error);
   }
 }
 
@@ -1181,8 +1161,8 @@ bool Plus::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return m_x->declare(module, scope, error);
 }
 
-void Plus::resolve(Module *module, Context &ctx) {
-  m_x->resolve(module, ctx);
+void Plus::resolve(Module *module, Scope &scope, Error &error) {
+  m_x->resolve(module, scope, error);
 }
 
 void Plus::dump(std::ostream &out, const std::string &indent) {
@@ -1209,8 +1189,8 @@ bool Negation::declare(Module *module, Scope &scope, Error &error, bool is_lval)
   return m_x->declare(module, scope, error);
 }
 
-void Negation::resolve(Module *module, Context &ctx) {
-  m_x->resolve(module, ctx);
+void Negation::resolve(Module *module, Scope &scope, Error &error) {
+  m_x->resolve(module, scope, error);
 }
 
 void Negation::dump(std::ostream &out, const std::string &indent) {
@@ -1254,9 +1234,9 @@ bool Addition::declare(Module *module, Scope &scope, Error &error, bool is_lval)
   return true;
 }
 
-void Addition::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void Addition::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void Addition::dump(std::ostream &out, const std::string &indent) {
@@ -1293,9 +1273,9 @@ bool Subtraction::declare(Module *module, Scope &scope, Error &error, bool is_lv
   return true;
 }
 
-void Subtraction::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void Subtraction::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void Subtraction::dump(std::ostream &out, const std::string &indent) {
@@ -1332,9 +1312,9 @@ bool Multiplication::declare(Module *module, Scope &scope, Error &error, bool is
   return true;
 }
 
-void Multiplication::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void Multiplication::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void Multiplication::dump(std::ostream &out, const std::string &indent) {
@@ -1371,9 +1351,9 @@ bool Division::declare(Module *module, Scope &scope, Error &error, bool is_lval)
   return true;
 }
 
-void Division::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void Division::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void Division::dump(std::ostream &out, const std::string &indent) {
@@ -1410,9 +1390,9 @@ bool Remainder::declare(Module *module, Scope &scope, Error &error, bool is_lval
   return true;
 }
 
-void Remainder::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void Remainder::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void Remainder::dump(std::ostream &out, const std::string &indent) {
@@ -1441,9 +1421,9 @@ bool Exponentiation::declare(Module *module, Scope &scope, Error &error, bool is
   return true;
 }
 
-void Exponentiation::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void Exponentiation::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void Exponentiation::dump(std::ostream &out, const std::string &indent) {
@@ -1476,9 +1456,9 @@ bool ShiftLeft::declare(Module *module, Scope &scope, Error &error, bool is_lval
   return true;
 }
 
-void ShiftLeft::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void ShiftLeft::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void ShiftLeft::dump(std::ostream &out, const std::string &indent) {
@@ -1511,9 +1491,9 @@ bool ShiftRight::declare(Module *module, Scope &scope, Error &error, bool is_lva
   return true;
 }
 
-void ShiftRight::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void ShiftRight::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void ShiftRight::dump(std::ostream &out, const std::string &indent) {
@@ -1546,9 +1526,9 @@ bool UnsignedShiftRight::declare(Module *module, Scope &scope, Error &error, boo
   return true;
 }
 
-void UnsignedShiftRight::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void UnsignedShiftRight::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void UnsignedShiftRight::dump(std::ostream &out, const std::string &indent) {
@@ -1576,8 +1556,8 @@ bool BitwiseNot::declare(Module *module, Scope &scope, Error &error, bool is_lva
   return m_x->declare(module, scope, error);
 }
 
-void BitwiseNot::resolve(Module *module, Context &ctx) {
-  m_x->resolve(module, ctx);
+void BitwiseNot::resolve(Module *module, Scope &scope, Error &error) {
+  m_x->resolve(module, scope, error);
 }
 
 void BitwiseNot::dump(std::ostream &out, const std::string &indent) {
@@ -1613,9 +1593,9 @@ bool BitwiseAnd::declare(Module *module, Scope &scope, Error &error, bool is_lva
   return true;
 }
 
-void BitwiseAnd::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void BitwiseAnd::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void BitwiseAnd::dump(std::ostream &out, const std::string &indent) {
@@ -1652,9 +1632,9 @@ bool BitwiseOr::declare(Module *module, Scope &scope, Error &error, bool is_lval
   return true;
 }
 
-void BitwiseOr::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void BitwiseOr::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void BitwiseOr::dump(std::ostream &out, const std::string &indent) {
@@ -1691,9 +1671,9 @@ bool BitwiseXor::declare(Module *module, Scope &scope, Error &error, bool is_lva
   return true;
 }
 
-void BitwiseXor::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void BitwiseXor::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void BitwiseXor::dump(std::ostream &out, const std::string &indent) {
@@ -1717,8 +1697,8 @@ bool LogicalNot::declare(Module *module, Scope &scope, Error &error, bool is_lva
   return m_x->declare(module, scope, error);
 }
 
-void LogicalNot::resolve(Module *module, Context &ctx) {
-  m_x->resolve(module, ctx);
+void LogicalNot::resolve(Module *module, Scope &scope, Error &error) {
+  m_x->resolve(module, scope, error);
 }
 
 void LogicalNot::dump(std::ostream &out, const std::string &indent) {
@@ -1743,9 +1723,9 @@ bool LogicalAnd::declare(Module *module, Scope &scope, Error &error, bool is_lva
   return true;
 }
 
-void LogicalAnd::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void LogicalAnd::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void LogicalAnd::dump(std::ostream &out, const std::string &indent) {
@@ -1771,9 +1751,9 @@ bool LogicalOr::declare(Module *module, Scope &scope, Error &error, bool is_lval
   return true;
 }
 
-void LogicalOr::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void LogicalOr::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void LogicalOr::dump(std::ostream &out, const std::string &indent) {
@@ -1799,9 +1779,9 @@ bool NullishCoalescing::declare(Module *module, Scope &scope, Error &error, bool
   return true;
 }
 
-void NullishCoalescing::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void NullishCoalescing::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void NullishCoalescing::dump(std::ostream &out, const std::string &indent) {
@@ -1836,9 +1816,9 @@ bool Equality::declare(Module *module, Scope &scope, Error &error, bool is_lval)
   return true;
 }
 
-void Equality::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void Equality::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void Equality::dump(std::ostream &out, const std::string &indent) {
@@ -1873,9 +1853,9 @@ bool Inequality::declare(Module *module, Scope &scope, Error &error, bool is_lva
   return true;
 }
 
-void Inequality::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void Inequality::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void Inequality::dump(std::ostream &out, const std::string &indent) {
@@ -1902,9 +1882,9 @@ bool Identity::declare(Module *module, Scope &scope, Error &error, bool is_lval)
   return true;
 }
 
-void Identity::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void Identity::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void Identity::dump(std::ostream &out, const std::string &indent) {
@@ -1931,9 +1911,9 @@ bool Nonidentity::declare(Module *module, Scope &scope, Error &error, bool is_lv
   return true;
 }
 
-void Nonidentity::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void Nonidentity::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void Nonidentity::dump(std::ostream &out, const std::string &indent) {
@@ -1974,9 +1954,9 @@ bool GreaterThan::declare(Module *module, Scope &scope, Error &error, bool is_lv
   return true;
 }
 
-void GreaterThan::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void GreaterThan::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void GreaterThan::dump(std::ostream &out, const std::string &indent) {
@@ -2017,9 +1997,9 @@ bool GreaterThanOrEqual::declare(Module *module, Scope &scope, Error &error, boo
   return true;
 }
 
-void GreaterThanOrEqual::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void GreaterThanOrEqual::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void GreaterThanOrEqual::dump(std::ostream &out, const std::string &indent) {
@@ -2060,9 +2040,9 @@ bool LessThan::declare(Module *module, Scope &scope, Error &error, bool is_lval)
   return true;
 }
 
-void LessThan::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void LessThan::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void LessThan::dump(std::ostream &out, const std::string &indent) {
@@ -2103,9 +2083,9 @@ bool LessThanOrEqual::declare(Module *module, Scope &scope, Error &error, bool i
   return true;
 }
 
-void LessThanOrEqual::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void LessThanOrEqual::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void LessThanOrEqual::dump(std::ostream &out, const std::string &indent) {
@@ -2141,9 +2121,9 @@ bool In::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void In::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void In::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void In::dump(std::ostream &out, const std::string &indent) {
@@ -2179,9 +2159,9 @@ bool InstanceOf::declare(Module *module, Scope &scope, Error &error, bool is_lva
   return true;
 }
 
-void InstanceOf::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
+void InstanceOf::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
 }
 
 void InstanceOf::dump(std::ostream &out, const std::string &indent) {
@@ -2217,8 +2197,8 @@ bool TypeOf::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return m_x->declare(module, scope, error);
 }
 
-void TypeOf::resolve(Module *module, Context &ctx) {
-  m_x->resolve(module, ctx);
+void TypeOf::resolve(Module *module, Scope &scope, Error &error) {
+  m_x->resolve(module, scope, error);
 }
 
 void TypeOf::dump(std::ostream &out, const std::string &indent) {
@@ -2246,8 +2226,8 @@ bool PostIncrement::declare(Module *module, Scope &scope, Error &error, bool is_
   return m_x->declare(module, scope, error);
 }
 
-void PostIncrement::resolve(Module *module, Context &ctx) {
-  m_x->resolve(module, ctx);
+void PostIncrement::resolve(Module *module, Scope &scope, Error &error) {
+  m_x->resolve(module, scope, error);
 }
 
 void PostIncrement::dump(std::ostream &out, const std::string &indent) {
@@ -2275,8 +2255,8 @@ bool PostDecrement::declare(Module *module, Scope &scope, Error &error, bool is_
   return m_x->declare(module, scope, error);
 }
 
-void PostDecrement::resolve(Module *module, Context &ctx) {
-  m_x->resolve(module, ctx);
+void PostDecrement::resolve(Module *module, Scope &scope, Error &error) {
+  m_x->resolve(module, scope, error);
 }
 
 void PostDecrement::dump(std::ostream &out, const std::string &indent) {
@@ -2302,8 +2282,8 @@ bool PreIncrement::declare(Module *module, Scope &scope, Error &error, bool is_l
   return m_x->declare(module, scope, error);
 }
 
-void PreIncrement::resolve(Module *module, Context &ctx) {
-  m_x->resolve(module, ctx);
+void PreIncrement::resolve(Module *module, Scope &scope, Error &error) {
+  m_x->resolve(module, scope, error);
 }
 
 void PreIncrement::dump(std::ostream &out, const std::string &indent) {
@@ -2329,8 +2309,8 @@ bool PreDecrement::declare(Module *module, Scope &scope, Error &error, bool is_l
   return m_x->declare(module, scope, error);
 }
 
-void PreDecrement::resolve(Module *module, Context &ctx) {
-  m_x->resolve(module, ctx);
+void PreDecrement::resolve(Module *module, Scope &scope, Error &error) {
+  m_x->resolve(module, scope, error);
 }
 
 void PreDecrement::dump(std::ostream &out, const std::string &indent) {
@@ -2350,8 +2330,8 @@ bool Delete::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return m_x->declare(module, scope, error);
 }
 
-void Delete::resolve(Module *module, Context &ctx) {
-  m_x->resolve(module, ctx);
+void Delete::resolve(Module *module, Scope &scope, Error &error) {
+  m_x->resolve(module, scope, error);
 }
 
 void Delete::dump(std::ostream &out, const std::string &indent) {
@@ -2382,13 +2362,13 @@ bool Assignment::declare(Module *module, Scope &scope, Error &error, bool is_lva
   return true;
 }
 
-void Assignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void Assignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
-bool Assignment::unpack(Context &ctx, const Value &src, Value *dst, int &idx) {
-  return m_l->unpack(ctx, src, dst, idx);
+bool Assignment::unpack(Context &ctx, const Value &val, const std::function<void(const Value &)> &out) {
+  return m_l->unpack(ctx, val, out);
 }
 
 void Assignment::dump(std::ostream &out, const std::string &indent) {
@@ -2431,9 +2411,9 @@ bool AdditionAssignment::declare(Module *module, Scope &scope, Error &error, boo
   return true;
 }
 
-void AdditionAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void AdditionAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void AdditionAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2470,9 +2450,9 @@ bool SubtractionAssignment::declare(Module *module, Scope &scope, Error &error, 
   return true;
 }
 
-void SubtractionAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void SubtractionAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void SubtractionAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2509,9 +2489,9 @@ bool MultiplicationAssignment::declare(Module *module, Scope &scope, Error &erro
   return true;
 }
 
-void MultiplicationAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void MultiplicationAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void MultiplicationAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2548,9 +2528,9 @@ bool DivisionAssignment::declare(Module *module, Scope &scope, Error &error, boo
   return true;
 }
 
-void DivisionAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void DivisionAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void DivisionAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2587,9 +2567,9 @@ bool RemainderAssignment::declare(Module *module, Scope &scope, Error &error, bo
   return true;
 }
 
-void RemainderAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void RemainderAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void RemainderAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2618,9 +2598,9 @@ bool ExponentiationAssignment::declare(Module *module, Scope &scope, Error &erro
   return true;
 }
 
-void ExponentiationAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void ExponentiationAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void ExponentiationAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2653,9 +2633,9 @@ bool ShiftLeftAssignment::declare(Module *module, Scope &scope, Error &error, bo
   return true;
 }
 
-void ShiftLeftAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void ShiftLeftAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void ShiftLeftAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2688,9 +2668,9 @@ bool ShiftRightAssignment::declare(Module *module, Scope &scope, Error &error, b
   return true;
 }
 
-void ShiftRightAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void ShiftRightAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void ShiftRightAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2723,9 +2703,9 @@ bool UnsignedShiftRightAssignment::declare(Module *module, Scope &scope, Error &
   return true;
 }
 
-void UnsignedShiftRightAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void UnsignedShiftRightAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void UnsignedShiftRightAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2762,9 +2742,9 @@ bool BitwiseAndAssignment::declare(Module *module, Scope &scope, Error &error, b
   return true;
 }
 
-void BitwiseAndAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void BitwiseAndAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void BitwiseAndAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2801,9 +2781,9 @@ bool BitwiseOrAssignment::declare(Module *module, Scope &scope, Error &error, bo
   return true;
 }
 
-void BitwiseOrAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void BitwiseOrAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void BitwiseOrAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2840,9 +2820,9 @@ bool BitwiseXorAssignment::declare(Module *module, Scope &scope, Error &error, b
   return true;
 }
 
-void BitwiseXorAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void BitwiseXorAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void BitwiseXorAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2868,9 +2848,9 @@ bool LogicalAndAssignment::declare(Module *module, Scope &scope, Error &error, b
   return true;
 }
 
-void LogicalAndAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void LogicalAndAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void LogicalAndAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2896,9 +2876,9 @@ bool LogicalOrAssignment::declare(Module *module, Scope &scope, Error &error, bo
   return true;
 }
 
-void LogicalOrAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void LogicalOrAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void LogicalOrAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2924,9 +2904,9 @@ bool LogicalNullishAssignment::declare(Module *module, Scope &scope, Error &erro
   return true;
 }
 
-void LogicalNullishAssignment::resolve(Module *module, Context &ctx) {
-  m_l->resolve(module, ctx);
-  m_r->resolve(module, ctx);
+void LogicalNullishAssignment::resolve(Module *module, Scope &scope, Error &error) {
+  m_l->resolve(module, scope, error);
+  m_r->resolve(module, scope, error);
 }
 
 void LogicalNullishAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2956,10 +2936,10 @@ bool Conditional::declare(Module *module, Scope &scope, Error &error, bool is_lv
   return true;
 }
 
-void Conditional::resolve(Module *module, Context &ctx) {
-  m_a->resolve(module, ctx);
-  m_b->resolve(module, ctx);
-  m_c->resolve(module, ctx);
+void Conditional::resolve(Module *module, Scope &scope, Error &error) {
+  m_a->resolve(module, scope, error);
+  m_b->resolve(module, scope, error);
+  m_c->resolve(module, scope, error);
 }
 
 void Conditional::dump(std::ostream &out, const std::string &indent) {

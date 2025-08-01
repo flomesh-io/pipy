@@ -98,28 +98,76 @@ void Tree::Scope::declare_fiber_var(Str *name, Module *module) {
   }
 }
 
-auto Tree::Scope::instantiate(Context &ctx) -> pjs::Scope* {
+auto Tree::Scope::capture(Scope *source, int i) -> int {
   init_variables();
 
-  auto *scope = ctx.new_scope(m_args.size(), m_size, m_variables);
+  if (source == this) {
+    auto &v = m_variables[i];
+    if (!v.is_closure) {
+      Stack::Variable c;
+      c.name = v.name;
+      v.index = m_closure.size();
+      v.is_closure = true;
+      m_closure.push_back(c);
+    }
+    return i;
+  }
+
+  auto parent_index = m_parent->capture(source, i);
+
+  for (size_t i = 0; i < m_variables.size(); i++) {
+    auto &v = m_variables[i];
+    if (v.is_closure) {
+      auto &c = m_closure[v.index];
+      if (c.is_capture && c.index == parent_index) return i;
+    }
+  }
+
+  Stack::Variable v;
+  v.name = m_parent->m_variables[parent_index].name;
+  v.index = m_closure.size();
+  v.is_closure = true;
+  m_variables.push_back(v);
+
+  Stack::Variable c;
+  c.name = v.name;
+  c.index = parent_index;
+  c.is_capture = true;
+  m_closure.push_back(c);
+
+  return m_variables.size() - 1;
+}
+
+auto Tree::Scope::new_closure(Context &ctx) -> Closure* {
+  return ctx.stack()->capture(m_closure);
+}
+
+auto Tree::Scope::new_stack(Context &ctx) -> Stack* {
+  init_variables();
+
+  auto stack = new Stack(m_size, m_closure.size(), ctx.closure(), m_variables);
+  ctx.init(stack, m_args.size());
 
   // Initialize arguments
   for (const auto &init : m_init_args) {
-    auto &arg = scope->value(init.index);
+    auto &arg = stack->value(init.index);
     if (auto v = init.value) { // Initialize locals
       if (!v->eval(ctx, arg)) {
+        delete stack;
         return nullptr;
       }
     } else if (arg.is_undefined()) { // Populate default values
       if (auto v = init.default_value) {
         if (!v->eval(ctx, arg)) {
+          delete stack;
           return nullptr;
         }
       }
     }
     if (auto v = init.unpack) { // Unpack objects
       auto index = init.unpack_index;
-      if (!v->unpack(ctx, arg, ctx.scope()->values(), index)) {
+      if (!v->unpack(ctx, arg, [&](const Value &val) { stack->value(index++) = val; })) {
+        delete stack;
         return nullptr;
       }
     }
@@ -127,14 +175,15 @@ auto Tree::Scope::instantiate(Context &ctx) -> pjs::Scope* {
 
   // Initialize variables
   for (const auto &init : m_init_vars) {
-    auto &var = scope->value(init.index);
+    auto &var = stack->value(init.index);
     if (auto v = init.value) {
       if (!v->eval(ctx, var)) { // Initialize locals
         return nullptr;
       }
     }
   }
-  return scope;
+
+  return stack;
 }
 
 void Tree::Scope::init_variables() {

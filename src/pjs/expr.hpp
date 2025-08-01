@@ -157,7 +157,7 @@ public:
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const {}
   virtual bool is_comma_ended() const { return false; }
   virtual void unpack(std::vector<Ref<Str>> &vars) const {}
-  virtual bool unpack(Context &ctx, const Value &src, Value *dst, int &idx) { return true; }
+  virtual bool unpack(Context &ctx, const Value &val, const std::function<void(const Value &)> &out) { return true; }
   virtual bool eval(Context &ctx, Value &result) = 0;
   virtual bool assign(Context &ctx, Value &value) { return error(ctx, "cannot assign to a right-value"); }
   virtual bool clear(Context &ctx, Value &result) { return error(ctx, "cannot delete a value"); }
@@ -185,7 +185,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -224,7 +224,7 @@ public:
   virtual bool eval(Context &ctx, Value &result) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -243,7 +243,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -336,11 +336,11 @@ public:
   virtual bool is_argument() const override;
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
   virtual void unpack(std::vector<Ref<Str>> &vars) const override;
-  virtual bool unpack(Context &ctx, const Value &src, Value *dst, int &idx) override;
+  virtual bool unpack(Context &ctx, const Value &val, const std::function<void(const Value &)> &out) override;
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool assign(Context &ctx, Value &value) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -367,7 +367,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -387,11 +387,11 @@ public:
   virtual bool is_argument() const override;
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
   virtual void unpack(std::vector<Ref<Str>> &vars) const override;
-  virtual bool unpack(Context &ctx, const Value &src, Value *dst, int &idx) override;
+  virtual bool unpack(Context &ctx, const Value &val, const std::function<void(const Value &)> &out) override;
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool assign(Context &ctx, Value &value) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -412,7 +412,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -486,7 +486,7 @@ private:
 
 class LocalVariable : public Expr {
 public:
-  LocalVariable(int i, int level) : m_i(i), m_level(level) {}
+  LocalVariable(int i) : m_i(i) {}
 
   virtual bool is_left_value() const override;
   virtual bool eval(Context &ctx, Value &result) override;
@@ -496,7 +496,6 @@ public:
 
 private:
   int m_i;
-  int m_level;
 };
 
 //
@@ -532,20 +531,17 @@ public:
   virtual bool is_argument() const override;
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
   virtual void unpack(std::vector<Ref<Str>> &vars) const override;
-  virtual bool unpack(Context &ctx, const Value &src, Value *dst, int &idx) override;
+  virtual bool unpack(Context &ctx, const Value &val, const std::function<void(const Value &)> &out) override;
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool assign(Context &ctx, Value &value) override;
   virtual bool clear(Context &ctx, Value &result) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
   Ref<Str> m_key;
-  Module* m_module = nullptr;
   std::unique_ptr<Expr> m_resolved;
-
-  void resolve(Context &ctx);
 
   auto locate(Expr *expr) -> Expr* {
     expr->locate(source(), line(), column());
@@ -566,7 +562,7 @@ public:
   virtual bool assign(Context &ctx, Value &value) override;
   virtual bool clear(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -586,7 +582,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -606,7 +602,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -625,7 +621,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -645,7 +641,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -664,7 +660,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -681,7 +677,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -698,7 +694,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -716,7 +712,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -734,7 +730,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -752,7 +748,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -770,7 +766,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -788,7 +784,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -806,7 +802,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -824,7 +820,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -842,7 +838,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -860,7 +856,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -877,7 +873,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -895,7 +891,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -913,7 +909,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -931,7 +927,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -948,7 +944,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -966,7 +962,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -984,7 +980,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1002,7 +998,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1020,7 +1016,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1038,7 +1034,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1056,7 +1052,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1074,7 +1070,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1092,7 +1088,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1110,7 +1106,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1128,7 +1124,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1146,7 +1142,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1165,7 +1161,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1192,7 +1188,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1209,7 +1205,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1226,7 +1222,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1243,7 +1239,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1260,7 +1256,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1277,7 +1273,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1299,8 +1295,8 @@ public:
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
-  virtual bool unpack(Context &ctx, const Value &src, Value *dst, int &idx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
+  virtual bool unpack(Context &ctx, const Value &val, const std::function<void(const Value &)> &out) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1320,7 +1316,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1338,7 +1334,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1356,7 +1352,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1374,7 +1370,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1392,7 +1388,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1410,7 +1406,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1428,7 +1424,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1446,7 +1442,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1464,7 +1460,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1482,7 +1478,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1500,7 +1496,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1518,7 +1514,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1536,7 +1532,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1554,7 +1550,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1572,7 +1568,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1590,7 +1586,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:

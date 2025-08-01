@@ -59,7 +59,7 @@ class Instance;
 class Module;
 class Fiber;
 class Context;
-class Scope;
+class Stack;
 class Error;
 class Field;
 class Variable;
@@ -2151,12 +2151,8 @@ public:
   auto new_fiber() -> Fiber*;
 
 private:
-  void add(Scope *scope);
-  void remove(Scope *scope);
-
   Ref<Object> m_global;
   std::vector<Module*> m_modules;
-  Scope* m_scopes = nullptr;
 
   friend class Module;
   friend class Scope;
@@ -2199,65 +2195,91 @@ private:
 };
 
 //
-// Scope
+// Closure
 //
 
-class Scope : public Pooled<Scope, RefCount<Scope>> {
+struct Capture : public Pooled<Capture, RefCount<Capture>> {
+  Value value;
+};
+
+typedef PooledArray<Ref<Capture>> Closure;
+
+//
+// Stack
+//
+
+class Stack : public Pooled<Stack> {
 public:
   struct Variable {
     Ref<Str> name;
     int index = 0;
     bool is_fiber = false;
     bool is_closure = false;
+    bool is_capture = false;
   };
 
-  static auto make(Instance *instance, Scope *parent, size_t size, std::vector<Variable> &variables) -> Scope* {
-    return new Scope(instance, parent, size, variables);
-  }
-
-  auto parent() const -> Scope* { return m_parent; }
-  auto size() const -> size_t { return m_data->size(); }
-  auto value(int i) -> Value& { return m_data->at(i); }
-  auto values() -> Value* { return m_data->elements(); }
-  auto variables() const -> std::vector<Variable>& { return m_variables; }
-
-  void init(int argc, const Value *args) {
-    auto data = m_data->elements();
-    auto size = m_data->size();
-    for (int i = 0; i < argc; i++) data[i] = args[i];
-    for (int i = argc; i < size; i++) data[i] = Value::undefined;
-  }
-
-  void clear(bool all = false) {
-    auto values = m_data->elements();
-    for (size_t i = 0, n = m_data->size(); i < n; i++) {
-      if (all || !m_variables[i].is_closure) {
-        values[i] = Value::undefined;
+  Stack(size_t size, size_t closure_size, Closure *closure, std::vector<Variable> &variables)
+    : m_variables(variables)
+    , m_data(size > 0 ? Data::make(size) : nullptr)
+    , m_closure(closure_size > 0 ? Closure::make(closure_size) : nullptr)
+  {
+    if (closure) {
+      for (int i = 0, n = closure->size(); i < n; i++) {
+        auto v = closure->at(i).get();
+        m_closure->at(i) = v ? v : new Capture;
+      }
+    } else if (m_closure) {
+      for (int i = 0, n = closure_size; i < n; i++) {
+        m_closure->at(i) = new Capture;
       }
     }
   }
 
-private:
-  Scope(Instance *instance, Scope *parent, size_t size, std::vector<Variable> &variables)
-    : m_instance(instance)
-    , m_parent(parent)
-    , m_data(Data::make(size))
-    , m_variables(variables) { if (instance) instance->add(this); }
-
-  ~Scope() {
-    m_data->free();
-    if (m_instance) m_instance->remove(this);
+  ~Stack() {
+    if (m_data) m_data->free();
+    if (m_closure) m_closure->free();
   }
 
-  Instance* m_instance;
-  Scope* m_prev;
-  Scope* m_next;
-  Ref<Scope> m_parent;
-  Data* m_data;
-  std::vector<Variable> &m_variables;
+  void init(int argc, const Value *args) {
+    auto vars = m_variables.data();
+    auto data = m_data->elements();
+    for (int i = 0; i < argc; i++) {
+      auto &v = vars[i];
+      if (v.is_closure) {
+        m_closure->at(v.index)->value = args[i];
+      } else {
+        data[i] = args[i];
+      }
+    }
+  }
 
-  friend class RefCount<Scope>;
-  friend class Instance;
+  auto capture(const std::vector<Variable> &captures) -> Closure* {
+    auto n = captures.size();
+    if (!n) return nullptr;
+    auto closure = Closure::make(n);
+    for (size_t i = 0; i < n; i++) {
+      auto &c = captures[i];
+      if (c.is_capture) {
+        closure->at(i) = m_closure->at(m_variables[c.index].index);
+      }
+    }
+    return closure;
+  }
+
+  auto size() const -> size_t { return m_data->size(); }
+  auto data() -> Value* { return m_data->elements(); }
+  auto closure() -> Closure* { return m_closure; }
+  auto variables() const -> std::vector<Variable>& { return m_variables; }
+
+  auto value(int i) -> Value& {
+    auto &v = m_variables[i];
+    return v.is_closure ? m_closure->at(v.index)->value : m_data->at(i);
+  }
+
+private:
+  std::vector<Variable> &m_variables;
+  Data* m_data;
+  Closure* m_closure;
 };
 
 //
@@ -2278,37 +2300,40 @@ public:
 
   Context(Instance *instance, Fiber *fiber = nullptr)
     : m_instance(instance)
-    , m_parent(nullptr)
     , m_root(this)
     , m_caller(nullptr)
     , m_g(instance ? instance->global() : nullptr)
     , m_fiber(fiber)
+    , m_closure(nullptr)
     , m_level(0)
     , m_argc(0)
     , m_argv(nullptr)
     , m_error(std::make_shared<Error>()) {}
 
-  Context(Context &ctx, int argc, Value *argv, Scope *scope)
+  Context(Context &ctx, int argc = 0, Value *argv = nullptr, Closure *closure = nullptr)
     : m_instance(ctx.m_instance)
-    , m_parent(s_current)
     , m_root(ctx.m_root)
-    , m_caller(&ctx)
+    , m_caller(s_current)
     , m_g(ctx.m_g)
-    , m_scope(scope)
+    , m_fiber(ctx.m_fiber)
+    , m_closure(closure)
     , m_level(ctx.m_level + 1)
     , m_argc(argc)
     , m_argv(argv)
     , m_error(ctx.m_error) { s_current = this; }
 
-  ~Context() { if (s_current == this) s_current = m_parent; }
+  ~Context() {
+    delete m_stack;
+    if (s_current == this) s_current = m_caller;
+  }
 
   auto instance() const -> Instance* { return m_instance; }
   auto root() const -> Context* { return m_root; }
   auto caller() const -> Context* { return m_caller; }
   auto g() const -> Object* { return m_g; }
   auto fiber() const -> Fiber* { return m_fiber; }
-  auto scope() const -> Scope* { return m_scope; }
-  void scope(Scope *scope) { m_scope = scope; }
+  auto stack() const -> Stack* { return m_stack; }
+  auto closure() const -> Closure* { return m_closure; }
   auto level() const -> int { return m_level; }
   auto argc() const -> int { return m_argc; }
   auto argv() const -> Value* { return m_argv; }
@@ -2333,11 +2358,9 @@ public:
   void backtrace(const Source *source, int line, int column);
   void backtrace(const std::string &name);
 
-  auto new_scope(int argc, int nvar, std::vector<Scope::Variable> &variables) -> Scope* {
-    auto *scope = Scope::make(m_instance, m_scope, nvar, variables);
-    scope->init(std::min(m_argc, argc), m_argv);
-    m_scope = scope;
-    return scope;
+  void init(Stack *stack, int argc) {
+    stack->init(std::min(m_argc, argc), m_argv);
+    m_stack = stack;
   }
 
   bool is_undefined(int i) const { return i >= argc() || arg(i).is_undefined(); }
@@ -2535,14 +2558,12 @@ protected:
 
 private:
   Instance* m_instance;
-  Context* m_parent;
   Context* m_root;
   Context* m_caller;
-  Context* m_prev;
-  Context* m_next;
   Ref<Object> m_g;
   Ref<Fiber> m_fiber;
-  Ref<Scope> m_scope;
+  Stack* m_stack = nullptr;
+  Closure* m_closure;
   int m_level;
   int m_argc;
   Value* m_argv;
@@ -2757,19 +2778,6 @@ inline auto Class::construct() -> Object* {
   return construct(ctx);
 }
 
-inline void Instance::add(Scope *s) {
-  s->m_prev = nullptr;
-  s->m_next = m_scopes;
-  if (m_scopes) m_scopes->m_prev = s;
-  m_scopes = s;
-}
-
-inline void Instance::remove(Scope *s) {
-  if (auto p = s->m_prev) p->m_next = s->m_next; else m_scopes = s->m_next;
-  if (auto n = s->m_next) n->m_prev = s->m_prev;
-  s->m_instance = nullptr;
-}
-
 //
 // Method
 //
@@ -2786,8 +2794,8 @@ public:
 
   auto constructor_class() const -> Class* { return m_constructor_class; }
 
-  void invoke(Context &ctx, Scope *scope, Object *thiz, int argc, Value argv[], Value &retv) {
-    Context fctx(ctx, argc, argv, scope);
+  void invoke(Context &ctx, Object *thiz, Closure *closure, int argc, Value argv[], Value &retv) {
+    Context fctx(ctx, argc, argv, closure);
     retv = Value::undefined;
     if (fctx.level() > 100) {
       fctx.error("call stack overflow");
@@ -2803,7 +2811,7 @@ public:
       ctx.error("function is not a constructor");
       return nullptr;
     }
-    Context fctx(ctx, argc, argv, nullptr); // No need for a scope since JS ctors are not supported yet
+    Context fctx(ctx, argc, argv);
     auto *obj = m_constructor_class->construct(fctx);
     if (!fctx.ok()) fctx.backtrace(name()->str());
     return obj;
@@ -2859,12 +2867,12 @@ class Function : public ObjectTemplate<Function> {
 public:
   virtual auto to_string() const -> std::string override;
 
-  auto scope() const -> Scope* { return m_scope; }
   auto method() const -> Method* { return m_method; }
   auto thiz() const -> Object* { return m_this; }
+  auto closure() const -> Closure* { return m_closure; }
 
   void operator()(Context &ctx, int argc, Value argv[], Value &retv) {
-    m_method->invoke(ctx, m_scope, m_this, argc, argv, retv);
+    m_method->invoke(ctx, m_this, m_closure, argc, argv, retv);
   }
 
   auto construct(Context &ctx, int argc, Value argv[]) -> Object* {
@@ -2874,14 +2882,16 @@ public:
 protected:
   Function() {}
 
-  Function(Method *method, Object *thiz = nullptr, Scope *scope = nullptr)
+  Function(Method *method, Object *thiz = nullptr, Closure *closure = nullptr)
     : m_method(method)
     , m_this(thiz)
-    , m_scope(scope) {}
+    , m_closure(closure) {}
+
+  ~Function() { if (m_closure) m_closure->free(); }
 
   Ref<Method> m_method;
   Ref<Object> m_this;
-  Ref<Scope> m_scope;
+  Closure* m_closure;
 
   friend class ObjectTemplate<Function>;
 };

@@ -166,20 +166,23 @@ void Module::resolve(const std::function<Module*(Module*, Str*)> &resolver) {
 }
 
 void Module::execute(Context &ctx, Value &result) {
-  m_tree->resolve(this, ctx);
-  m_scope.instantiate(ctx);
+  Tree::Error err;
+  m_tree->resolve(this, m_scope, err);
+
+  Context mctx(ctx);
+  m_scope.new_stack(mctx);
 
   for (auto &exp : m_exports) {
     if (auto v = exp.value) {
       Value val;
-      if (!v->eval(ctx, val)) return;
+      if (!v->eval(mctx, val)) return;
       m_exports_class->set(m_exports_object, exp.id, val);
     }
   }
 
   Stmt::Result res;
-  m_tree->execute(ctx, res);
-  if (ctx.ok()) result = res.value;
+  m_tree->execute(mctx, res);
+  if (mctx.ok()) result = res.value;
 }
 
 void Module::check_cyclic_import(Tree::Import *root, Tree::Import *current) {

@@ -70,9 +70,9 @@ bool Block::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void Block::resolve(Module *module, Context &ctx) {
+void Block::resolve(Module *module, Scope &scope, Error &error) {
   for (const auto &p : m_stmts) {
-    p->resolve(module, ctx);
+    p->resolve(module, scope, error);
   }
 }
 
@@ -106,8 +106,8 @@ bool Label::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return m_stmt->declare(module, s, error);
 }
 
-void Label::resolve(Module *module, Context &ctx) {
-  m_stmt->resolve(module, ctx);
+void Label::resolve(Module *module, Scope &scope, Error &error) {
+  m_stmt->resolve(module, scope, error);
 }
 
 void Label::execute(Context &ctx, Result &result) {
@@ -130,8 +130,8 @@ bool Evaluate::declare(Module *module, Scope &scope, Error &error, bool is_lval)
   return m_expr->declare(module, scope, error);
 }
 
-void Evaluate::resolve(Module *module, Context &ctx) {
-  m_expr->resolve(module, ctx);
+void Evaluate::resolve(Module *module, Scope &scope, Error &error) {
+  m_expr->resolve(module, scope, error);
 }
 
 void Evaluate::execute(Context &ctx, Result &result) {
@@ -205,9 +205,9 @@ bool Var::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void Var::resolve(Module *module, Context &ctx) {
+void Var::resolve(Module *module, Scope &scope, Error &error) {
   for (auto e : m_assignments) {
-    e->resolve(module, ctx);
+    e->resolve(module, scope, error);
   }
 }
 
@@ -305,9 +305,9 @@ bool Function::declare(Module *module, Scope &scope, Error &error, bool is_lval)
   }
 }
 
-void Function::resolve(Module *module, Context &ctx) {
-  m_identifier->resolve(module, ctx);
-  m_expr->resolve(module, ctx);
+void Function::resolve(Module *module, Scope &scope, Error &error) {
+  m_identifier->resolve(module, scope, error);
+  m_expr->resolve(module, scope, error);
 }
 
 void Function::execute(Context &ctx, Result &result) {
@@ -351,10 +351,10 @@ bool If::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void If::resolve(Module *module, Context &ctx) {
-  m_cond->resolve(module, ctx);
-  m_then->resolve(module, ctx);
-  if (m_else) m_else->resolve(module, ctx);
+void If::resolve(Module *module, Scope &scope, Error &error) {
+  m_cond->resolve(module, scope, error);
+  m_then->resolve(module, scope, error);
+  if (m_else) m_else->resolve(module, scope, error);
 }
 
 void If::execute(Context &ctx, Result &result) {
@@ -394,11 +394,11 @@ bool Switch::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void Switch::resolve(Module *module, Context &ctx) {
-  m_cond->resolve(module, ctx);
+void Switch::resolve(Module *module, Scope &scope, Error &error) {
+  m_cond->resolve(module, scope, error);
   for (const auto &p : m_cases) {
-    if (p.first) p.first->resolve(module, ctx);
-    if (p.second) p.second->resolve(module, ctx);
+    if (p.first) p.first->resolve(module, scope, error);
+    if (p.second) p.second->resolve(module, scope, error);
   }
 }
 
@@ -504,11 +504,11 @@ bool For::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void For::resolve(Module *module, Context &ctx) {
-  if (m_init) m_init->resolve(module, ctx);
-  if (m_cond) m_cond->resolve(module, ctx);
-  if (m_step) m_step->resolve(module, ctx);
-  if (m_body) m_body->resolve(module, ctx);
+void For::resolve(Module *module, Scope &scope, Error &error) {
+  if (m_init) m_init->resolve(module, scope, error);
+  if (m_cond) m_cond->resolve(module, scope, error);
+  if (m_step) m_step->resolve(module, scope, error);
+  if (m_body) m_body->resolve(module, scope, error);
 }
 
 void For::execute(Context &ctx, Result &result) {
@@ -597,8 +597,8 @@ bool Return::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void Return::resolve(Module *module, Context &ctx) {
-  if (m_expr) m_expr->resolve(module, ctx);
+void Return::resolve(Module *module, Scope &scope, Error &error) {
+  if (m_expr) m_expr->resolve(module, scope, error);
 }
 
 void Return::execute(Context &ctx, Result &result) {
@@ -626,8 +626,8 @@ bool Throw::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void Throw::resolve(Module *module, Context &ctx) {
-  if (m_expr) m_expr->resolve(module, ctx);
+void Throw::resolve(Module *module, Scope &scope, Error &error) {
+  if (m_expr) m_expr->resolve(module, scope, error);
 }
 
 void Throw::execute(Context &ctx, Result &result) {
@@ -672,21 +672,13 @@ bool Try::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   return true;
 }
 
-void Try::resolve(Module *module, Context &ctx) {
-  m_try->resolve(module, ctx);
+void Try::resolve(Module *module, Scope &scope, Error &error) {
+  m_try->resolve(module, scope, error);
   if (m_catch) {
-    Context cctx(
-      ctx, 0, nullptr,
-      pjs::Scope::make(
-        ctx.instance(),
-        ctx.scope(),
-        m_catch_scope.size(),
-        m_catch_scope.variables()
-      )
-    );
-    m_catch->resolve(module, cctx);
+    m_catch_scope.parent(&scope);
+    m_catch->resolve(module, m_catch_scope, error);
   }
-  if (m_finally) m_finally->resolve(module, ctx);
+  if (m_finally) m_finally->resolve(module, scope, error);
 }
 
 void Try::execute(Context &ctx, Result &result) {
@@ -694,11 +686,11 @@ void Try::execute(Context &ctx, Result &result) {
   if (!ctx.ok() && m_catch) {
     auto exception = ctx.error().to_exception();
     ctx.reset();
-    Context cctx(ctx, 1, &exception, ctx.scope());
-    if (auto scope = m_catch_scope.instantiate(cctx)) {
-      m_catch->execute(cctx, result);
-      scope->clear();
-    }
+    auto closure = m_catch_scope.new_closure(ctx);
+    Context cctx(ctx, 1, &exception, closure);
+    m_catch_scope.new_stack(cctx);
+    m_catch->execute(cctx, result);
+    if (closure) closure->free();
   }
   if (m_finally) {
     if (!ctx.ok()) {
@@ -803,9 +795,9 @@ bool Export::declare(Module *module, Scope &scope, Error &error, bool is_lval) {
   }
 }
 
-void Export::resolve(Module *module, Context &ctx) {
+void Export::resolve(Module *module, Scope &scope, Error &error) {
   if (m_stmt) {
-    m_stmt->resolve(module, ctx);
+    m_stmt->resolve(module, scope, error);
   }
 }
 

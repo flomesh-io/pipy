@@ -100,7 +100,7 @@ public:
 
   virtual bool is_expression() const override;
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -117,7 +117,7 @@ public:
   Label(const std::string &name, Stmt *stmt) : m_name(Str::make(name)), m_stmt(stmt) {}
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -136,7 +136,7 @@ public:
 
   virtual bool is_expression() const override { return true; }
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual bool declare_export(Module *module, bool is_default, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
@@ -160,7 +160,7 @@ public:
   static bool is_reserved(const std::string &name);
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual bool declare_export(Module *module, bool is_default, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
@@ -182,7 +182,7 @@ public:
     : m_identifier(name), m_expr(expr) {}
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual bool declare_export(Module *module, bool is_default, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
@@ -203,7 +203,7 @@ public:
     : m_cond(cond), m_then(then_clause), m_else(else_clause) {}
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -223,7 +223,7 @@ public:
     : m_cond(cond), m_cases(std::move(cases)) {}
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -242,7 +242,7 @@ public:
     : m_is_var(is_var), m_init(init), m_cond(cond), m_step(step), m_body(body) {}
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -284,7 +284,7 @@ public:
   auto value() const -> Expr* { return m_expr.get(); }
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -301,7 +301,7 @@ public:
   Throw(Expr *expr) : m_expr(expr) {}
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -318,7 +318,7 @@ public:
   Try(Stmt *try_clause, Stmt *catch_clause, Stmt *finally_clause, Expr *exception_variable);
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -358,7 +358,7 @@ public:
     : m_list(std::move(list)), m_from(from), m_default(false) {}
 
   virtual bool declare(Module *module, Scope &scope, Error &error, bool is_lval) override;
-  virtual void resolve(Module *module, Context &ctx) override;
+  virtual void resolve(Module *module, Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
