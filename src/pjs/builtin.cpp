@@ -910,6 +910,104 @@ template<> void ClassDef<Constructor<Set>>::init() {
 }
 
 //
+// FinalizationRegistry
+//
+
+void FinalizationRegistry::add(Object *target, const Value &held_value, Object *token) {
+  std::unique_ptr<Target> tracker(new Target(this, target, held_value));
+  m_targets[target] = std::move(tracker);
+  if (token) {
+    auto &t = m_tokens[token];
+    if (!t) t = std::unique_ptr<Token>(new Token(this, token));
+    t->add(target);
+  }
+}
+
+bool FinalizationRegistry::remove(Object *token) {
+  if (!token) return false;
+  auto i = m_tokens.find(token);
+  if (i == m_tokens.end()) return false;
+  i->second->clear();
+  m_tokens.erase(i);
+  return true;
+}
+
+//
+// FinalizationRegistry::Target
+//
+
+FinalizationRegistry::Target::Target(FinalizationRegistry *registry, Object *target, const Value &held_value)
+  : m_registry(registry), m_target(target), m_held_value(held_value)
+{
+  watch(target->weak_ptr());
+}
+
+void FinalizationRegistry::Target::on_weak_ptr_gone() {
+  m_registry->m_callback(m_held_value);
+  m_registry->m_targets.erase(m_target);
+}
+
+//
+// FinalizationRegistry::Token
+//
+
+FinalizationRegistry::Token::Token(FinalizationRegistry *registry, Object *token)
+  : m_registry(registry), m_token(token)
+{
+  watch(token->weak_ptr());
+}
+
+void FinalizationRegistry::Token::add(Object *target) {
+  m_targets.insert(target);
+}
+
+void FinalizationRegistry::Token::clear() {
+  std::set<WeakRef<Object>> targets(std::move(m_targets));
+  for (auto &t : targets) {
+    m_registry->m_targets.erase(t);
+  }
+}
+
+void FinalizationRegistry::Token::on_weak_ptr_gone() {
+  m_registry->m_tokens.erase(m_token);
+}
+
+template<> void ClassDef<FinalizationRegistry>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Function *cb;
+    if (!ctx.arguments(1, &cb)) return nullptr;
+    Ref<Context> root = ctx.root();
+    Ref<Function> f(cb);
+    return FinalizationRegistry::make(
+      [=](const Value &value) {
+        Context ctx(*root);
+        Value val(value), ret;
+        (*f)(ctx, 1, &val, ret);
+      }
+    );
+  });
+
+  method("register", [](Context &ctx, Object *obj, Value &) {
+    Object *target, *token = nullptr;
+    Value held_value;
+    if (!ctx.arguments(1, &target, &held_value, &token)) return;
+    if (!target) return ctx.error_argument_type(0, "non-null object");
+    obj->as<FinalizationRegistry>()->add(target, held_value, token);
+  });
+
+  method("unregister", [](Context &ctx, Object *obj, Value &ret) {
+    Object *token;
+    if (!ctx.arguments(1, &token)) return;
+    ret.set(obj->as<FinalizationRegistry>()->remove(token));
+  });
+}
+
+template<> void ClassDef<Constructor<FinalizationRegistry>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
 // Global
 //
 
@@ -956,6 +1054,9 @@ template<> void ClassDef<Global>::init() {
 
   // Set
   variable("Set", class_of<Constructor<Set>>());
+
+  // FinalizationRegistry
+  variable("FinalizationRegistry", class_of<Constructor<FinalizationRegistry>>());
 
   // RegExp
   variable("RegExp", class_of<Constructor<RegExp>>());

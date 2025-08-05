@@ -30,6 +30,7 @@
 
 #include <ctime>
 #include <functional>
+#include <set>
 
 namespace pjs {
 
@@ -213,6 +214,55 @@ private:
   Ref<OrderedHash<Value, bool>> m_ht;
 
   friend class ObjectTemplate<Set>;
+};
+
+//
+// FinalizationRegistry
+//
+
+class FinalizationRegistry : public ObjectTemplate<FinalizationRegistry> {
+public:
+  void add(Object *target, const Value &held_value = Value::undefined, Object *token = nullptr);
+  bool remove(Object *token);
+
+private:
+  FinalizationRegistry(const std::function<void(const Value &)> &callback) : m_callback(callback) {}
+
+  //
+  // FinalizationRegistry::Target
+  //
+
+  class Target : public Pooled<Target>, public WeakPtr::Watcher {
+  public:
+    Target(FinalizationRegistry *registry, Object *target, const Value &held_value);
+  private:
+    Ref<FinalizationRegistry> m_registry;
+    WeakRef<Object> m_target;
+    Value m_held_value;
+    virtual void on_weak_ptr_gone() override;
+  };
+
+  //
+  // FinalizationRegistry::Token
+  //
+
+  class Token : public Pooled<Token>, public WeakPtr::Watcher {
+  public:
+    Token(FinalizationRegistry *registry, Object *token);
+    void add(Object *target);
+    void clear();
+  private:
+    Ref<FinalizationRegistry> m_registry;
+    WeakRef<Object> m_token;
+    std::set<WeakRef<Object>> m_targets;
+    virtual void on_weak_ptr_gone() override;
+  };
+
+  std::function<void(const Value &)> m_callback;
+  std::unordered_map<WeakRef<Object>, std::unique_ptr<Target>> m_targets;
+  std::unordered_map<WeakRef<Object>, std::unique_ptr<Token>> m_tokens;
+
+  friend class ObjectTemplate<FinalizationRegistry>;
 };
 
 //
