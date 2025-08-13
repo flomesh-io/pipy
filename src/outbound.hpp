@@ -73,7 +73,7 @@ public:
     double    retry_delay = 0;
     double    connect_timeout = 0;
 
-    std::function<void(Outbound*)> on_state_changed;
+    std::function<bool(Outbound*)> on_state_changed;
   };
 
   static auto count() -> int {
@@ -140,7 +140,7 @@ protected:
 
   auto options() const -> const Options& { return m_options; }
 
-  void state(State state);
+  bool state(State state);
   void input(Event *evt);
   void error(StreamEnd::Error err);
   void describe(char *buf, size_t len);

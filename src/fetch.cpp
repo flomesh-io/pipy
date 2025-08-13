@@ -79,6 +79,7 @@ Fetch::Fetch(pjs::Str *host, const Options &options)
   Connect::Options connect_options(options);
   connect_options.on_state_changed = [this](Outbound *ob) {
     m_outbound = ob;
+    return true;
   };
 
   auto *ppl_connect = PipelineLayout::make(m_module);

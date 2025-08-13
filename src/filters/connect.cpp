@@ -184,7 +184,7 @@ void Connect::process(Event *evt) {
       pjs::Ref<pjs::Function> f = options.on_state_f;
       options.on_state_changed = [=](Outbound *ob) {
         pjs::Value arg(ob), ret;
-        Filter::callback(f, 1, &arg, ret);
+        return Filter::callback(f, 1, &arg, ret);
       };
     }
 

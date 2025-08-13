@@ -120,13 +120,14 @@ void Outbound::close(StreamEnd *eos) {
   release();
 }
 
-void Outbound::state(State state) {
+bool Outbound::state(State state) {
   if (m_state != state) {
     m_state = state;
     if (const auto &f = m_options.on_state_changed) {
-      f(this);
+      return f(this);
     }
   }
+  return true;
 }
 
 void Outbound::input(Event *evt) {
@@ -273,7 +274,7 @@ void OutboundTCP::bind(const std::string &address) {
   auto &s = SocketTCP::socket();
   tcp::endpoint ep(asio::ip::make_address(ip), port);
   s.open(ep.protocol());
-  state(Outbound::State::open);
+  if (!state(Outbound::State::open)) return;
   s.bind(ep);
   const auto &local = s.local_endpoint();
   m_local_addr = local.address().to_string();
@@ -420,16 +421,16 @@ void OutboundTCP::resolve() {
 }
 
 void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
+  auto &s = socket();
+  if (!s.is_open()) {
+    s.open(target.protocol());
+    if (!state(Outbound::State::open)) return;
+  }
+
   if (Log::is_enabled(Log::OUTBOUND)) {
     char desc[200];
     describe(desc, sizeof(desc));
     Log::debug(Log::OUTBOUND, "%s connecting...", desc);
-  }
-
-  auto &s = socket();
-  if (!s.is_open()) {
-    s.open(target.protocol());
-    state(Outbound::State::open);
   }
 
   s.async_connect(
@@ -470,6 +471,12 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
           retain();
           SocketTCP::open();
           state(Outbound::State::connected);
+        }
+      } else {
+        if (Log::is_enabled(Log::OUTBOUND)) {
+          char desc[200];
+          describe(desc, sizeof(desc));
+          Log::debug(Log::OUTBOUND, "%s connection canceled", desc);
         }
       }
 
@@ -533,7 +540,7 @@ void OutboundUDP::bind(const std::string &address) {
   auto &s = SocketUDP::socket();
   udp::endpoint ep(asio::ip::make_address(ip), port);
   s.open(ep.protocol());
-  state(Outbound::State::open);
+  if (!state(Outbound::State::open)) return;
   s.bind(ep);
   const auto &local = s.local_endpoint();
   m_local_addr = local.address().to_string();
@@ -684,16 +691,16 @@ void OutboundUDP::resolve() {
 }
 
 void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
+  auto &s = socket();
+  if (!s.is_open()) {
+    s.open(target.protocol());
+    if (!state(Outbound::State::open)) return;
+  }
+
   if (Log::is_enabled(Log::OUTBOUND)) {
     char desc[200];
     describe(desc, sizeof(desc));
     Log::debug(Log::OUTBOUND, "%s connecting...", desc);
-  }
-
-  auto &s = socket();
-  if (!s.is_open()) {
-    s.open(target.protocol());
-    state(Outbound::State::open);
   }
 
   s.async_connect(
@@ -734,6 +741,12 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
           retain();
           SocketUDP::open();
           state(State::connected);
+        }
+      } else {
+        if (Log::is_enabled(Log::OUTBOUND)) {
+          char desc[200];
+          describe(desc, sizeof(desc));
+          Log::debug(Log::OUTBOUND, "%s connection canceled", desc);
         }
       }
 
