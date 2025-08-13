@@ -28,7 +28,12 @@ export function responder(f) {
   return pipeline($=>$
     .replaceMessage(req => {
       try {
-        return f($params, req).catch(responseError)
+        var res = f($params, req)
+        if (res instanceof Promise) {
+          return res.catch(responseError)
+        } else {
+          return res
+        }
       } catch (e) {
         return responseError(e)
       }
