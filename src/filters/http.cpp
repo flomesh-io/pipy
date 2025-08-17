@@ -1865,8 +1865,10 @@ void Mux::HTTPSession::free_all() {
     http2::Client::shutdown();
     for (auto s = HTTPQueue::head(); s; s = s->next()) {
       auto stream = static_cast<HTTPStream*>(s);
-      http2::Client::discard(stream->m_http2_stream);
-      stream->m_http2_stream = nullptr;
+      if (auto s = stream->m_http2_stream) {
+        http2::Client::discard(s);
+        stream->m_http2_stream = nullptr;
+      }
     }
   }
   HTTPQueue::free_all();
