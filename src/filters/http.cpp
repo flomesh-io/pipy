@@ -1647,7 +1647,10 @@ void Mux::HTTPStream::discard() {
     if (auto s = Muxer::Stream::session()) {
       auto session = static_cast<HTTPSession*>(s);
       session->http2::Client::close(m_http2_stream);
-      m_http2_stream = nullptr;
+      if (m_http2_stream) {
+        session->http2::Client::discard(m_http2_stream);
+        m_http2_stream = nullptr;
+      }
     }
   }
   EventFunction::chain(nullptr);
