@@ -1,0 +1,90 @@
+name: MacOS tests
+
+on: [pull_request, push]
+
+permissions:
+  contents: read
+
+jobs:
+  coding_style_tests:
+    uses: ./.github/workflows/coding_style.yml
+  macos:
+# Run a job for each of the specified os configs:
+    strategy:
+      matrix:
+        os:
+          - macos-13
+        libjade-build:
+# build with -DOQS_LIBJADE_BUILD=ON when building for algorithms with libjade implementations
+          - "OFF"
+# eventually build for other alg sets, if CCI use is discontinued
+        params:
+          - oqsconfig: -DOQS_ALGS_ENABLED=STD
+    runs-on: ${{matrix.os}}
+    needs: [coding_style_tests]
+    env:
+# Don't overwhelm github CI VMs:
+      MAKE_PARAMS: -j 4
+    steps:
+      - name: Checkout provider
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # pin@v4
+      - name: Checkout openssl
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # pin@v4
+        with:
+          set-safe-directory: true
+          repository: openssl/openssl
+          path: openssl
+      - name: checkout liboqs
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # pin@v4
+        with:
+          set-safe-directory: true
+          repository: open-quantum-safe/liboqs
+          ref: main
+          path: liboqs
+      - name: Retrieve OpenSSL32 from cache
+        id: cache-openssl32
+        uses: actions/cache@v4
+        with:
+          path: .localopenssl32
+          key: ${{ runner.os }}-openssl32
+      - name: Build openssl3 if not cached
+        if: steps.cache-openssl32.outputs.cache-hit != 'true'
+        run: pwd && ./config --prefix=`pwd`/../.localopenssl32 && make $MAKE_PARAMS && make install_sw install_ssldirs
+        working-directory: openssl
+      - name: Save OpenSSL
+        id: cache-openssl-save
+        if: steps.cache-openssl32.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            .localopenssl32
+          key: ${{ runner.os }}-openssl32
+      - name: build liboqs
+        run: |
+           cmake -DOPENSSL_ROOT_DIR=../.localopenssl32 -DCMAKE_INSTALL_PREFIX=../.localliboqs -DOQS_LIBJADE_BUILD=${{ matrix.libjade-build }} ${{ matrix.params.oqsconfig }} -S . -B _build
+           cmake --build _build
+           cmake --install _build
+        working-directory: liboqs
+      - name: build oqs-provider
+        run: liboqs_DIR=.localliboqs cmake -DOPENSSL_ROOT_DIR=.localopenssl32 -S . -B _build && cmake --build _build
+      - name: Check Openssl providers
+        run: OPENSSL_MODULES=_build/lib .localopenssl32/bin/openssl list -providers -provider oqsprovider -provider default
+      - name: Run tests
+        run: PATH=../.localopenssl32/bin:$PATH ctest -V
+        working-directory: _build
+      # Try brew install of head: If error message below appears, build and test passed successfully
+      - name: brew install test
+        # try this only if brew'd liboqs knows about ML-KEM:
+        run: |
+          bash -c 'brew install liboqs && FIND_MLKEM=`brew info liboqs | grep files | awk "{print $1}"`
+            if [[ `echo $FIND_MLKEM | grep ML_KEM` ]]; then
+               brew install --HEAD --formula -s oqsprovider.rb 2>&1 | grep "Empty installation"
+            else
+               echo "ML-KEM not present in liboqs. Skipping test."
+            fi'
+        working-directory: scripts
+      - name: Retain oqsprovider.dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: oqs-provider-${{matrix.os}}-x64
+          path: _build/lib/oqsprovider.dylib

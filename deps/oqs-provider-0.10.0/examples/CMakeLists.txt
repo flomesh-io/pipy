@@ -1,0 +1,16 @@
+if(NOT BUILD_TESTING)
+  return()
+endif()
+
+if (OQS_PROVIDER_BUILD_STATIC)
+  get_filename_component(OPENSSL_LIB_TYPE ${OPENSSL_CRYPTO_LIBRARY} LAST_EXT)
+  add_executable(example_static_oqsprovider static_oqsprovider.c)
+  if(OPENSSL_LIB_TYPE STREQUAL ".a")
+    target_link_libraries(example_static_oqsprovider PRIVATE ${OPENSSL_CRYPTO_LIBRARY} oqsprovider)
+  else()
+    target_link_libraries(example_static_oqsprovider PRIVATE ${OPENSSL_CRYPTO_LIBRARY} oqsprovider dl pthread )
+  endif()
+  targets_set_static_provider(example_static_oqsprovider)
+  add_test(NAME test_example_static_oqsprovider
+    COMMAND example_static_oqsprovider)
+endif()

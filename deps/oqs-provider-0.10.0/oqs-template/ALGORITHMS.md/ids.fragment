@@ -1,0 +1,18 @@
+
+|Algorithm name | default ID | enabled | environment variable |
+|---------------|:----------:|:-------:|----------------------|
+{%- for kem in config['kems']  %}
+| {{ kem['name_group'] }} | {{ kem['nid'] }} | Yes | OQS_CODEPOINT_{{ kem['name_group']|upper }} |
+{%- for hybrid in kem['hybrids'] %}
+| {% if 'standard_name' in hybrid %}{{ hybrid['standard_name'] }}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %} | {{ hybrid['nid'] }} | Yes | OQS_CODEPOINT_{% if 'standard_name' in hybrid %}{{ hybrid['standard_name']|upper }}{% else %}{{ hybrid['hybrid_group']|upper }}_{{ kem['name_group']|upper }}{% endif %} |
+{%- endfor %}
+{%- endfor %}
+{%- for sig in config['sigs'] %}
+   {%- for variant in sig['variants'] %}
+| {{variant['name']}} | {{ variant['code_point'] }} | {%- if variant['enable'] -%} Yes {%- else -%} No {%- endif -%} | OQS_CODEPOINT_{{ variant['name']|upper }}
+      {%- for classical_alg in variant['mix_with'] %}
+| {{ classical_alg['name'] }}_{{variant['name']}} | {{ classical_alg['code_point'] }} | {%- if variant['enable'] -%} Yes {%- else -%} No {%- endif -%} | OQS_CODEPOINT_{{ classical_alg['name']|upper }}_{{ variant['name']|upper }}
+      {%- endfor %}
+   {%- endfor %}
+{%- endfor %}
+

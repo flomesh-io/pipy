@@ -1,0 +1,21 @@
+
+### KEM algorithms
+{% for family, kems in config['kems'] | groupby('family') %}
+- **{{ family }}**: {% for kem in kems -%} `{{ kem['name_group'] }}` {%- for hybrid in kem['hybrids'] -%}, `{% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{hybrid['hybrid_group']}}_{{kem['name_group']}}{% endif %}`{%- endfor -%}{%- if not loop.last %}, {% endif -%}{%- if loop.last and family == 'HQC' -%}†{%- endif -%}{%- endfor -%}
+{%- endfor %}
+
+### Signature algorithms
+{% for sig in config['sigs'] %}
+{% if sig['variants']|length > 0 -%}
+- **{{ sig['family'] }}**:
+    {%- for variant in sig['variants'] -%}
+`{{ variant['name'] }}`
+{%- if not variant['enable'] and variant['enable_tls'] -%} \* {%- endif -%}
+{%- if not variant['enable_tls'] -%} \*\* {%- endif -%}
+{%- for classical_alg in variant['mix_with'] -%} , `{{ classical_alg['name']}}_{{ variant['name'] }}`{%- if not variant['enable'] and variant['enable_tls'] -%} \* {%- endif -%}{%- if not variant['enable_tls'] -%} \*\* {%- endif -%}{%- endfor -%}
+{%- if not loop.last %}, {% endif -%}
+    {%- endfor -%}
+{%- endif -%}
+{%- endfor %}
+
+

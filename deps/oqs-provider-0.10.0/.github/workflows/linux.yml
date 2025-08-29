@@ -1,0 +1,256 @@
+name: Linux tests
+
+on:
+  push:
+    branches: [ '*' ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  coding_style_tests:
+    uses: ./.github/workflows/coding_style.yml
+  linux_baseline:
+    runs-on: ubuntu-latest
+    needs: [coding_style_tests]
+    strategy:
+      fail-fast: false
+      matrix:
+        cmake-params: [ "" ]
+        libjade-build: ["ON", "OFF"]
+    container:
+      image: openquantumsafe/ci-ubuntu-jammy:latest
+    env:
+      MAKE_PARAMS: "-j 18"
+      LIBOQS_BRANCH: "main"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # pin@v4
+      - name: Full build
+        run: OQSPROV_CMAKE_PARAMS=${{ matrix.cmake-params}} OQS_LIBJADE_BUILD=${{ matrix.libjade-build }} ./scripts/fullbuild.sh
+      - name: Test
+        run: ./scripts/runtests.sh -V
+
+  linux_intel:
+    runs-on: ubuntu-latest
+    needs: [coding_style_tests]
+    strategy:
+      fail-fast: false
+      matrix:
+        ossl-branch: [openssl-3.4.1, openssl-3.5.0, master] # retain openssl-3.4.1 to test non-OpenSSL PQ alg implementations
+        cmake-params: [ "", "-DOQS_KEM_ENCODERS=ON" ]
+        libjade-build:
+          - "ON" 
+          - "OFF"
+        include:
+          - name: alpine
+            container: openquantumsafe/ci-alpine-amd64:latest
+# focal test done on CircleCI - save the compute cycles here until CCI is dropped
+#          - name: focal
+#            container: openquantumsafe/ci-ubuntu-focal-x86_64:latest
+          - name: jammy
+            container: openquantumsafe/ci-ubuntu-jammy:latest
+    container:
+      image: ${{ matrix.container }}
+    env:
+      MAKE_PARAMS: "-j 18"
+      LIBOQS_BRANCH: "main"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # pin@v4
+      - name: Add safe directory exception
+        run: git config --global --add safe.directory /__w/oqs-provider/oqs-provider
+      - name: Full build
+        run: OQSPROV_CMAKE_PARAMS=${{ matrix.cmake-params}} OPENSSL_BRANCH=${{ matrix.ossl-branch }} LIBOQS_BRANCH=main OQS_LIBJADE_BUILD=${{ matrix.libjade-build }} ./scripts/fullbuild.sh
+      - name: Test
+        run: ./scripts/runtests.sh -V
+      - name: Re-generate code
+        run: |
+          apt-get update && apt-get install -y clang-format && \
+          git config --global user.name "ciuser" && \
+          git config --global user.email "ci@openquantumsafe.org" && \
+          git config --global --add safe.directory `pwd` && \
+          export LIBOQS_SRC_DIR=`pwd`/liboqs && \
+          ! pip3 install -r oqs-template/requirements.txt 2>&1 | grep ERROR && \
+          python3 oqs-template/generate.py
+      - name: Full re-build & test
+        run: rm -rf _build && OPENSSL_BRANCH=${{ matrix.ossl-branch }} LIBOQS_BRANCH=main OQS_LIBJADE_BUILD=${{ matrix.libjade-build }} ./scripts/fullbuild.sh && ./scripts/runtests.sh
+      - name: Build .deb install package
+        run: cpack -C DebPack
+        working-directory: _build
+      - name: Retain .deb installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.ossl-branch }} ${{ matrix.cmake-params }} ${{ matrix.libjade-build }} oqsprovider-x64
+          path: _build/*.deb
+      - name: Verify that the static library is copied to the install directory.
+        run: |
+          OPENSSL_BRANCH=${{ matrix.ossl-branch }} OQSPROV_CMAKE_PARAMS="-DOQS_PROVIDER_BUILD_STATIC=ON" ./scripts/fullbuild.sh -f && \
+          mkdir -p _sysroot/ && \
+          cmake --install _build --prefix _sysroot/ && \
+          stat _sysroot/lib/liboqsprovider.a
+
+  asan_linux_intel:
+    name: "Security checks"
+    runs-on: ubuntu-latest
+    needs: [coding_style_tests]
+    strategy:
+      fail-fast: false
+    container:
+      image: openquantumsafe/ci-ubuntu-jammy:latest
+    env:
+      CC: "clang"
+      CXX: "clang++"
+      ASAN_C_FLAGS: "-fsanitize=address -fno-omit-frame-pointer"
+      ASAN_OPTIONS: "detect_stack_use_after_return=1,detect_leaks=1"
+      OPENSSL_BRANCH: "openssl-3.5.0"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # pin@v4
+
+      - name: Install dependencies
+        run: apt-get update && apt-get install -y clang llvm ninja-build git cmake libclang-14-dev libclang-common-14-dev
+
+      - name: Clone and build OpenSSL(3) with ASan
+        run: |
+          git clone --depth=1 --branch "${OPENSSL_BRANCH}" https://github.com/openssl/openssl.git openssl
+          cd openssl
+          mkdir install
+          ./Configure --openssldir="${PWD}/install" \
+                      --prefix="${PWD}/install" \
+                      --debug \
+                      enable-asan \
+                      no-tests
+          make -j$(nproc)
+          make install_sw
+          cd ..
+
+      - name: Clone and build liboqs with ASan
+        run: |
+          git clone --depth=1 --branch main https://github.com/open-quantum-safe/liboqs.git liboqs
+          cd liboqs
+          mkdir build install
+          cmake -GNinja -B build \
+                -DCMAKE_BUILD_TYPE=Debug \
+                -DOQS_USE_OPENSSL=OFF \
+                -DCMAKE_C_FLAGS="${ASAN_C_FLAGS}" \
+                -DCMAKE_EXE_LINKER_FLAGS="${ASAN_C_FLAGS}" \
+                -DCMAKE_INSTALL_PREFIX="${PWD}/install"
+          cmake --build build -j$(nproc)
+          cmake --install build
+          cd ..
+
+      - name: Build oqs-provider with ASan
+        run: |
+          cmake -GNinja -B build \
+                -DCMAKE_BUILD_TYPE=Debug \
+                -DOPENSSL_ROOT_DIR="$PWD/openssl/install" \
+                -Dliboqs_DIR="$PWD/liboqs/install/lib/cmake/liboqs" \
+                -DCMAKE_C_FLAGS="${ASAN_C_FLAGS}" \
+                -DCMAKE_EXE_LINKER_FLAGS="${ASAN_C_FLAGS}"
+          cmake --build build -j$(nproc)
+
+      - name: Verify that test binaries are linked against ASan
+        run: |
+          find build/test/ -type f -perm '/u=x' | while read -r test_bin; do
+            if ! nm "${test_bin}" | grep -q '__local_asan_preinit'; then
+              echo "ASan not found in ${test_bin}"
+              exit 1
+            fi
+          done
+
+      - name: Run tests
+        run: |
+          ctest --test-dir build \
+            --output-on-failure \
+            --extra-verbose
+
+  linux_aarch64:
+    name: "aarch64 cross-compilation"
+    runs-on: ubuntu-latest
+    needs: [coding_style_tests]
+    strategy:
+      fail-fast: false
+    container:
+      image: openquantumsafe/ci-ubuntu-jammy:latest
+    env:
+      OPENSSL_BRANCH: "master"
+      INSTALL_DIR: "/opt/install"
+      CMAKE_TOOLCHAIN_FILE: "/opt/linux-aarch64-toolchain.cmake"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # pin@v4
+
+      - name: Install dependencies
+        run: apt-get update && apt-get install -y ninja-build git cmake nodejs gcc-aarch64-linux-gnu libc6-dev-arm64-cross qemu-user
+
+      - name: Prepare install directory
+        run: mkdir -p "${INSTALL_DIR}"
+
+      - name: Clone and build OpenSSL(3) for linux-aarch64
+        working-directory: /opt/
+        run: |
+          git clone --depth=1 --branch "${OPENSSL_BRANCH}" https://github.com/openssl/openssl.git openssl
+          cd openssl
+          ./Configure linux-aarch64 no-tests --prefix="${INSTALL_DIR}" \
+                                    --openssldir="${INSTALL_DIR}" \
+                                    --cross-compile-prefix=aarch64-linux-gnu- \
+                                    --release
+          make -j$(nproc)
+          make install_sw
+
+      - name: Write CMake toolchain file for liboqs and oqs-provider
+        run: |
+          echo "set(CMAKE_SYSTEM_NAME Linux) \n
+                set(CMAKE_SYSTEM_PROCESSOR aarch64) \n
+                set(CMAKE_C_COMPILER "/usr/bin/aarch64-linux-gnu-gcc")\n" > "${CMAKE_TOOLCHAIN_FILE}"
+
+      - name: Clone and build liboqs for linux-aarch64
+        working-directory: /opt/
+        run: |
+          git clone --depth=1 --branch main https://github.com/open-quantum-safe/liboqs.git liboqs
+          cd liboqs
+          mkdir build install
+          cmake --toolchain "${CMAKE_TOOLCHAIN_FILE}" \
+                -GNinja -B build \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" \
+                -DOQS_USE_OPENSSL=OFF
+          cmake --build build -j$(nproc)
+          cmake --install build
+
+      - name: Build oqs-provider for linux-aarch64
+        run: |
+          cmake --toolchain "${CMAKE_TOOLCHAIN_FILE}" \
+                -GNinja -B build \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" \
+                -DOPENSSL_ROOT_DIR="${INSTALL_DIR}" \
+                -Dliboqs_DIR="${INSTALL_DIR}/lib/cmake/liboqs"
+          cmake --build build -j$(nproc)
+          cmake --install build
+
+      - name: Run tests with qemu-aarch64
+        run: |
+            cmake -B build -DCMAKE_CROSSCOMPILING_EMULATOR="qemu-aarch64;-L;/usr/aarch64-linux-gnu"
+            ctest --test-dir build/
+
+      - name: Build .deb install package
+        run: |
+            cpack \
+                --toolchain "${CMAKE_TOOLCHAIN_FILE}" \
+                -C DebPack \
+                -DCMAKE_INSTALL_PREFIX=/usr
+        working-directory: build
+
+      - name: Verify the .deb file target architecture.
+        working-directory: build
+        run: |
+            dpkg -I oqs-provider-*.deb | grep -q "Architecture: arm64"
+
+      - name: Retain .deb installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: oqsprovider-aarch64
+          path: build/*.deb
+

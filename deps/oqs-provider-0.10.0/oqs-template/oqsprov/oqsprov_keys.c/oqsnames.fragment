@@ -1,0 +1,46 @@
+
+{% set count = namespace(val=0) %}
+{% set kemcount = namespace(val=0) %}
+
+{% for kem in config['kems'] %}
+{%- set kemcount.val = kemcount.val + 1 -%}
+{% for hybrid in kem['hybrids'] %}
+{%- set kemcount.val = kemcount.val + 1 -%}
+{%- endfor -%}
+{%- endfor -%}
+
+{%- for sig in config['sigs'] %}
+{%- for variant in sig['variants'] -%}
+{%- set count.val = count.val + 1 -%}
+{%- for classical_alg in variant['mix_with'] %}
+{%- set count.val = count.val + 1 -%}
+{%- endfor -%}
+{%- endfor -%}
+{%- endfor %}
+
+#ifdef OQS_KEM_ENCODERS
+#define NID_TABLE_LEN {{ count.val + kemcount.val }}
+#else
+#define NID_TABLE_LEN {{ count.val }}
+#endif
+
+static oqs_nid_name_t nid_names[NID_TABLE_LEN] = {
+#ifdef OQS_KEM_ENCODERS
+{% for kem in config['kems'] %}
+  { 0, "{{ kem['name_group'] }}", {{ kem['oqs_alg'] }}, KEY_TYPE_KEM, {{ kem['bit_security'] }}, 0 },
+{%- for hybrid in kem['hybrids'] %}
+  { 0, "{% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}", {{ kem['oqs_alg'] }}, {% if hybrid['hybrid_group'].startswith('p') or hybrid['hybrid_group'].startswith('secp') -%} KEY_TYPE_ECP_HYB_KEM {% else %} KEY_TYPE_ECX_HYB_KEM {% endif %}, {{ kem['bit_security'] }}, {% if 'fips_standard' in kem and hybrid['hybrid_group'] in ["x25519", "x448"] %}1{% else %}0{% endif %} },
+{%- endfor -%}
+{%- endfor %}
+
+#endif /* OQS_KEM_ENCODERS */
+
+{%- for sig in config['sigs'] -%}
+   {%- for variant in sig['variants'] %}
+       { 0, "{{variant['name']}}", {{variant['oqs_meth']}}, KEY_TYPE_SIG, {{variant['security']}} },
+     {%- for classical_alg in variant['mix_with'] %}
+       { 0, "{{ classical_alg['name'] }}_{{variant['name']}}", {{variant['oqs_meth']}}, KEY_TYPE_HYB_SIG, {{variant['security']}} },
+     {%- endfor %}
+   {%- endfor %}
+{%- endfor %}
+

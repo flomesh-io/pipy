@@ -1,0 +1,54 @@
+name: Tests using distributions with OpenSSL3 binaries
+
+on:
+  push:
+    branches: [ '*' ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  coding_style_tests:
+    uses: ./.github/workflows/coding_style.yml
+  standalone_macos_intel:
+    needs: [coding_style_tests]
+    runs-on: macos-13
+    strategy:
+      fail-fast: false
+    steps:
+      - name: Install prerequisites
+        run: brew install liboqs
+      - name: Checkout oqsprovider code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # pin@v4
+      - name: Build and test oqsprovider
+        # try this only if brew'd liboqs knows about ML-KEM:
+        run: |
+          bash -c 'FIND_MLKEM=`brew info liboqs | grep files | awk "{print $1}"`
+            if [[ `echo $FIND_MLKEM | grep ML_KEM` ]]; then
+               cmake -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@3 -S . -B _build && cmake --build _build && ctest --parallel 5 --test-dir _build
+            else
+               echo "ML-KEM not present in liboqs. Skipping test."
+            fi'
+
+  standalone_linux_intel:
+    needs: [coding_style_tests]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-latest
+            container: ubuntu:latest
+    container:
+      image: ${{ matrix.container }}
+    env:
+      MAKE_PARAMS: "-j 18"
+    steps:
+      - name: Update container
+        run: apt update && apt install -y cmake ninja-build gcc libssl-dev git
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # pin@v4
+      - name: Full build
+        run: LIBOQS_BRANCH=main ./scripts/fullbuild.sh
+      - name: Test
+        run: ./scripts/runtests.sh -V
+

@@ -1,0 +1,53 @@
+{% set kemcount = namespace(val=0) %}
+{% for kem in config['kems'] %}
+{%- set kemcount.val = kemcount.val + 1 -%}
+{% for hybrid in kem['hybrids'] %}
+{%- set kemcount.val = kemcount.val + 1 -%}
+{%- endfor -%}
+{%- endfor -%}
+
+{% set count = namespace(val=0) %}
+{%- for sig in config['sigs'] %}
+    {%- for variant in sig['variants'] %}
+{%- set count.val = count.val + 1 -%}
+        {%- for classical_alg in variant['mix_with'] %}
+{%- set count.val = count.val + 1 -%}
+        {%- endfor %}
+    {%- endfor %}
+{%- endfor %}
+
+#ifdef OQS_KEM_ENCODERS
+#define OQS_OID_CNT {{ count.val*2  + kemcount.val*2 }}
+#else
+#define OQS_OID_CNT {{ count.val*2 }}
+#endif
+const char* oqs_oid_alg_list[OQS_OID_CNT] =
+{
+
+#ifdef OQS_KEM_ENCODERS
+{% for kem in config['kems'] %}
+{%- if kem['oid'] == "NULL" -%}
+NULL, "{{ kem['name_group'] }}",
+{%- else -%}
+"{{ kem['oid'] }}", "{{ kem['name_group'] }}",
+{%- endif -%}
+{%- for hybrid in kem['hybrids'] %}
+{%- if hybrid['hybrid_oid'] == "NULL" -%}
+NULL, "{% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}",
+{%- else -%}
+"{{hybrid['hybrid_oid']}}", "{% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}",
+{%- endif -%}
+{%- endfor -%}
+{%- endfor %}
+
+#endif /* OQS_KEM_ENCODERS */
+
+{% for sig in config['sigs'] %}
+    {%- for variant in sig['variants'] %}
+"{{ variant['oid'] }}", "{{ variant['name'] }}",
+        {%- for classical_alg in variant['mix_with'] %}
+"{{ classical_alg['oid'] }}" , "{{ classical_alg['name'] }}_{{ variant['name'] }}",
+        {%- endfor %}
+    {%- endfor %}
+{%- endfor %}
+

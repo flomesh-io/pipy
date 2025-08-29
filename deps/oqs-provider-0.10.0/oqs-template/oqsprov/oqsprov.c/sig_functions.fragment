@@ -1,0 +1,11 @@
+{% for sig in config['sigs'] %}
+   {%- for variant in sig['variants'] %}
+#ifdef OQS_ENABLE_SIG_{{ variant['oqs_meth']|replace("OQS_SIG_alg_","") }}
+    SIGALG("{{variant['name']}}", {{variant['security']}}, oqs_signature_functions),
+      {%- for classical_alg in variant['mix_with'] %}
+    SIGALG("{{ classical_alg['name'] }}_{{variant['name']}}", {{variant['security']}}, oqs_signature_functions),
+      {%- endfor %}
+#endif
+   {%- endfor %}
+{%- endfor %}
+

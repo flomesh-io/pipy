@@ -30,6 +30,12 @@
 #include "log.hpp"
 
 #include <openssl/err.h>
+#include <openssl/opensslv.h>
+#ifdef PIPY_USE_PQC
+#ifdef PIPY_USE_OQS_PROVIDER
+#include <openssl/provider.h>
+#endif
+#endif
 
 namespace pipy {
 namespace tls {
@@ -44,6 +50,30 @@ static void throw_error() {
   ERR_error_string(err, str);
   throw std::runtime_error(str);
 }
+
+//
+// Options
+//
+
+//
+// PqcOptions
+//
+
+#ifdef PIPY_USE_PQC
+PqcOptions::PqcOptions(pjs::Object *options) {
+  Value(options, "keyExchange")
+    .get(key_exchange)
+    .check_nullable();
+
+  Value(options, "signature")
+    .get(signature)
+    .check_nullable();
+
+  Value(options, "hybrid")
+    .get(hybrid)
+    .check_nullable();
+}
+#endif
 
 //
 // Options
@@ -105,6 +135,43 @@ Options::Options(pjs::Object *options, const char *base_name) {
     .get(ntls)
     .check_nullable();
 #endif
+
+#ifdef PIPY_USE_PQC
+  pjs::Ref<pjs::Object> pqc_options;
+  Value(options, "pqc", base_name)
+    .get(pqc_options)
+    .check_nullable();
+
+  if (pqc_options) {
+    pqc = PqcOptions(pqc_options);
+    pqc_enabled = true;
+
+    // Set default algorithms if not specified
+    if (!pqc.key_exchange) {
+      pqc.key_exchange = pjs::Str::make("ML-KEM-512");
+    }
+
+    // Only set signature default for OpenSSL versions that support it
+    if (TLSContext::openssl_supports_builtin_pqc()) {
+      // For OpenSSL >= 3.5, PQC signatures are not available due to OID conflicts
+      if (pqc.signature) {
+        Log::warn("[tls] PQC signature algorithms are not available in OpenSSL >= 3.5 due to OID conflicts with built-in algorithms, ignoring signature setting");
+        pqc.signature = nullptr;
+      }
+    } else if (TLSContext::should_use_oqs_provider()) {
+      // For OpenSSL 3.2-3.4 or older versions with oqs-provider, signatures are supported
+      if (!pqc.signature) {
+        pqc.signature = pjs::Str::make("ML-DSA-44");
+      }
+    } else {
+      // No PQC signature support available
+      if (pqc.signature) {
+        Log::warn("[tls] PQC signature algorithms are not available in this build configuration, ignoring signature setting");
+        pqc.signature = nullptr;
+      }
+    }
+  }
+#endif
 }
 
 //
@@ -137,6 +204,27 @@ TLSContext::TLSContext(bool is_server, const Options &options) {
   if (options.alpn && is_server) {
     SSL_CTX_set_alpn_select_cb(m_ctx, on_select_alpn, this);
   }
+
+#ifdef PIPY_USE_PQC
+  if (options.pqc_enabled) {
+    // Load oqs-provider if needed and available
+    if (should_use_oqs_provider()) {
+#ifdef PIPY_USE_OQS_PROVIDER
+      load_pqc_provider();
+#else
+      Log::warn("[tls] PQC support requires oqs-provider but it was not built into this binary");
+#endif
+    }
+    
+    // Both key_exchange and signature have been processed with defaults/nulls in Options constructor
+    std::string sig_alg = options.pqc.signature ? options.pqc.signature->str() : "";
+    set_pqc_algorithms(
+      options.pqc.key_exchange->str(),
+      sig_alg,
+      options.pqc.hybrid
+    );
+  }
+#endif
 }
 
 TLSContext::~TLSContext() {
@@ -242,6 +330,111 @@ auto TLSContext::on_select_alpn(
     return SSL_TLSEXT_ERR_ALERT_FATAL;
   }
 }
+
+#ifdef PIPY_USE_PQC
+#ifdef PIPY_USE_OQS_PROVIDER
+void TLSContext::load_pqc_provider() {
+  if (!OSSL_PROVIDER_load(nullptr, "oqsprovider")) {
+    throw std::runtime_error("Failed to load OQS provider");
+  }
+}
+#endif
+
+bool TLSContext::openssl_supports_builtin_pqc() {
+  // OpenSSL 3.5.0 has built-in PQC algorithms
+  // Version format: MNNFFPPS (Major, miNor, Fix, Patch, Status)
+  // 3.5.0 = 0x30500000L
+  return OPENSSL_VERSION_NUMBER >= 0x30500000L;
+}
+
+bool TLSContext::openssl_supports_pqc_signatures() {
+  // OpenSSL 3.2.0 introduced PQC signature support via oqs-provider
+  // but OpenSSL 3.5.0+ has conflicts with oqs-provider for signature algorithms
+  // 3.2.0 = 0x30200000L, 3.5.0 = 0x30500000L
+  return (OPENSSL_VERSION_NUMBER >= 0x30200000L && OPENSSL_VERSION_NUMBER < 0x30500000L);
+}
+
+bool TLSContext::should_use_oqs_provider() {
+#ifdef PIPY_PQC_BUILTIN_ONLY
+  // Force built-in only mode
+  return false;
+#elif defined(PIPY_USE_OQS_PROVIDER)
+  // Use oqs-provider for OpenSSL versions that don't have built-in PQC
+  // or when explicitly configured to use oqs-provider
+  return !openssl_supports_builtin_pqc();
+#else
+  // No oqs-provider available
+  return false;
+#endif
+}
+
+void TLSContext::set_pqc_algorithms(const std::string &kem_alg, const std::string &sig_alg, bool hybrid) {
+  // Configure supported groups (KEM algorithms)
+  if (!kem_alg.empty()) {
+    std::string groups;
+    if (hybrid) {
+      // Use hybrid algorithms that combine classical with PQC
+      if (kem_alg == "ML-KEM-512") {
+        // For ML-KEM-512, typically use X25519 hybrid
+        groups = "X25519MLKEM768:MLKEM512"; // Use 768 for hybrid, fallback to 512
+      } else if (kem_alg == "ML-KEM-768") {
+        groups = "X25519MLKEM768:MLKEM768";
+      } else if (kem_alg == "ML-KEM-1024") {
+        groups = "SecP384r1MLKEM1024:MLKEM1024";
+      } else {
+        groups = kem_alg;
+      }
+    } else {
+      // Pure PQC mode - use only post-quantum algorithms
+      if (kem_alg == "ML-KEM-512") {
+        groups = "MLKEM512";
+      } else if (kem_alg == "ML-KEM-768") {
+        groups = "MLKEM768";
+      } else if (kem_alg == "ML-KEM-1024") {
+        groups = "MLKEM1024";
+      } else {
+        groups = kem_alg;
+      }
+    }
+
+    if (SSL_CTX_set1_groups_list(m_ctx, groups.c_str()) != 1) {
+      throw std::runtime_error("Failed to set PQC KEM algorithms: " + groups);
+    }
+  }
+
+  // Configure signature algorithms
+  if (!sig_alg.empty()) {
+    std::string sig_list;
+    if (hybrid) {
+      // Use hybrid signature algorithms
+      if (sig_alg == "ML-DSA-44") {
+        sig_list = "p256_mldsa44:mldsa44";
+      } else if (sig_alg == "ML-DSA-65") {
+        sig_list = "p384_mldsa65:mldsa65";
+      } else if (sig_alg == "ML-DSA-87") {
+        sig_list = "p521_mldsa87:mldsa87";
+      } else {
+        sig_list = sig_alg;
+      }
+    } else {
+      // Pure PQC mode
+      if (sig_alg == "ML-DSA-44") {
+        sig_list = "mldsa44";
+      } else if (sig_alg == "ML-DSA-65") {
+        sig_list = "mldsa65";
+      } else if (sig_alg == "ML-DSA-87") {
+        sig_list = "mldsa87";
+      } else {
+        sig_list = sig_alg;
+      }
+    }
+
+    if (SSL_CTX_set1_sigalgs_list(m_ctx, sig_list.c_str()) != 1) {
+      throw std::runtime_error("Failed to set PQC signature algorithms: " + sig_list);
+    }
+  }
+}
+#endif
 
 //
 // TLSSession

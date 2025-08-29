@@ -1,0 +1,10 @@
+# https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/about-code-owners
+
+* @baentsch
+/oqsprov/oqs_hyb_kem.c @bhess
+/oqs-template/generate.yml @baentsch @bhess @feventura @alexrow
+/CMakeLists.txt @baentsch @zadlg
+/.circleci/config.yml @baentsch @zadlg
+/.github/workflows @baentsch @zadlg @jplomas
+/oqsprov/oqs_sig.c @baentsch @feventura
+/scripts/oqsprovider-pkcs12gen.sh @iyanmv

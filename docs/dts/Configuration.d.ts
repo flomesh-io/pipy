@@ -40,6 +40,30 @@ interface CertificateOptions {
   cert: Certificate | CertificateChain,
 }
 
+interface PqcOptions {
+  /**
+   * Key exchange algorithm for post-quantum cryptography.
+   * Defaults to "ML-KEM-512" if not specified and pqc is enabled.
+   * Available algorithms depend on OpenSSL version:
+   * - OpenSSL >= 3.5: Only key exchange algorithms supported
+   * - OpenSSL >= 3.2 && < 3.5: Both key exchange and signature algorithms supported
+   */
+  keyExchange?: "ML-KEM-512" | "ML-KEM-768" | "ML-KEM-1024" | string,
+  
+  /**
+   * Signature algorithm for post-quantum cryptography.
+   * Defaults to "ML-DSA-44" if not specified and pqc is enabled.
+   * Only available when OpenSSL version >= 3.2 && < 3.5.
+   */
+  signature?: "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87" | "SLH-DSA-128s" | "SLH-DSA-128f" | "SLH-DSA-192s" | "SLH-DSA-192f" | "SLH-DSA-256s" | "SLH-DSA-256f" | string,
+  
+  /**
+   * Whether to use hybrid algorithms (combining classical and post-quantum algorithms).
+   * Defaults to true.
+   */
+  hybrid?: boolean,
+}
+
 interface ProxyProtocolHeader {
   version?: 1 | 2,
   command?: 'PROXY' | 'LOCAL',
@@ -266,6 +290,7 @@ interface Configuration {
       verify?: (ok: boolean, cert: Certificate) => boolean,
       alpn?: string[] | ((protocolNames: string[]) => number),
       handshake?: (protocolName: string | undefined) => void,
+      pqc?: PqcOptions | (() => PqcOptions),
     }
   ): Configuration;
 
@@ -508,6 +533,7 @@ interface Configuration {
       verify?: (ok: boolean, cert: Certificate) => boolean,
       alpn?: string | string[],
       sni?: string | (() => string),
+      pqc?: PqcOptions | (() => PqcOptions),
       handshake?: (protocolName: string | undefined) => void,
     }
   ): Configuration;

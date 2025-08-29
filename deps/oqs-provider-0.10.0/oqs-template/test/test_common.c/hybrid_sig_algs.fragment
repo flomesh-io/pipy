@@ -1,0 +1,14 @@
+
+
+/** \brief List of hybrid signature algorithms. */
+const char *kHybridSignatureAlgorithms[] = {
+{% for sig in config['sigs'] %}
+   {%- for variant in sig['variants'] %}
+     {%- for classical_alg in variant['mix_with'] -%}
+     "{{ classical_alg['name'] }}_{{ variant['name'] }}",
+     {%- endfor -%}
+   {%- endfor %}
+{%- endfor %}
+NULL,
+};
+

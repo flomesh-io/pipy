@@ -1,0 +1,58 @@
+name: Release tests
+
+on:
+  repository_dispatch:
+    types: [ "liboqs-release" ]
+
+# To trigger this job, generate a GitHub personal access token and run the following command:
+#
+# curl --request POST \
+#      --header "Accept: application/vnd.github+json" \
+#      --header "Authorization: Bearer YOUR_TOKEN_HERE" \
+#      --header "X-GitHub-Api-Version: 2022-11-28" \
+#      --data '{
+#                "event_type": "liboqs-release",
+#                "client_payload": {
+#                                    "provider_ref": "PROVIDER_BRANCH_OR_TAG_HERE",
+#                                    "liboqs_ref": "LIBOQS_BRANCH_OR_TAG_HERE"
+#                                  }
+#              }' \
+#      https://api.github.com/repos/open-quantum-safe/oqs-provider/dispatches
+
+jobs:
+  release-test:
+    runs-on: ubuntu-latest
+    container:
+      image: openquantumsafe/ci-ubuntu-jammy:latest
+
+    steps:
+      - name: Check if requested ref exists
+        env:
+          provider_ref: ${{ github.event.client_payload.provider_ref }}
+        run: |
+          # try both branch and tag
+          wget --quiet \
+               --header "Accept: application/vnd.github+json" \
+               --header "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+               --header "X-GitHub-Api-Version: 2022-11-28" \
+               https://api.github.com/repos/open-quantum-safe/oqs-provider/branches/$provider_ref || \
+          wget --quiet \
+               --header "Accept: application/vnd.github+json" \
+               --header "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+               --header "X-GitHub-Api-Version: 2022-11-28" \
+               https://api.github.com/repos/open-quantum-safe/oqs-provider/git/ref/tags/$provider_ref \
+            && echo "provider_ref=$provider_ref" >> "$GITHUB_ENV" \
+            || echo "provider_ref=main" >> "$GITHUB_ENV"
+      - name: Checkout oqs-provider on requested ref if it exists; otherwise, fall back to main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.provider_ref }}
+      # This is designed to be triggered automatically from liboqs CI, so don't bother validating the liboqs ref.
+      - name: Checkout liboqs at requested ref
+        uses: actions/checkout@v4
+        with:
+          repository: open-quantum-safe/liboqs
+          path: liboqs
+          ref: ${{ github.event.client_payload.liboqs_ref }}
+      - name: Run release tests
+        run: OPENSSL_BRANCH=master ./scripts/release-test-ci.sh

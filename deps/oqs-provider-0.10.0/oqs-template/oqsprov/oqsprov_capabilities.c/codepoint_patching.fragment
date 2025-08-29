@@ -1,0 +1,21 @@
+{% set cnt = namespace(val=-1) %}
+{%- for kem in config['kems'] %}
+   {%- set cnt.val = cnt.val + 1 %}
+   if (getenv("OQS_CODEPOINT_{{ kem['name_group']|upper }}")) oqs_group_list[{{ cnt.val }}].group_id = atoi(getenv("OQS_CODEPOINT_{{ kem['name_group']|upper }}"));
+{%- for hybrid in kem['hybrids'] %}
+   {%- set cnt.val = cnt.val + 1 %}
+   if (getenv("OQS_CODEPOINT_{% if 'standard_name' in hybrid %}{{ hybrid['standard_name']|upper }}{% else %}{{ hybrid['hybrid_group']|upper }}_{{ kem['name_group']|upper }}{% endif %}")) oqs_group_list[{{ cnt.val }}].group_id = atoi(getenv("OQS_CODEPOINT_{% if 'standard_name' in hybrid %}{{ hybrid['standard_name']|upper }}{% else %}{{ hybrid['hybrid_group']|upper }}_{{ kem['name_group']|upper }}{% endif %}"));
+{%- endfor %}
+{%- endfor %}
+{% set cnt = namespace(val=-1) %}
+{%- for sig in config['sigs'] %}
+   {%- for variant in sig['variants'] %}
+   {%- set cnt.val = cnt.val + 1 %}
+   if (getenv("OQS_CODEPOINT_{{variant['name']|upper}}")) oqs_sigalg_list[{{ cnt.val }}].code_point = atoi(getenv("OQS_CODEPOINT_{{variant['name']|upper}}")); 
+      {%- for classical_alg in variant['mix_with'] %}
+   {%- set cnt.val = cnt.val + 1 %}
+   if (getenv("OQS_CODEPOINT_{{ classical_alg['name']|upper }}_{{variant['name']|upper}}")) oqs_sigalg_list[{{ cnt.val }}].code_point = atoi(getenv("OQS_CODEPOINT_{{ classical_alg['name']|upper }}_{{variant['name']|upper}}")); 
+      {%- endfor %}
+   {%- endfor %}
+{%- endfor %}
+
