@@ -7,6 +7,10 @@ set (YAML_VERSION_MINOR 2)
 set (YAML_VERSION_PATCH 5)
 set (YAML_VERSION_STRING "${YAML_VERSION_MAJOR}.${YAML_VERSION_MINOR}.${YAML_VERSION_PATCH}")
 
+if(POLICY CMP0077)
+  cmake_policy(SET CMP0077 NEW)
+endif()
+
 option(BUILD_SHARED_LIBS "Build libyaml as a shared library" OFF)
 set(YAML_STATIC_LIB_NAME "yaml" CACHE STRING "Base name of static library output")
 
