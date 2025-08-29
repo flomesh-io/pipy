@@ -26,6 +26,7 @@
 #ifndef ELF_HPP
 #define ELF_HPP
 
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <map>
