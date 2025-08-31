@@ -159,32 +159,30 @@ else()
   set(OPENSSL_LIB_DIR ${OPENSSL_SRC_DIR}/build)
   set(OPENSSL_INC_DIR ${OPENSSL_SRC_DIR}/include ${OPENSSL_LIB_DIR}/include)
 
-  file(MAKE_DIRECTORY "${OPENSSL_SRC_DIR}/build")
+  include(ExternalProject)
 
   if(WIN32)
-    add_custom_command(
-      OUTPUT ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL}
-      WORKING_DIRECTORY ${OPENSSL_SRC_DIR}/build
-      COMMAND cmd ARGS /C set
-      COMMAND perl ARGS ../Configure no-shared no-tests VC-WIN64A
-      COMMAND nmake
-      VERBATIM
-      COMMENT "Building OpenSSL"
-    )
+    set(configure_command perl
+      <SOURCE_DIR>/Configure no-shared no-tests VC-WIN64A)
+    set(make_command nmake)
   else()
-    add_custom_command(
-      OUTPUT ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL}
-      WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
-      COMMAND mkdir -p ${OPENSSL_SRC_DIR}/build
-      COMMAND cd ${OPENSSL_SRC_DIR}/build && CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} ../config no-shared no-tests && make -j2
-      VERBATIM
-      COMMENT "Building OpenSSL"
-    )
+    set(configure_command ${CMAKE_COMMAND} -E env
+      CC=${CMAKE_C_COMPILER}
+      CXX=${CMAKE_CXX_COMPILER}
+      AR=${CMAKE_AR}
+      RANLIB=${CMAKE_RANLIB}
+      <SOURCE_DIR>/Configure no-shared no-tests)
+    set(make_command make)
   endif()
-endif()
 
-if(NOT PIPY_USE_SYSTEM_OPENSSL)
-  add_custom_target(OpenSSL DEPENDS ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL})
+  ExternalProject_Add(OpenSSL
+    SOURCE_DIR ${OPENSSL_SRC_DIR}
+    BINARY_DIR ${OPENSSL_LIB_DIR}
+    CONFIGURE_COMMAND "${configure_command}"
+    BUILD_COMMAND "${build_command}"
+    BUILD_BYPRODUCTS ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL}
+    INSTALL_COMMAND ""
+  )
 endif()
 
 set(BROTLI_BUNDLED_MODE ON CACHE BOOL "" FORCE)
@@ -394,10 +392,6 @@ add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
 add_custom_target(BuiltinCodebases DEPENDS ${CMAKE_BINARY_DIR}/deps/codebases.br.h)
 
 add_dependencies(pipy yajl_s expat ${BROTLI_LIB} GenVer BuiltinCodebases)
-
-if(NOT PIPY_USE_SYSTEM_OPENSSL)
-  add_dependencies(pipy OpenSSL)
-endif()
 
 if(NOT PIPY_USE_SYSTEM_ZLIB)
   add_dependencies(pipy ${ZLIB_LIB})
