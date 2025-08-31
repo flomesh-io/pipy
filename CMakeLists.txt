@@ -179,7 +179,7 @@ else()
     SOURCE_DIR ${OPENSSL_SRC_DIR}
     BINARY_DIR ${OPENSSL_LIB_DIR}
     CONFIGURE_COMMAND "${configure_command}"
-    BUILD_COMMAND "${build_command}"
+    BUILD_COMMAND "${make_command}"
     BUILD_BYPRODUCTS ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL}
     INSTALL_COMMAND ""
   )
