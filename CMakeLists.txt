@@ -155,7 +155,7 @@ else()
       )
   endif()
 
-  set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-3.2.0)
+  set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-3.5.2)
   set(OPENSSL_LIB_DIR ${OPENSSL_SRC_DIR}/build)
   set(OPENSSL_INC_DIR ${OPENSSL_SRC_DIR}/include ${OPENSSL_LIB_DIR}/include)
 
