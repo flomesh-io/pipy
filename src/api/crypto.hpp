@@ -42,6 +42,23 @@ namespace crypto {
 enum class KeyType {
   RSA,
   DSA,
+#ifdef PIPY_USE_PQC
+  // ML-DSA signature algorithms
+  ML_DSA_44,
+  ML_DSA_65,
+  ML_DSA_87,
+  // SLH-DSA signature algorithms
+  SLH_DSA_128s,
+  SLH_DSA_128f,
+  SLH_DSA_192s,
+  SLH_DSA_192f,
+  SLH_DSA_256s,
+  SLH_DSA_256f,
+  // ML-KEM key exchange algorithms
+  ML_KEM_512,
+  ML_KEM_768,
+  ML_KEM_1024,
+#endif
 };
 
 //

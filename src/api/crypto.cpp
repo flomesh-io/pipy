@@ -39,6 +39,10 @@
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
+#ifdef PIPY_USE_PQC
+#include <openssl/provider.h>
+#include <openssl/params.h>
+#endif
 
 #include <stdexcept>
 
@@ -61,6 +65,29 @@ static void throw_error() {
   ERR_error_string(err, str);
   throw std::runtime_error(str);
 }
+
+#ifdef PIPY_USE_PQC
+static const char* get_pqc_algorithm_name(KeyType type) {
+  switch (type) {
+    // ML-DSA signature algorithms
+    case KeyType::ML_DSA_44: return "mldsa44";
+    case KeyType::ML_DSA_65: return "mldsa65";
+    case KeyType::ML_DSA_87: return "mldsa87";
+    // SLH-DSA signature algorithms
+    case KeyType::SLH_DSA_128s: return "slhdsa128s";
+    case KeyType::SLH_DSA_128f: return "slhdsa128f";
+    case KeyType::SLH_DSA_192s: return "slhdsa192s";
+    case KeyType::SLH_DSA_192f: return "slhdsa192f";
+    case KeyType::SLH_DSA_256s: return "slhdsa256s";
+    case KeyType::SLH_DSA_256f: return "slhdsa256f";
+    // ML-KEM key exchange algorithms
+    case KeyType::ML_KEM_512: return "mlkem512";
+    case KeyType::ML_KEM_768: return "mlkem768";
+    case KeyType::ML_KEM_1024: return "mlkem1024";
+    default: return nullptr;
+  }
+}
+#endif
 
 static void read_bio(BIO *bio, Data &data) {
   Data::Builder db(data, &s_dp);
@@ -238,6 +265,27 @@ PrivateKey::PrivateKey(pjs::Str *data) {
 }
 
 PrivateKey::PrivateKey(const GenerateOptions &options) {
+#ifdef PIPY_USE_PQC
+  // Check if this is a PQC algorithm
+  const char* pqc_alg_name = get_pqc_algorithm_name(options.type);
+  if (pqc_alg_name) {
+    // Generate PQC key using EVP_PKEY_keygen_init with algorithm name
+    auto ctx = EVP_PKEY_CTX_new_from_name(nullptr, pqc_alg_name, nullptr);
+    if (!ctx) throw_error();
+
+    try {
+      if (EVP_PKEY_keygen_init(ctx) <= 0) throw_error();
+      if (EVP_PKEY_keygen(ctx, &m_pkey) <= 0) throw_error();
+      EVP_PKEY_CTX_free(ctx);
+    } catch (std::runtime_error &) {
+      EVP_PKEY_CTX_free(ctx);
+      throw;
+    }
+    return;
+  }
+#endif
+
+  // Traditional RSA/DSA key generation
   int id;
   switch (options.type) {
     case KeyType::RSA: id = EVP_PKEY_RSA; break;
@@ -422,7 +470,7 @@ Certificate::Certificate(const Options &options) {
       throw std::runtime_error("missing public key");
     }
 
-        // Digest algorithm
+    // Digest algorithm
 #ifdef PIPY_USE_OPENSSL1
     const EVP_MD *md = nullptr;
     if (EVP_PKEY_type(EVP_PKEY_id(options.private_key->pkey())) == EVP_PKEY_RSA ||
@@ -432,12 +480,27 @@ Certificate::Certificate(const Options &options) {
     }
 #else
     char digest_name[80];
+    const EVP_MD *md = nullptr;
+
+    // Get the default digest for this key type
     if (EVP_PKEY_get_default_digest_name(options.private_key->pkey(), digest_name, sizeof(digest_name)) == 2) {
       if (!std::strcmp(digest_name, "UNDEF")) {
         digest_name[0] = '\0';
       }
     }
-    auto md = digest_name[0] ? Hash::algorithm(digest_name) : nullptr;
+
+#ifdef PIPY_USE_PQC
+    // For PQC algorithms, check if this is a recognized PQC key type
+    auto key_id = EVP_PKEY_get_id(options.private_key->pkey());
+    if (key_id == EVP_PKEY_NONE || digest_name[0] == '\0') {
+      // This might be a PQC key - PQC signature algorithms typically don't need separate digest
+      // as they include their own hashing mechanism
+      md = nullptr;
+    } else
+#endif
+    {
+      md = digest_name[0] ? Hash::algorithm(digest_name) : nullptr;
+    }
 #endif
 
     // Sign
