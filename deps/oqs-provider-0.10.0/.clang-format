@@ -1,0 +1,81 @@
+# OpenSSL formatting is close to Linux Kernel's , which is close
+# to LLVM's.
+BasedOnStyle: LLVM
+
+# The following rules tries to reproduce the OpenSSL coding style defined
+# in the following document: https://www.openssl.org/policies/technical/coding-style.html
+
+# Chapter 1: Indentation.
+
+## Use 4 space characters, not tabs.
+UseTab: Never
+IndentWidth: 4
+
+## Pre-processor directives use one space for indents, after hash.
+IndentPPDirectives: AfterHash
+
+# This option seems to be broken on clang-format-14, but fixed in clang-format-15.
+# We keep it disabled for now.
+#PPIndentWidth: 1
+
+# Chapter 2: Breaking long lines and strings
+
+## Don’t put multiple statements, or assignments, on a single line.
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+AllowAllParametersOfDeclarationOnNextLine: false
+
+## The limit on the length of lines is 80 columns.
+ColumnLimit: 80
+
+# Descendants are always substantially shorter than the parent and are placed substantially to the right.
+AlignAfterOpenBracket: Align
+AlignOperands: Align
+BreakBeforeBinaryOperators: true
+
+# Never break user-visible strings, however, because that breaks the ability to grep for them.
+BreakStringLiterals: false
+
+
+# Chapter 3: Placing Braces and Spaces
+
+SpaceBeforeAssignmentOperators: true
+
+# Use the same indentation level as for the switch statement.
+IndentCaseLabels: false
+
+## […] is to put the opening brace last on the line, and the closing brace first
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: false
+  AfterControlStatement: Never
+  AfterEnum: false
+## There is one special case, however. Functions have the opening brace at the beginning of the next line
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
+  BeforeCatch: false
+  BeforeElse: false
+  BeforeWhile: false
+
+
+# Chapter 3.1: Spaces
+
+## When declaring pointer data or a function that returns a pointer type, the asterisk goes next to the data or function name, and not the type:
+PointerAlignment: Right
+
+## Do not use multiple consecutive spaces except in comments, for indentation, and for multi-line alignment of definitions, e.g.:
+AlignConsecutiveMacros: AcrossComments
+
+
+# Chapter 9: Macros and Enums
+
+## Macros with multiple statements should be enclosed in a do - while block
+AlignEscapedNewlines: Left

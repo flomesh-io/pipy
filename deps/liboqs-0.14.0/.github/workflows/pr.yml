@@ -1,0 +1,32 @@
+name: Pull request tests
+
+permissions:
+  contents: read
+
+on: pull_request
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  basic-checks:
+    uses: ./.github/workflows/basic.yml
+
+  platform-tests:
+    needs: basic-checks
+    uses: ./.github/workflows/platforms.yml
+
+  code-coverage:
+    needs: basic-checks
+    uses: ./.github/workflows/code-coverage.yml
+    secrets: inherit
+
+  scorecard:
+    needs: basic-checks
+    uses: ./.github/workflows/scorecard.yml
+    secrets: inherit
+    permissions:
+      id-token: write
+      security-events: write

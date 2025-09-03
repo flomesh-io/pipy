@@ -1,0 +1,62 @@
+kyber90s512:
+   claimed-nist-level: 1
+kyber90s768:
+   claimed-nist-level: 3
+kyber90s1024:
+   claimed-nist-level: 5
+dilithium2_aes:
+   claimed-nist-level: 2
+dilithium3_aes:
+   claimed-nist-level: 3
+dilithium5_aes:
+   claimed-nist-level: 5
+sphincsharaka128frobust:
+   claimed-nist-level: 1
+sphincsshake256128frobust:
+   claimed-nist-level: 1
+sphincsshake256128srobust:
+   claimed-nist-level: 1
+sphincsharaka128fsimple:
+   claimed-nist-level: 1
+sphincsharaka128srobust:
+   claimed-nist-level: 1
+sphincsharaka128ssimple:
+   claimed-nist-level: 1
+sphincsharaka192frobust:
+   claimed-nist-level: 3
+sphincsharaka192fsimple:
+   claimed-nist-level: 3
+sphincsharaka192srobust:
+   claimed-nist-level: 3
+sphincsharaka192ssimple:
+   claimed-nist-level: 3
+sphincsshake256192frobust:
+   claimed-nist-level: 3
+sphincsshake256192srobust:
+   claimed-nist-level: 3
+sphincsharaka256frobust:
+   claimed-nist-level: 3
+sphincsharaka256fsimple:
+   claimed-nist-level: 5
+sphincsharaka256srobust:
+   claimed-nist-level: 5
+sphincsharaka256ssimple:
+   claimed-nist-level: 5
+sphincssha26128frobust:
+   claimed-nist-level: 5
+sphincssha256128srobust:
+   claimed-nist-level: 5
+sphincssha256192frobust:
+   claimed-nist-level: 5
+sphincssha256192srobust:
+   claimed-nist-level: 5
+sphincssha256256frobust:
+   claimed-nist-level: 5
+sphincssha256256srobust:
+   claimed-nist-level: 5
+sphincsshake256256frobust:
+   claimed-nist-level: 5
+sphincsshake256256srobust:
+   claimed-nist-level: 5
+
+

@@ -1,0 +1,9 @@
+{%- for sig in config['sigs'] %}
+    {%- for variant in sig['variants'] %}
+    { {{ variant['code_point'] }}, {{variant['security']}}, TLS1_3_VERSION, 0 }, 
+        {%- for classical_alg in variant['mix_with'] %}
+    { {{ classical_alg['code_point'] }}, {{ variant['security'] }}, TLS1_3_VERSION, 0 }, 
+        {%- endfor %}
+    {%- endfor %}
+{%- endfor %}
+

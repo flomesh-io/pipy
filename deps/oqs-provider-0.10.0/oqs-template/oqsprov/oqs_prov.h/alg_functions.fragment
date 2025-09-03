@@ -1,0 +1,19 @@
+{% for sig in config['sigs'] %}
+   {%- for variant in sig['variants'] %}
+extern const OSSL_DISPATCH oqs_{{ variant['name'] }}_keymgmt_functions[];
+     {%- for classical_alg in variant['mix_with'] -%}
+extern const OSSL_DISPATCH oqs_{{ classical_alg['name'] }}_{{ variant['name'] }}_keymgmt_functions[];
+     {%- endfor -%}
+   {%- endfor %}
+{%- endfor %}
+{% for kem in config['kems'] %}
+extern const OSSL_DISPATCH oqs_{{ kem['name_group'] }}_keymgmt_functions[];
+{% for hybrid in kem['hybrids'] %}
+{% if hybrid['hybrid_group'].startswith('p') or hybrid['hybrid_group'].startswith('secp') -%}
+extern const OSSL_DISPATCH oqs_ecp_{% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}_keymgmt_functions[];
+{%- else -%}
+extern const OSSL_DISPATCH oqs_ecx_{% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}_keymgmt_functions[];
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+

@@ -1,0 +1,11 @@
+
+
+/** \brief List of hybrid KEMs. */
+const char *kHybridKEMAlgorithms[] = {
+{%- for kem in config['kems'] %}
+  {%- for hybrid in kem['hybrids'] %}
+    "{% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}",
+  {%- endfor %}
+{%- endfor %}
+NULL,
+};

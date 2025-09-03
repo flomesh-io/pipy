@@ -1,0 +1,24 @@
+{% for kem in config['kems'] %}
+# define {{ kem['name_group'] }}_evp_type     0
+# define {{ kem['name_group'] }}_input_type    "{{ kem['name_group'] }}"
+# define {{ kem['name_group'] }}_pem_type      "{{ kem['name_group'] }}"
+{% for hybrid in kem['hybrids'] %}
+# define {% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}_evp_type     0
+# define {% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}_input_type    {% if 'standard_name' in hybrid %}"{{hybrid['standard_name']}}"{% else %}"{{hybrid['hybrid_group']}}_{{ kem['name_group'] }}"{% endif %}
+# define {% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}_pem_type      {% if 'standard_name' in hybrid %}"{{hybrid['standard_name']}}"{% else %}"{{hybrid['hybrid_group']}}_{{ kem['name_group'] }}"{% endif %}
+{%- endfor %}
+{%- endfor %}
+
+{% for sig in config['sigs'] %}
+   {%- for variant in sig['variants'] %}
+# define {{ variant['name'] }}_evp_type       0
+# define {{ variant['name'] }}_input_type      "{{ variant['name'] }}"
+# define {{ variant['name'] }}_pem_type        "{{ variant['name'] }}"
+     {%- for classical_alg in variant['mix_with'] %}
+# define {{ classical_alg['name'] }}_{{ variant['name'] }}_evp_type       0
+# define {{ classical_alg['name'] }}_{{ variant['name'] }}_input_type      "{{ classical_alg['name'] }}_{{ variant['name'] }}"
+# define {{ classical_alg['name'] }}_{{ variant['name'] }}_pem_type        "{{ classical_alg['name'] }}_{{ variant['name'] }}"
+     {%- endfor -%}
+   {%- endfor %}
+{%- endfor %}
+

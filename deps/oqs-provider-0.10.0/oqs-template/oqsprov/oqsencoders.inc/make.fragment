@@ -1,0 +1,49 @@
+
+#ifdef OQS_KEM_ENCODERS
+
+{% for kem in config['kems'] %}
+#ifdef OQS_ENABLE_KEM_{{ kem['oqs_alg']|replace("OQS_KEM_alg_","") }}
+ENCODER_w_structure("{{ kem['name_group'] }}", {{ kem['name_group'] }}, der, PrivateKeyInfo),
+ENCODER_w_structure("{{ kem['name_group'] }}", {{ kem['name_group'] }}, pem, PrivateKeyInfo),
+ENCODER_w_structure("{{ kem['name_group'] }}", {{ kem['name_group'] }}, der, EncryptedPrivateKeyInfo),
+ENCODER_w_structure("{{ kem['name_group'] }}", {{ kem['name_group'] }}, pem, EncryptedPrivateKeyInfo),
+ENCODER_w_structure("{{ kem['name_group'] }}", {{ kem['name_group'] }}, der, SubjectPublicKeyInfo),
+ENCODER_w_structure("{{ kem['name_group'] }}", {{ kem['name_group'] }}, pem, SubjectPublicKeyInfo),
+ENCODER_TEXT("{{ kem['name_group'] }}", {{ kem['name_group'] }}),
+{% for hybrid in kem['hybrids'] -%}
+ENCODER_w_structure({% if 'standard_name' in hybrid %}"{{hybrid['standard_name']}}"{% else %}"{{hybrid['hybrid_group']}}_{{ kem['name_group'] }}"{% endif %}, {% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}, der, PrivateKeyInfo),
+ENCODER_w_structure({% if 'standard_name' in hybrid %}"{{hybrid['standard_name']}}"{% else %}"{{hybrid['hybrid_group']}}_{{ kem['name_group'] }}"{% endif %}, {% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}, pem, PrivateKeyInfo),
+ENCODER_w_structure({% if 'standard_name' in hybrid %}"{{hybrid['standard_name']}}"{% else %}"{{hybrid['hybrid_group']}}_{{ kem['name_group'] }}"{% endif %}, {% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}, der, EncryptedPrivateKeyInfo),
+ENCODER_w_structure({% if 'standard_name' in hybrid %}"{{hybrid['standard_name']}}"{% else %}"{{hybrid['hybrid_group']}}_{{ kem['name_group'] }}"{% endif %}, {% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}, pem, EncryptedPrivateKeyInfo),
+ENCODER_w_structure({% if 'standard_name' in hybrid %}"{{hybrid['standard_name']}}"{% else %}"{{hybrid['hybrid_group']}}_{{ kem['name_group'] }}"{% endif %}, {% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}, der, SubjectPublicKeyInfo),
+ENCODER_w_structure({% if 'standard_name' in hybrid %}"{{hybrid['standard_name']}}"{% else %}"{{hybrid['hybrid_group']}}_{{ kem['name_group'] }}"{% endif %}, {% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}, pem, SubjectPublicKeyInfo),
+ENCODER_TEXT({% if 'standard_name' in hybrid %}"{{hybrid['standard_name']}}"{% else %}"{{hybrid['hybrid_group']}}_{{ kem['name_group'] }}"{% endif %}, {% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}),
+{% endfor -%}
+#endif
+{%- endfor %}
+
+#endif /* OQS_KEM_ENCODERS */
+
+{% for sig in config['sigs'] %}
+   {%- for variant in sig['variants'] %}
+#ifdef OQS_ENABLE_SIG_{{ variant['oqs_meth']|replace("OQS_SIG_alg_","") }}
+ENCODER_w_structure("{{ variant['name'] }}", {{ variant['name'] }}, der, PrivateKeyInfo),
+ENCODER_w_structure("{{ variant['name'] }}", {{ variant['name'] }}, pem, PrivateKeyInfo),
+ENCODER_w_structure("{{ variant['name'] }}", {{ variant['name'] }}, der, EncryptedPrivateKeyInfo),
+ENCODER_w_structure("{{ variant['name'] }}", {{ variant['name'] }}, pem, EncryptedPrivateKeyInfo),
+ENCODER_w_structure("{{ variant['name'] }}", {{ variant['name'] }}, der, SubjectPublicKeyInfo),
+ENCODER_w_structure("{{ variant['name'] }}", {{ variant['name'] }}, pem, SubjectPublicKeyInfo),
+ENCODER_TEXT("{{ variant['name'] }}", {{ variant['name'] }}),
+{% for classical_alg in variant['mix_with'] -%}
+ENCODER_w_structure("{{ classical_alg['name'] }}_{{ variant['name'] }}", {{ classical_alg['name'] }}_{{ variant['name'] }}, der, PrivateKeyInfo),
+ENCODER_w_structure("{{ classical_alg['name'] }}_{{ variant['name'] }}", {{ classical_alg['name'] }}_{{ variant['name'] }}, pem, PrivateKeyInfo),
+ENCODER_w_structure("{{ classical_alg['name'] }}_{{ variant['name'] }}", {{ classical_alg['name'] }}_{{ variant['name'] }}, der, EncryptedPrivateKeyInfo),
+ENCODER_w_structure("{{ classical_alg['name'] }}_{{ variant['name'] }}", {{ classical_alg['name'] }}_{{ variant['name'] }}, pem, EncryptedPrivateKeyInfo),
+ENCODER_w_structure("{{ classical_alg['name'] }}_{{ variant['name'] }}", {{ classical_alg['name'] }}_{{ variant['name'] }}, der, SubjectPublicKeyInfo),
+ENCODER_w_structure("{{ classical_alg['name'] }}_{{ variant['name'] }}", {{ classical_alg['name'] }}_{{ variant['name'] }}, pem, SubjectPublicKeyInfo),
+ENCODER_TEXT("{{ classical_alg['name'] }}_{{ variant['name'] }}", {{ classical_alg['name'] }}_{{ variant['name'] }}),
+{% endfor -%}
+#endif
+   {%- endfor %}
+{%- endfor %}
+

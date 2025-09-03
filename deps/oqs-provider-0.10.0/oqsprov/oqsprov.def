@@ -1,0 +1,2 @@
+EXPORTS
+    OSSL_provider_init

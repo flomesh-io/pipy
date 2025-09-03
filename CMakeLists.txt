@@ -190,6 +190,147 @@ else()
   )
 endif()
 
+# OQS-Provider configuration for Post-Quantum Cryptography
+option(PIPY_PQC "Enable Post-Quantum Cryptography support" ON)
+
+if(PIPY_PQC)
+  message(STATUS "Enabling Post-Quantum Cryptography support")
+  add_definitions(-DPIPY_USE_PQC)
+
+  # Determine if we're using system OpenSSL or bundled OpenSSL
+  set(USING_SYSTEM_OPENSSL ${PIPY_USE_SYSTEM_OPENSSL})
+  
+  if(USING_SYSTEM_OPENSSL)
+    # Detect system OpenSSL version for intelligent PQC configuration
+    find_package(OpenSSL REQUIRED)
+    message(STATUS "Detected system OpenSSL version: ${OpenSSL_VERSION}")
+    
+    # Check OpenSSL version compatibility
+    if(OpenSSL_VERSION VERSION_LESS "3.2.0")
+      message(FATAL_ERROR "PQC support requires OpenSSL >= 3.2.0, but found ${OpenSSL_VERSION}. "
+                         "Please upgrade OpenSSL or disable PIPY_PQC.")
+    endif()
+    
+    # Determine PQC strategy based on OpenSSL version
+    if(OpenSSL_VERSION VERSION_GREATER_EQUAL "3.5.0")
+      message(STATUS "OpenSSL >= 3.5.0 detected: Using built-in PQC algorithms only")
+      set(PIPY_PQC_BUILTIN_ONLY ON)
+      add_definitions(-DPIPY_PQC_BUILTIN_ONLY)
+    else()
+      message(STATUS "OpenSSL 3.2.0-3.4.x detected: oqs-provider support available")
+      set(PIPY_PQC_BUILTIN_ONLY OFF)
+      add_definitions(-DPIPY_USE_OQS_PROVIDER)
+    endif()
+  else()
+    # Using bundled OpenSSL 3.5.2 - always use built-in PQC
+    message(STATUS "Using bundled OpenSSL 3.5.2: Using built-in PQC algorithms only")
+    set(PIPY_PQC_BUILTIN_ONLY ON)
+    add_definitions(-DPIPY_PQC_BUILTIN_ONLY)
+  endif()
+
+  # Only configure oqs-provider options when they're relevant
+  if(NOT PIPY_PQC_BUILTIN_ONLY)
+    include(CMakeDependentOption)
+    
+    # These options only make sense when using system OpenSSL 3.2-3.4
+    cmake_dependent_option(PIPY_USE_SYSTEM_LIBOQS
+      "Use system-installed liboqs instead of building from source"
+      OFF "USING_SYSTEM_OPENSSL;NOT PIPY_PQC_BUILTIN_ONLY" OFF)
+      
+    cmake_dependent_option(PIPY_USE_SYSTEM_OQS_PROVIDER
+      "Use system-installed oqs-provider instead of building from source" 
+      OFF "USING_SYSTEM_OPENSSL;NOT PIPY_PQC_BUILTIN_ONLY" OFF)
+    
+    # Determine what needs to be built
+    set(BUILD_LIBOQS NOT PIPY_USE_SYSTEM_LIBOQS)
+    set(BUILD_OQS_PROVIDER NOT PIPY_USE_SYSTEM_OQS_PROVIDER)
+    
+    # Find system libraries if using them
+    if(PIPY_USE_SYSTEM_LIBOQS)
+      find_library(LIBOQS_LIB oqs REQUIRED)
+      message(STATUS "Found system liboqs: ${LIBOQS_LIB}")
+    endif()
+    
+    if(PIPY_USE_SYSTEM_OQS_PROVIDER)
+      find_library(OQS_PROVIDER_LIB oqsprovider REQUIRED)
+      message(STATUS "Found system oqs-provider: ${OQS_PROVIDER_LIB}")
+    endif()
+    
+    # Build components if needed
+    if(BUILD_LIBOQS OR BUILD_OQS_PROVIDER)
+      include(ExternalProject)
+      
+      # Common CMake arguments for both projects
+      set(COMMON_CMAKE_ARGS
+        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+        -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+        -DCMAKE_AR=${CMAKE_AR}
+        -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+      )
+      
+      if(BUILD_LIBOQS)
+        message(STATUS "Building liboqs from source")
+        ExternalProject_Add(liboqs
+          SOURCE_DIR ${CMAKE_SOURCE_DIR}/deps/liboqs-0.14.0
+          INSTALL_DIR ${CMAKE_BINARY_DIR}/deps/liboqs
+          CMAKE_ARGS
+            ${COMMON_CMAKE_ARGS}
+            -DOPENSSL_ROOT_DIR=${CMAKE_SOURCE_DIR}/deps/openssl-3.5.2
+            -DOQS_USE_OPENSSL=ON
+            -DOQS_BUILD_ONLY_LIB=ON
+            -DOQS_USE_AES_INSTRUCTIONS=OFF
+            -DOQS_DIST_BUILD=ON
+            -DOQS_ALGS_ENABLED=STD
+            -DOQS_USE_AES_OPENSSL=ON
+            -DOQS_USE_SHA3_OPENSSL=ON
+          DEPENDS OpenSSL
+        )
+      endif()
+      
+      if(BUILD_OQS_PROVIDER)
+        message(STATUS "Building oqs-provider from source")
+        set(OQS_PROVIDER_CMAKE_ARGS
+          ${COMMON_CMAKE_ARGS}
+          -DOPENSSL_ROOT_DIR=${OPENSSL_SRC_DIR}/build
+          -DOQS_PROVIDER_BUILD_STATIC=OFF
+          -DOQS_KEM_ENCODERS=ON
+        )
+        
+        # Add liboqs dependency if we built it, otherwise use system
+        if(BUILD_LIBOQS)
+          list(APPEND OQS_PROVIDER_CMAKE_ARGS -Dliboqs_DIR=${CMAKE_BINARY_DIR}/deps/liboqs/lib/cmake/liboqs)
+          set(OQS_PROVIDER_DEPENDS OpenSSL liboqs)
+        else()
+          set(OQS_PROVIDER_DEPENDS OpenSSL)
+        endif()
+        
+        ExternalProject_Add(oqs-provider
+          SOURCE_DIR ${CMAKE_SOURCE_DIR}/deps/oqs-provider-0.10.0
+          INSTALL_DIR ${CMAKE_BINARY_DIR}/deps/oqs-provider
+          CMAKE_ARGS ${OQS_PROVIDER_CMAKE_ARGS}
+          DEPENDS ${OQS_PROVIDER_DEPENDS}
+        )
+        
+        # Set oqs-provider library path for linking
+        set(OQS_PROVIDER_LIB ${CMAKE_BINARY_DIR}/deps/oqs-provider/lib/oqsprovider${CMAKE_SHARED_LIBRARY_SUFFIX})
+      endif()
+    endif()
+    
+    # Status summary
+    if(PIPY_USE_SYSTEM_LIBOQS AND PIPY_USE_SYSTEM_OQS_PROVIDER)
+      message(STATUS "Using system-installed liboqs and oqs-provider")
+    elseif(PIPY_USE_SYSTEM_LIBOQS)
+      message(STATUS "Using system-installed liboqs, building oqs-provider from source")
+    elseif(PIPY_USE_SYSTEM_OQS_PROVIDER)
+      message(STATUS "Using system-installed oqs-provider, building liboqs from source")
+    else()
+      message(STATUS "Building liboqs and oqs-provider from source")
+    endif()
+  else()
+    message(STATUS "oqs-provider not needed - using built-in OpenSSL PQC algorithms")
+  endif()
+endif()
+
 foreach(component Crypto SSL)
   string(TOLOWER ${component} lower_c)
   set(lib OpenSSL::${component})

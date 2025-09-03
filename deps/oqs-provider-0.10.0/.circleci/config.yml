@@ -1,0 +1,145 @@
+version: 2.1
+
+parameters:
+  run_downstream_tests:
+    type: boolean
+    default: false
+
+# CircleCI doesn't handle large file sets properly for local builds
+# https://github.com/CircleCI-Public/circleci-cli/issues/281#issuecomment-472808051
+localCheckout: &localCheckout
+  run: |-
+    git config --global --add safe.directory /tmp/_circleci_local_build_repo
+    PROJECT_PATH=$(cd ${CIRCLE_WORKING_DIRECTORY}; pwd)
+    mkdir -p ${PROJECT_PATH}
+    cd /tmp/_circleci_local_build_repo
+    git ls-files -z | xargs -0 -s 2090860 tar -c | tar -x -C ${PROJECT_PATH}
+    cp -a /tmp/_circleci_local_build_repo/.git ${PROJECT_PATH}
+jobs:
+  macOS:
+    description: A template for running tests on macOS
+    parameters:
+      CMAKE_ARGS:
+        description: "Arguments to pass to CMake."
+        type: string
+      OPENSSL_PREINSTALL:
+        description: "OpenSSL version preinstalled."
+        type: string
+      OQS_PROVIDER_BUILD_STATIC:
+        description: "Build oqsprovider as a static library"
+        type: boolean
+        default: false
+    macos:
+      xcode: "14.3.1"
+    steps:
+      - checkout # change this from "checkout" to "*localCheckout" when running CircleCI locally
+      - run:
+          name: Install dependencies
+          command: brew install cmake ninja << parameters.OPENSSL_PREINSTALL >>
+      - run:
+          name: Get system information
+          command: sysctl -a | grep machdep.cpu && cc --version
+      - run:
+          name: Clone and build liboqs
+          command: |
+             git clone --depth 1 --branch main https://github.com/open-quantum-safe/liboqs.git &&
+             export LIBOQS_INSTALLPATH=$(pwd)/.local && cd liboqs && mkdir _build && cd _build &&
+             export OPENSSL_INSTALL="$(brew --prefix << parameters.OPENSSL_PREINSTALL >> || echo "")"
+             cmake -GNinja -DOPENSSL_ROOT_DIR="${OPENSSL_INSTALL}" -DCMAKE_INSTALL_PREFIX=$LIBOQS_INSTALLPATH << parameters.CMAKE_ARGS >> .. && ninja install &&
+             cd .. && cd .. && echo "export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$LIBOQS_INSTALLPATH/lib" >> "$BASH_ENV"
+      - when:
+          condition:
+            not:
+              equal: [ openssl@3, << parameters.OPENSSL_PREINSTALL >> ]
+          steps:
+            - run:
+                name: Clone and build OpenSSL(3) master
+                command: |
+                   git clone --branch master https://github.com/openssl/openssl.git openssl &&
+                   cd openssl && ./config --prefix=$(echo $(pwd)/../.local) && make -j 18 && make install_sw && cd ..
+            - run:
+               name: Build OQS-OpenSSL provider
+               command: |
+                  oqsprovider_cmake_args="<< parameters.CMAKE_ARGS >>"
+                  if << parameters.OQS_PROVIDER_BUILD_STATIC >> ; then
+                    oqsprovider_cmake_args="${oqsprovider_cmake_args} -DOQS_PROVIDER_BUILD_STATIC=ON"
+                  fi
+                  export OPENSSL_INSTALL=$(pwd)/.local && mkdir _build && cd _build && cmake -GNinja -DOPENSSL_ROOT_DIR=$OPENSSL_INSTALL -DCMAKE_PREFIX_PATH=$(pwd)/../.local ${oqsprovider_cmake_args} .. && ninja && echo "export OPENSSL_INSTALL=$OPENSSL_INSTALL" >> "$BASH_ENV"
+                  if << parameters.OQS_PROVIDER_BUILD_STATIC >> ; then
+                    file _build/lib/oqsprovider.a
+                  fi
+      - when:
+          condition:
+              equal: [ openssl@3, << parameters.OPENSSL_PREINSTALL >> ]
+          steps:
+            - run:
+                name: Build OQS-OpenSSL provider
+                command: |
+                  oqsprovider_cmake_args="<< parameters.CMAKE_ARGS >>"
+                  if << parameters.OQS_PROVIDER_BUILD_STATIC >> ; then
+                    oqsprovider_cmake_args="${oqsprovider_cmake_args} -DOQS_PROVIDER_BUILD_STATIC=ON"
+                  fi
+                  export OPENSSL_INSTALL="$(brew --prefix << parameters.OPENSSL_PREINSTALL >>)"
+                  mkdir _build && cd _build && liboqs_DIR=`pwd`/../.local cmake -GNinja -DOPENSSL_ROOT_DIR="${OPENSSL_INSTALL}" ${oqsprovider_cmake_args} .. && ninja && echo "export OPENSSL_INSTALL=$OPENSSL_INSTALL" >> "$BASH_ENV" && cd .. && echo "export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$OPENSSL_INSTALL/lib" >> "$BASH_ENV"
+                  if << parameters.OQS_PROVIDER_BUILD_STATIC >> ; then
+                    file _build/lib/oqsprovider.a
+                  fi
+      - run:
+          name: Run tests
+          command: |
+             if << parameters.OQS_PROVIDER_BUILD_STATIC >> ; then
+               ctest --test-dir _build/ --output-on-failure
+             else
+               ./scripts/runtests.sh -V
+             fi
+
+  trigger-downstream-ci:
+    docker:
+      - image: cimg/base:2020.01
+# Re-enable iff docker enforces rate limitations without auth:
+#        auth:
+#          username: $DOCKER_LOGIN
+#          password: $DOCKER_PASSWORD
+    steps:
+      - run:
+          name: Trigger oqs-demos CI
+          command: |
+            curl --silent \
+                 --write-out "\n%{response_code}\n" \
+                 --user ${BUILD_TRIGGER_TOKEN}: \
+                 --request POST \
+                 --header "Content-Type: application/json" \
+                 -d '{ "branch": "main", "parameters": { "new_openssl_commit": true } }' \
+                 https://circleci.com/api/v2/project/gh/open-quantum-safe/oqs-demos/pipeline | tee curl_out \
+            && grep -q "201" curl_out
+
+workflows:
+  version: 2.1
+  build:
+    jobs:
+      - macOS:
+          name: macOS-noopenssl
+          CMAKE_ARGS: -DOQS_STRICT_WARNINGS=ON -DOQS_USE_OPENSSL=OFF
+          OPENSSL_PREINSTALL: openssl
+      - macOS:
+          name: macOS-shared
+          CMAKE_ARGS: -DBUILD_SHARED_LIBS=ON -DOQS_DIST_BUILD=OFF -DOQS_ENABLE_KEM_CLASSIC_MCELIECE=OFF
+          OPENSSL_PREINSTALL: openssl@3
+      - macOS:
+          name: macOS-static
+          OQS_PROVIDER_BUILD_STATIC: true
+          CMAKE_ARGS: -DOQS_DIST_BUILD=OFF -DOQS_ENABLE_KEM_CLASSIC_MCELIECE=OFF
+          OPENSSL_PREINSTALL: openssl@3
+  on-main-branch:
+    when:
+      or:
+        - equal: [ main , << pipeline.git.branch >> ]
+        - equal: [ true , << pipeline.parameters.run_downstream_tests >> ]
+    jobs:
+      - hold:
+          type: approval
+      - trigger-downstream-ci:
+          context: openquantumsafe
+          requires:
+            - hold
+

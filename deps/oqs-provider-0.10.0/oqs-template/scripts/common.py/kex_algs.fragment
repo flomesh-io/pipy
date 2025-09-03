@@ -1,0 +1,10 @@
+
+    # post-quantum key exchanges
+    {% for kem in config['kems'] %}'{{ kem['name_group'] }}',  {%- endfor %}
+    # post-quantum + classical key exchanges
+    {% for kem in config['kems'] -%}
+       {%- for hybrid in kem['hybrids'] -%}
+          '{% if 'standard_name' in hybrid %}{{hybrid['standard_name']}}{% else %}{{ hybrid['hybrid_group'] }}_{{ kem['name_group'] }}{% endif %}', 
+       {%- endfor -%}
+    {% endfor %}
+
