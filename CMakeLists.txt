@@ -159,6 +159,11 @@ else()
   set(OPENSSL_LIB_DIR ${OPENSSL_SRC_DIR}/build)
   set(OPENSSL_INC_DIR ${OPENSSL_SRC_DIR}/include ${OPENSSL_LIB_DIR}/include)
 
+  # Create the OpenSSL build/include directory early to avoid CMake configuration errors
+  # This is needed because CMake validates INTERFACE_INCLUDE_DIRECTORIES paths during configuration,
+  # but ExternalProject creates these directories only during build time
+  file(MAKE_DIRECTORY ${OPENSSL_LIB_DIR}/include)
+
   include(ExternalProject)
 
   if(WIN32)
@@ -325,6 +330,23 @@ if(PIPY_PQC)
     message(STATUS "oqs-provider not needed - using built-in OpenSSL PQC algorithms")
   endif()
 endif()
+
+foreach(component Crypto SSL)
+  string(TOLOWER ${component} lower_c)
+  set(lib OpenSSL::${component})
+  if(NOT TARGET ${lib})
+    add_library(${lib} STATIC IMPORTED)
+    set_target_properties(${lib} PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INC_DIR}"
+      IMPORTED_LINK_INTERFACE_LANGUAGES "C"
+      IMPORTED_LOCATION ${OPENSSL_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}${lower_c}${CMAKE_STATIC_LIBRARY_SUFFIX})
+    if(TARGET OpenSSL::SSL AND TARGET OpenSSL::Crypto)
+      set_target_properties(OpenSSL::SSL PROPERTIES
+        INTERFACE_LINK_LIBRARIES OpenSSL::Crypto)
+    endif()
+    add_dependencies(${lib} OpenSSL)
+  endif()
+endforeach()
 
 set(BROTLI_BUNDLED_MODE ON CACHE BOOL "" FORCE)
 set(BROTLI_DISABLE_TESTS ON CACHE BOOL "" FORCE)
@@ -590,15 +612,10 @@ target_link_libraries(
   yajl_s
   yaml
   expat
+  OpenSSL::SSL
   ${ZLIB_LIB}
   ${BROTLI_LIB}
 )
-
-if(PIPY_USE_SYSTEM_OPENSSL)
-  target_link_libraries(pipy ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY})
-else()
-  target_link_libraries(pipy ${OPENSSL_LIB_DIR}/${LIB_SSL} ${OPENSSL_LIB_DIR}/${LIB_CRYPTO})
-endif()
 
 if(WIN32)
   target_link_libraries(pipy crypt32 userenv)
