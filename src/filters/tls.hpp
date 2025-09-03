@@ -114,7 +114,6 @@ public:
   void load_pqc_provider();
 #endif
   static bool openssl_supports_pqc_signatures();
-  static bool openssl_supports_builtin_pqc();
   static bool should_use_oqs_provider();
 #endif
 

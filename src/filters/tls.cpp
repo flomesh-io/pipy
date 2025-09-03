@@ -335,13 +335,6 @@ void TLSContext::load_pqc_provider() {
 }
 #endif
 
-bool TLSContext::openssl_supports_builtin_pqc() {
-  // OpenSSL 3.5.0 has built-in PQC algorithms
-  // Version format: MNNFFPPS (Major, miNor, Fix, Patch, Status)
-  // 3.5.0 = 0x30500000L
-  return OPENSSL_VERSION_NUMBER >= 0x30500000L;
-}
-
 bool TLSContext::openssl_supports_pqc_signatures() {
   // OpenSSL 3.2.0 introduced PQC signature support via oqs-provider
   // OpenSSL 3.5.0+ has built-in PQC signature support
@@ -354,9 +347,12 @@ bool TLSContext::should_use_oqs_provider() {
   // Force built-in only mode
   return false;
 #elif defined(PIPY_USE_OQS_PROVIDER)
+  // OpenSSL 3.5.0 has built-in PQC algorithms
+  // Version format: MNNFFPPS (Major, miNor, Fix, Patch, Status)
+  // 3.5.0 = 0x30500000L
   // Use oqs-provider for OpenSSL versions that don't have built-in PQC
   // or when explicitly configured to use oqs-provider
-  return !openssl_supports_builtin_pqc();
+  return OPENSSL_VERSION_NUMBER < 0x30500000L;
 #else
   // No oqs-provider available
   return false;
