@@ -45,15 +45,14 @@ interface PqcOptions {
    * Key exchange algorithm for post-quantum cryptography.
    * Defaults to "ML-KEM-512" if not specified and pqc is enabled.
    * Available algorithms depend on OpenSSL version:
-   * - OpenSSL >= 3.5: Only key exchange algorithms supported
-   * - OpenSSL >= 3.2 && < 3.5: Both key exchange and signature algorithms supported
+   * - OpenSSL >= 3.2: Both key exchange and signature algorithms supported
    */
   keyExchange?: "ML-KEM-512" | "ML-KEM-768" | "ML-KEM-1024" | string,
   
   /**
    * Signature algorithm for post-quantum cryptography.
    * Defaults to "ML-DSA-44" if not specified and pqc is enabled.
-   * Only available when OpenSSL version >= 3.2 && < 3.5.
+   * Available when OpenSSL version >= 3.2.
    */
   signature?: "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87" | "SLH-DSA-128s" | "SLH-DSA-128f" | "SLH-DSA-192s" | "SLH-DSA-192f" | "SLH-DSA-256s" | "SLH-DSA-256f" | string,
   

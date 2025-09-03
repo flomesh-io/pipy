@@ -152,14 +152,9 @@ Options::Options(pjs::Object *options, const char *base_name) {
     }
 
     // Only set signature default for OpenSSL versions that support it
-    if (TLSContext::openssl_supports_builtin_pqc()) {
-      // For OpenSSL >= 3.5, PQC signatures are not available due to OID conflicts
-      if (pqc.signature) {
-        Log::warn("[tls] PQC signature algorithms are not available in OpenSSL >= 3.5 due to OID conflicts with built-in algorithms, ignoring signature setting");
-        pqc.signature = nullptr;
-      }
-    } else if (TLSContext::should_use_oqs_provider()) {
-      // For OpenSSL 3.2-3.4 or older versions with oqs-provider, signatures are supported
+    if (TLSContext::openssl_supports_pqc_signatures()) {
+      // For OpenSSL >= 3.5, use built-in PQC signature algorithms
+      // For OpenSSL 3.2-3.4, use oqs-provider PQC signature algorithms
       if (!pqc.signature) {
         pqc.signature = pjs::Str::make("ML-DSA-44");
       }
@@ -340,18 +335,11 @@ void TLSContext::load_pqc_provider() {
 }
 #endif
 
-bool TLSContext::openssl_supports_builtin_pqc() {
-  // OpenSSL 3.5.0 has built-in PQC algorithms
-  // Version format: MNNFFPPS (Major, miNor, Fix, Patch, Status)
-  // 3.5.0 = 0x30500000L
-  return OPENSSL_VERSION_NUMBER >= 0x30500000L;
-}
-
 bool TLSContext::openssl_supports_pqc_signatures() {
   // OpenSSL 3.2.0 introduced PQC signature support via oqs-provider
-  // but OpenSSL 3.5.0+ has conflicts with oqs-provider for signature algorithms
-  // 3.2.0 = 0x30200000L, 3.5.0 = 0x30500000L
-  return (OPENSSL_VERSION_NUMBER >= 0x30200000L && OPENSSL_VERSION_NUMBER < 0x30500000L);
+  // OpenSSL 3.5.0+ has built-in PQC signature support
+  // 3.2.0 = 0x30200000L
+  return OPENSSL_VERSION_NUMBER >= 0x30200000L;
 }
 
 bool TLSContext::should_use_oqs_provider() {
@@ -359,9 +347,12 @@ bool TLSContext::should_use_oqs_provider() {
   // Force built-in only mode
   return false;
 #elif defined(PIPY_USE_OQS_PROVIDER)
+  // OpenSSL 3.5.0 has built-in PQC algorithms
+  // Version format: MNNFFPPS (Major, miNor, Fix, Patch, Status)
+  // 3.5.0 = 0x30500000L
   // Use oqs-provider for OpenSSL versions that don't have built-in PQC
   // or when explicitly configured to use oqs-provider
-  return !openssl_supports_builtin_pqc();
+  return OPENSSL_VERSION_NUMBER < 0x30500000L;
 #else
   // No oqs-provider available
   return false;
@@ -413,6 +404,18 @@ void TLSContext::set_pqc_algorithms(const std::string &kem_alg, const std::strin
         sig_list = "p384_mldsa65:mldsa65";
       } else if (sig_alg == "ML-DSA-87") {
         sig_list = "p521_mldsa87:mldsa87";
+      } else if (sig_alg == "SLH-DSA-128s") {
+        sig_list = "p256_slhdsa128s:slhdsa128s";
+      } else if (sig_alg == "SLH-DSA-128f") {
+        sig_list = "p256_slhdsa128f:slhdsa128f";
+      } else if (sig_alg == "SLH-DSA-192s") {
+        sig_list = "p384_slhdsa192s:slhdsa192s";
+      } else if (sig_alg == "SLH-DSA-192f") {
+        sig_list = "p384_slhdsa192f:slhdsa192f";
+      } else if (sig_alg == "SLH-DSA-256s") {
+        sig_list = "p521_slhdsa256s:slhdsa256s";
+      } else if (sig_alg == "SLH-DSA-256f") {
+        sig_list = "p521_slhdsa256f:slhdsa256f";
       } else {
         sig_list = sig_alg;
       }
@@ -424,6 +427,18 @@ void TLSContext::set_pqc_algorithms(const std::string &kem_alg, const std::strin
         sig_list = "mldsa65";
       } else if (sig_alg == "ML-DSA-87") {
         sig_list = "mldsa87";
+      } else if (sig_alg == "SLH-DSA-128s") {
+        sig_list = "slhdsa128s";
+      } else if (sig_alg == "SLH-DSA-128f") {
+        sig_list = "slhdsa128f";
+      } else if (sig_alg == "SLH-DSA-192s") {
+        sig_list = "slhdsa192s";
+      } else if (sig_alg == "SLH-DSA-192f") {
+        sig_list = "slhdsa192f";
+      } else if (sig_alg == "SLH-DSA-256s") {
+        sig_list = "slhdsa256s";
+      } else if (sig_alg == "SLH-DSA-256f") {
+        sig_list = "slhdsa256f";
       } else {
         sig_list = sig_alg;
       }
