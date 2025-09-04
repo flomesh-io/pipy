@@ -522,7 +522,10 @@ auto Context::Error::to_exception() -> Value {
 }
 
 void Context::error(bool flag) {
-  for (auto *c = this; c; c = c->m_caller) c->m_has_error = flag;
+  for (auto *c = this; c; c = c->m_caller) {
+    c->m_has_error = flag;
+  }
+  if (m_root) m_root->m_has_error = flag;
 }
 
 void Context::error(const Error &err) {
