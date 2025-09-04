@@ -1028,6 +1028,49 @@ void Sign::update(pjs::Str *str, Data::Encoding enc) {
 }
 
 auto Sign::sign(PrivateKey *key, const SignOptions &options) -> Data* {
+#ifdef PIPY_USE_PQC
+  // Check if this is a PQC key using OpenSSL's method
+  char defname[100];
+  int deftype = EVP_PKEY_get_default_digest_name(key->pkey(), defname, sizeof(defname));
+  bool is_pqc_key = (deftype == 2 && strcmp(defname, "UNDEF") == 0);
+
+  if (is_pqc_key) {
+    // For PQC keys, use EVP_DigestSign with raw input like pkeyutl does
+    auto mctx = EVP_MD_CTX_new();
+    if (!mctx) throw_error();
+
+    try {
+      // Initialize digest sign context without specifying digest (nullptr means no digest)
+      if (EVP_DigestSignInit(mctx, nullptr, nullptr, nullptr, key->pkey()) <= 0) throw_error();
+
+      if (options.id) {
+        auto ctx = EVP_MD_CTX_get_pkey_ctx(mctx);
+        auto id = options.id->to_bytes();
+        EVP_PKEY_CTX_set1_id(ctx, id.data(), id.size());
+      }
+
+      // Get the accumulated input data from our digest context
+      unsigned char hash[EVP_MAX_MD_SIZE];
+      unsigned int size;
+      if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
+
+      // Use EVP_DigestSign with the raw data (one-shot operation for PQC)
+      size_t sig_len = 0;
+      if (EVP_DigestSign(mctx, nullptr, &sig_len, hash, size) <= 0) throw_error();
+
+      pjs::vl_array<unsigned char, 1000> sig(sig_len);
+      if (EVP_DigestSign(mctx, sig, &sig_len, hash, size) <= 0) throw_error();
+
+      EVP_MD_CTX_free(mctx);
+      return s_dp_sign.make(&sig[0], sig_len);
+
+    } catch (std::runtime_error &) {
+      EVP_MD_CTX_free(mctx);
+      throw;
+    }
+  }
+#endif
+
   unsigned char hash[EVP_MAX_MD_SIZE];
   unsigned int size;
   if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
@@ -1094,6 +1137,48 @@ void Verify::update(pjs::Str *str, Data::Encoding enc) {
 }
 
 bool Verify::verify(PublicKey *key, Data *signature, const SignOptions &options) {
+#ifdef PIPY_USE_PQC
+  // Check if this is a PQC key using OpenSSL's method
+  char defname[100];
+  int deftype = EVP_PKEY_get_default_digest_name(key->pkey(), defname, sizeof(defname));
+  bool is_pqc_key = (deftype == 2 && strcmp(defname, "UNDEF") == 0);
+
+  if (is_pqc_key) {
+    // For PQC keys, use EVP_DigestVerify with raw input like pkeyutl does
+    auto mctx = EVP_MD_CTX_new();
+    if (!mctx) throw_error();
+
+    try {
+      // Initialize digest verify context without specifying digest (nullptr means no digest)
+      if (EVP_DigestVerifyInit(mctx, nullptr, nullptr, nullptr, key->pkey()) <= 0) throw_error();
+
+      if (options.id) {
+        auto ctx = EVP_MD_CTX_get_pkey_ctx(mctx);
+        auto id = options.id->to_bytes();
+        EVP_PKEY_CTX_set1_id(ctx, id.data(), id.size());
+      }
+
+      // Get the accumulated input data from our digest context
+      unsigned char hash[EVP_MAX_MD_SIZE];
+      unsigned int size;
+      if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
+
+      // Use EVP_DigestVerify with the raw data (one-shot operation for PQC)
+      auto sig = signature->to_bytes();
+      auto result = EVP_DigestVerify(mctx, &sig[0], sig.size(), hash, size);
+
+      EVP_MD_CTX_free(mctx);
+
+      if (result < 0) throw_error();
+      return result == 1;
+
+    } catch (std::runtime_error &) {
+      EVP_MD_CTX_free(mctx);
+      throw;
+    }
+  }
+#endif
+
   unsigned char hash[EVP_MAX_MD_SIZE];
   unsigned int size;
   if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
