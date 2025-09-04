@@ -1404,6 +1404,30 @@ using namespace pipy::crypto;
 template<> void EnumDef<KeyType>::init() {
   define(KeyType::RSA, "rsa");
   define(KeyType::DSA, "dsa");
+#ifdef PIPY_USE_PQC
+  // ML-DSA signature algorithms
+  define(KeyType::ML_DSA_44, "mldsa44");
+  define(KeyType::ML_DSA_65, "mldsa65");
+  define(KeyType::ML_DSA_87, "mldsa87");
+  // SLH-DSA signature algorithms - SHA2 variants
+  define(KeyType::SLH_DSA_SHA2_128s, "slh-dsa-sha2-128s");
+  define(KeyType::SLH_DSA_SHA2_128f, "slh-dsa-sha2-128f");
+  define(KeyType::SLH_DSA_SHA2_192s, "slh-dsa-sha2-192s");
+  define(KeyType::SLH_DSA_SHA2_192f, "slh-dsa-sha2-192f");
+  define(KeyType::SLH_DSA_SHA2_256s, "slh-dsa-sha2-256s");
+  define(KeyType::SLH_DSA_SHA2_256f, "slh-dsa-sha2-256f");
+  // SLH-DSA signature algorithms - SHAKE variants
+  define(KeyType::SLH_DSA_SHAKE_128s, "slh-dsa-shake-128s");
+  define(KeyType::SLH_DSA_SHAKE_128f, "slh-dsa-shake-128f");
+  define(KeyType::SLH_DSA_SHAKE_192s, "slh-dsa-shake-192s");
+  define(KeyType::SLH_DSA_SHAKE_192f, "slh-dsa-shake-192f");
+  define(KeyType::SLH_DSA_SHAKE_256s, "slh-dsa-shake-256s");
+  define(KeyType::SLH_DSA_SHAKE_256f, "slh-dsa-shake-256f");
+  // ML-KEM key exchange algorithms
+  define(KeyType::ML_KEM_512, "mlkem512");
+  define(KeyType::ML_KEM_768, "mlkem768");
+  define(KeyType::ML_KEM_1024, "mlkem1024");
+#endif
 }
 
 //
