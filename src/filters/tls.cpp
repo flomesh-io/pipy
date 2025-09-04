@@ -357,8 +357,20 @@ bool TLSContext::should_use_oqs_provider() {
 void TLSContext::set_pqc_algorithms(const std::string &kem_alg, const std::string &sig_alg) {
   // Configure supported groups (KEM algorithms)
   if (!kem_alg.empty()) {
-    if (SSL_CTX_set1_groups_list(m_ctx, kem_alg.c_str()) != 1) {
-      throw std::runtime_error("Failed to set PQC KEM algorithms: " + kem_alg);
+    // Map user-friendly names to OpenSSL group names
+    std::string openssl_kem_name = kem_alg;
+    if (kem_alg == "ML-KEM-512") {
+      openssl_kem_name = "mlkem512";
+    } else if (kem_alg == "ML-KEM-768") {
+      openssl_kem_name = "mlkem768";
+    } else if (kem_alg == "ML-KEM-1024") {
+      openssl_kem_name = "mlkem1024";
+    }
+    // Support hybrid algorithms as-is (they use correct names already)
+    // X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024, X448MLKEM1024
+    
+    if (SSL_CTX_set1_groups_list(m_ctx, openssl_kem_name.c_str()) != 1) {
+      throw std::runtime_error("Failed to set PQC KEM algorithms: " + openssl_kem_name);
     }
   }
 

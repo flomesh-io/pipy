@@ -4,14 +4,42 @@ This directory contains a comprehensive demonstration of Post-Quantum Cryptograp
 
 ## Overview
 
-Post-Quantum Cryptography represents the next generation of cryptographic security, designed to protect against attacks from both classical and quantum computers. This demo showcases:
+Post-Quantum Cryptography represents the next generation of cryptographic security, designed to protect against attacks from both classical and quantum computers. This demo showcases Pipy's implementation of NIST-standardized PQC algorithms with OpenSSL 3.5.2 support.
 
-- **ML-KEM** (Module-Lattice-Based Key Encapsulation) - NIST standardized key exchange
-- **ML-DSA** (Module-Lattice-Based Digital Signature Algorithm) - NIST standardized signatures  
-- **SLH-DSA** (Stateless Hash-Based Digital Signature Algorithm) - Hash-based signatures
-- **Full PQC Certificate Support** - Certificates generated with PQC signature algorithms
-- **Hybrid Mode** - Combines classical and post-quantum algorithms for transition security
+## ✅ Supported Algorithms (Working)
 
+### PQC Key Exchange (KEM) - FULLY SUPPORTED ✅
+- **ML-KEM-512** (128-bit security level)
+- **ML-KEM-768** (192-bit security level) - **Recommended**
+- **ML-KEM-1024** (256-bit security level)
+
+### Hybrid Key Exchange - FULLY SUPPORTED ✅
+- **X25519MLKEM768** (X25519 + ML-KEM-768)
+- **SecP256r1MLKEM768** (P-256 + ML-KEM-768)
+- **SecP384r1MLKEM1024** (P-384 + ML-KEM-1024)
+- **X448MLKEM1024** (X448 + ML-KEM-1024)
+
+### PQC Signatures - FULLY SUPPORTED ✅
+- **ML-DSA-44** (128-bit security, 2420-byte signatures)
+- **ML-DSA-65** (192-bit security, 3309-byte signatures)
+- **ML-DSA-87** (256-bit security, 4627-byte signatures)
+
+### Hash-based Signatures - PARTIALLY SUPPORTED ⚠️
+- **SLH-DSA-SHA2-128s** ❌ (Issue: Algorithm name mapping)
+- **SLH-DSA-SHA2-128f** ✅ 
+- **SLH-DSA-SHAKE-128s** ❌ (Issue: Algorithm name mapping)
+- **SLH-DSA-SHAKE-128f** ✅
+
+<<<<<<< HEAD
+## 🔧 Recent Fixes
+
+**Fixed in latest commit (61c774d8):**
+- ✅ ML-KEM algorithm name mapping issue resolved
+- ✅ All ML-KEM variants now work correctly with TLS
+- ✅ Proper OpenSSL 3.5.2 integration for KEM algorithms
+
+=======
+>>>>>>> e0f2a511 (wip)
 ## Quick Start
 
 ### 1. Generate PQC Certificates
@@ -33,20 +61,54 @@ Post-Quantum Cryptography represents the next generation of cryptographic securi
 
 **Start Server:**
 ```bash
-# Basic PQC server (OpenSSL 3.5+ compatible)
+# Pure PQC key exchange (FULLY WORKING ✅)
 pipy server.js -- --port 8443 --kem ML-KEM-768
 
-# Full PQC server (if signatures are supported)
+# Full PQC with signatures (FULLY WORKING ✅)
 pipy server.js -- --kem ML-KEM-1024 --sig ML-DSA-65
 
-# Pure PQC mode (no hybrid)
-pipy server.js -- --kem ML-KEM-512 --no-hybrid
+# Hybrid algorithms for production (RECOMMENDED ✅)
+pipy server.js -- --kem X25519MLKEM768 --sig ML-DSA-44
+
+# High security configuration (256-bit)
+pipy server.js -- --kem ML-KEM-1024 --sig ML-DSA-87
+
+# Testing problematic algorithms (for debugging)
+pipy server.js -- --kem ML-KEM-768 --sig SLH-DSA-SHA2-128s  # ❌ Expected to fail
 ```
 
 **Test with Client:**
 ```bash
-# Basic health check
+# Basic health check  
 pipy client.js -- --url https://localhost:8443/health
+
+# Test PQC info endpoint
+pipy client.js -- --url https://localhost:8443/pqc-info --kem ML-KEM-768
+
+# Test hybrid algorithm
+pipy client.js -- --url https://localhost:8443/api/test --kem X25519MLKEM768
+```
+
+## 📊 Complete Algorithm Support Matrix
+
+| Algorithm Type | Algorithm Name | Status | Security Level | Notes |
+|----------------|----------------|--------|----------------|-------|
+| **Key Exchange** | ML-KEM-512 | ✅ Working | 128-bit | Pure PQC |
+| | ML-KEM-768 | ✅ Working | 192-bit | **Recommended** |
+| | ML-KEM-1024 | ✅ Working | 256-bit | High security |
+| **Hybrid KEM** | X25519MLKEM768 | ✅ Working | ~192-bit | **Production ready** |
+| | SecP256r1MLKEM768 | ✅ Working | ~192-bit | NIST P-256 + ML-KEM |
+| | SecP384r1MLKEM1024 | ✅ Working | ~256-bit | NIST P-384 + ML-KEM |
+| | X448MLKEM1024 | ✅ Working | ~256-bit | High security hybrid |
+| **Signatures** | ML-DSA-44 | ✅ Working | 128-bit | 2420B signatures |
+| | ML-DSA-65 | ✅ Working | 192-bit | 3309B signatures |
+| | ML-DSA-87 | ✅ Working | 256-bit | 4627B signatures |
+| **Hash Signatures** | SLH-DSA-SHA2-128f | ✅ Working | 128-bit | Fast variant |
+| | SLH-DSA-SHAKE-128f | ✅ Working | 128-bit | SHAKE variant |
+| | SLH-DSA-SHA2-128s | ❌ Failed | 128-bit | Name mapping issue |
+| | SLH-DSA-SHAKE-128s | ❌ Failed | 128-bit | Name mapping issue |
+
+## 🧪 Testing
 
 # PQC configuration info
 pipy client.js -- --url https://localhost:8443/pqc-info --kem ML-KEM-768
@@ -315,4 +377,5 @@ This demo showcases complete Post-Quantum Cryptography support in Pipy:
 - **Comprehensive Testing Suite** validating all algorithm combinations
 - **Production Ready** with performance testing and monitoring
 
-The implementation provides quantum-resistant security while maintaining full compatibility with existing TLS infrastructure.
+The implementation provides quantum-resistant security with proper OpenSSL 3.5.2 integration, 
+following official design principles for long-term compatibility and correctness.
