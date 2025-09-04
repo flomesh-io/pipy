@@ -7,8 +7,7 @@ var options = parseOptions({
   defaults: {
     '--url': 'https://localhost:8443',
     '--kem': 'ML-KEM-768',
-    '--sig': '',
-    '--hybrid': true,
+    '--sig': 'ML-DSA-65',
     '--method': 'GET',
     '--header': [],
     '--connections': 1,

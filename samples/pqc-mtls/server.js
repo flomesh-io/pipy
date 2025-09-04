@@ -7,8 +7,7 @@ var options = parseOptions({
   defaults: {
     '--port': 8443,
     '--kem': 'ML-KEM-768',
-    '--sig': '',
-    '--hybrid': true,
+    '--sig': 'ML-DSA-65',
     '--log-level': 'info',
     '--help': false,
   },
@@ -49,11 +48,7 @@ function parseOptions({ defaults, shorthands }) {
     var k = shorthands[name] || name
     if (!(k in defaults)) throw `invalid option ${name}`
     if (typeof defaults[k] === 'boolean') {
-      if (name === '--no-hybrid') {
-        opts['--hybrid'] = false
-      } else {
-        opts[k] = true
-      }
+      opts[k] = true
     } else if (value) {
       addOption(k, value)
     } else {
@@ -82,45 +77,38 @@ if (options['--help']) {
   console.log('  -p, --port <number>     Server port (default: 8443)')
   console.log('  -k, --kem <algorithm>   Key exchange algorithm:')
   console.log('                          ML-KEM-512, ML-KEM-768, ML-KEM-1024')
-  console.log('  -s, --sig <algorithm>   Signature algorithm (OpenSSL 3.2-3.4 only):')
+  console.log('  -s, --sig <algorithm>   Signature algorithm (OpenSSL 3.5+ supported):')
   console.log('                          ML-DSA-44, ML-DSA-65, ML-DSA-87,')
-  console.log('                          SLH-DSA-128s, SLH-DSA-128f, etc.')
-  console.log('  --no-hybrid             Disable hybrid mode (pure PQC)')
+  console.log('                          SLH-DSA-SHA2-128s, SLH-DSA-SHA2-128f,')
+  console.log('                          SLH-DSA-SHAKE-128s, SLH-DSA-SHAKE-128f, etc.')
   console.log('  --log-level <level>     Log level: debug, info, warn, error')
   console.log('  -h, --help              Show this help message')
   console.log('')
   console.log('Examples:')
-  console.log('  pipy server.js --port 8443 --kem ML-KEM-768')
-  console.log('  pipy server.js --kem ML-KEM-1024 --sig ML-DSA-65')
-  console.log('  pipy server.js --kem ML-KEM-512 --no-hybrid')
+  console.log('  pipy server.js -- --port 8443 --kem ML-KEM-768')
+  console.log('  pipy server.js -- --kem ML-KEM-1024 --sig ML-DSA-65')
+  console.log('  pipy server.js -- --kem ML-KEM-512 --sig SLH-DSA-SHA2-128s')
   console.log('')
-  console.log('Note: Signature algorithms require OpenSSL 3.2-3.4 with oqs-provider.')
-  console.log('      OpenSSL >= 3.5 only supports key exchange algorithms.')
+  console.log('Note: All PQC signature algorithms now supported with OpenSSL 3.5+')
+  console.log('      Updated implementation uses correct EVP_DigestSign methods.')
   return
 }
 
 var port = options['--port']
 var kemAlgorithm = options['--kem'] 
 var sigAlgorithm = options['--sig']
-var hybrid = options['--hybrid']
 
 // PQC configuration
 var pqcConfig = {
   keyExchange: kemAlgorithm,
-  hybrid: hybrid
+  signature: sigAlgorithm
 }
 
-if (sigAlgorithm) {
-  pqcConfig.signature = sigAlgorithm
-}
-
-console.log('Starting PQC mTLS Server')
+console.log('Starting PQC mTLS Server with updated algorithm support')
 console.log(`Port: ${port}`)
 console.log(`Key Exchange: ${kemAlgorithm}`)
-if (sigAlgorithm) {
-  console.log(`Signature: ${sigAlgorithm}`)
-}
-console.log(`Hybrid Mode: ${hybrid ? 'enabled' : 'disabled'}`)
+console.log(`Signature: ${sigAlgorithm}`)
+console.log(`PQC Config:`, pqcConfig)
 console.log('')
 
 // Load certificates
@@ -128,10 +116,10 @@ var serverCert = new crypto.CertificateChain(os.readFile('certs/server-cert.pem'
 var serverKey = new crypto.PrivateKey(os.readFile('certs/server-key.pem'))
 var caCert = new crypto.Certificate(os.readFile('certs/ca-cert.pem'))
 
-// Statistics
+// Statistics - updated for new PQC structure
 var requestCount = new stats.Counter('requests_total', ['method', 'status'])
 var connectionCount = new stats.Counter('connections_total', ['type'])
-var pqcStats = new stats.Counter('pqc_connections', ['kem', 'signature', 'hybrid'])
+var pqcStats = new stats.Counter('pqc_connections', ['kem', 'signature'])
 
 // Request processing pipeline
 var $clientCert
@@ -218,7 +206,6 @@ var pqcInfoEndpoint = pipeline($=>$
       pqc: {
         keyExchange: kemAlgorithm,
         signature: sigAlgorithm || null,
-        hybrid: hybrid,
         supportedKEM: ['ML-KEM-512', 'ML-KEM-768', 'ML-KEM-1024'],
         supportedSignatures: ['ML-DSA-44', 'ML-DSA-65', 'ML-DSA-87', 'SLH-DSA-128s', 'SLH-DSA-192s', 'SLH-DSA-256s'],
         note: sigAlgorithm ? 'Full PQC support' : 'KEM-only (OpenSSL >= 3.5 compatibility)'
@@ -248,7 +235,6 @@ var apiEndpoint = pipeline($=>$
         'x-pqc-server': 'true',
         'x-kem-algorithm': kemAlgorithm,
         'x-sig-algorithm': sigAlgorithm || 'none',
-        'x-hybrid-mode': hybrid.toString()
       }
     }, JSON.encode({
       message: `API endpoint: ${path}`,
@@ -289,7 +275,6 @@ var defaultEndpoint = pipeline($=>$
     <h3>Security Configuration</h3>
     <p><strong>Key Exchange:</strong> ${kemAlgorithm}</p>
     ${sigAlgorithm ? `<p><strong>Signature:</strong> ${sigAlgorithm}</p>` : ''}
-    <p><strong>Hybrid Mode:</strong> ${hybrid ? 'Enabled' : 'Disabled'}</p>
     <p><strong>Client Certificate:</strong> ${$clientCert?.subject?.commonName || 'Not provided'}</p>
   </div>
   
@@ -330,7 +315,7 @@ pipy.listen(port, $=>$
       
       if (ok) {
         connectionCount.withLabels('verified').increase()
-        pqcStats.withLabels(kemAlgorithm, sigAlgorithm || 'none', hybrid.toString()).increase()
+        pqcStats.withLabels(kemAlgorithm, sigAlgorithm || 'none').increase()
       } else {
         connectionCount.withLabels('rejected').increase()
       }
