@@ -68,10 +68,6 @@ PqcOptions::PqcOptions(pjs::Object *options) {
   Value(options, "signature")
     .get(signature)
     .check_nullable();
-
-  Value(options, "hybrid")
-    .get(hybrid)
-    .check_nullable();
 }
 #endif
 
@@ -215,8 +211,7 @@ TLSContext::TLSContext(bool is_server, const Options &options) {
     std::string sig_alg = options.pqc.signature ? options.pqc.signature->str() : "";
     set_pqc_algorithms(
       options.pqc.key_exchange->str(),
-      sig_alg,
-      options.pqc.hybrid
+      sig_alg
     );
   }
 #endif
@@ -359,93 +354,18 @@ bool TLSContext::should_use_oqs_provider() {
 #endif
 }
 
-void TLSContext::set_pqc_algorithms(const std::string &kem_alg, const std::string &sig_alg, bool hybrid) {
+void TLSContext::set_pqc_algorithms(const std::string &kem_alg, const std::string &sig_alg) {
   // Configure supported groups (KEM algorithms)
   if (!kem_alg.empty()) {
-    std::string groups;
-    if (hybrid) {
-      // Use hybrid algorithms that combine classical with PQC
-      if (kem_alg == "ML-KEM-512") {
-        // For ML-KEM-512, typically use X25519 hybrid
-        groups = "X25519MLKEM768:MLKEM512"; // Use 768 for hybrid, fallback to 512
-      } else if (kem_alg == "ML-KEM-768") {
-        groups = "X25519MLKEM768:MLKEM768";
-      } else if (kem_alg == "ML-KEM-1024") {
-        groups = "SecP384r1MLKEM1024:MLKEM1024";
-      } else {
-        groups = kem_alg;
-      }
-    } else {
-      // Pure PQC mode - use only post-quantum algorithms
-      if (kem_alg == "ML-KEM-512") {
-        groups = "MLKEM512";
-      } else if (kem_alg == "ML-KEM-768") {
-        groups = "MLKEM768";
-      } else if (kem_alg == "ML-KEM-1024") {
-        groups = "MLKEM1024";
-      } else {
-        groups = kem_alg;
-      }
-    }
-
-    if (SSL_CTX_set1_groups_list(m_ctx, groups.c_str()) != 1) {
-      throw std::runtime_error("Failed to set PQC KEM algorithms: " + groups);
+    if (SSL_CTX_set1_groups_list(m_ctx, kem_alg.c_str()) != 1) {
+      throw std::runtime_error("Failed to set PQC KEM algorithms: " + kem_alg);
     }
   }
 
   // Configure signature algorithms
   if (!sig_alg.empty()) {
-    std::string sig_list;
-    if (hybrid) {
-      // Use hybrid signature algorithms
-      if (sig_alg == "ML-DSA-44") {
-        sig_list = "p256_mldsa44:mldsa44";
-      } else if (sig_alg == "ML-DSA-65") {
-        sig_list = "p384_mldsa65:mldsa65";
-      } else if (sig_alg == "ML-DSA-87") {
-        sig_list = "p521_mldsa87:mldsa87";
-      } else if (sig_alg == "SLH-DSA-128s") {
-        sig_list = "p256_slhdsa128s:slhdsa128s";
-      } else if (sig_alg == "SLH-DSA-128f") {
-        sig_list = "p256_slhdsa128f:slhdsa128f";
-      } else if (sig_alg == "SLH-DSA-192s") {
-        sig_list = "p384_slhdsa192s:slhdsa192s";
-      } else if (sig_alg == "SLH-DSA-192f") {
-        sig_list = "p384_slhdsa192f:slhdsa192f";
-      } else if (sig_alg == "SLH-DSA-256s") {
-        sig_list = "p521_slhdsa256s:slhdsa256s";
-      } else if (sig_alg == "SLH-DSA-256f") {
-        sig_list = "p521_slhdsa256f:slhdsa256f";
-      } else {
-        sig_list = sig_alg;
-      }
-    } else {
-      // Pure PQC mode
-      if (sig_alg == "ML-DSA-44") {
-        sig_list = "mldsa44";
-      } else if (sig_alg == "ML-DSA-65") {
-        sig_list = "mldsa65";
-      } else if (sig_alg == "ML-DSA-87") {
-        sig_list = "mldsa87";
-      } else if (sig_alg == "SLH-DSA-128s") {
-        sig_list = "slhdsa128s";
-      } else if (sig_alg == "SLH-DSA-128f") {
-        sig_list = "slhdsa128f";
-      } else if (sig_alg == "SLH-DSA-192s") {
-        sig_list = "slhdsa192s";
-      } else if (sig_alg == "SLH-DSA-192f") {
-        sig_list = "slhdsa192f";
-      } else if (sig_alg == "SLH-DSA-256s") {
-        sig_list = "slhdsa256s";
-      } else if (sig_alg == "SLH-DSA-256f") {
-        sig_list = "slhdsa256f";
-      } else {
-        sig_list = sig_alg;
-      }
-    }
-
-    if (SSL_CTX_set1_sigalgs_list(m_ctx, sig_list.c_str()) != 1) {
-      throw std::runtime_error("Failed to set PQC signature algorithms: " + sig_list);
+    if (SSL_CTX_set1_sigalgs_list(m_ctx, sig_alg.c_str()) != 1) {
+      throw std::runtime_error("Failed to set PQC signature algorithms: " + sig_alg);
     }
   }
 }

@@ -70,20 +70,27 @@ static void throw_error() {
 static const char* get_pqc_algorithm_name(KeyType type) {
   switch (type) {
     // ML-DSA signature algorithms
-    case KeyType::ML_DSA_44: return "mldsa44";
-    case KeyType::ML_DSA_65: return "mldsa65";
-    case KeyType::ML_DSA_87: return "mldsa87";
-    // SLH-DSA signature algorithms
-    case KeyType::SLH_DSA_128s: return "slhdsa128s";
-    case KeyType::SLH_DSA_128f: return "slhdsa128f";
-    case KeyType::SLH_DSA_192s: return "slhdsa192s";
-    case KeyType::SLH_DSA_192f: return "slhdsa192f";
-    case KeyType::SLH_DSA_256s: return "slhdsa256s";
-    case KeyType::SLH_DSA_256f: return "slhdsa256f";
+    case KeyType::ML_DSA_44: return "ML-DSA-44";
+    case KeyType::ML_DSA_65: return "ML-DSA-65";
+    case KeyType::ML_DSA_87: return "ML-DSA-87";
+    // SLH-DSA signature algorithms - SHA2 variants
+    case KeyType::SLH_DSA_SHA2_128s: return "SLH-DSA-SHA2-128s";
+    case KeyType::SLH_DSA_SHA2_128f: return "SLH-DSA-SHA2-128f";
+    case KeyType::SLH_DSA_SHA2_192s: return "SLH-DSA-SHA2-192s";
+    case KeyType::SLH_DSA_SHA2_192f: return "SLH-DSA-SHA2-192f";
+    case KeyType::SLH_DSA_SHA2_256s: return "SLH-DSA-SHA2-256s";
+    case KeyType::SLH_DSA_SHA2_256f: return "SLH-DSA-SHA2-256f";
+    // SLH-DSA signature algorithms - SHAKE variants
+    case KeyType::SLH_DSA_SHAKE_128s: return "SLH-DSA-SHAKE-128s";
+    case KeyType::SLH_DSA_SHAKE_128f: return "SLH-DSA-SHAKE-128f";
+    case KeyType::SLH_DSA_SHAKE_192s: return "SLH-DSA-SHAKE-192s";
+    case KeyType::SLH_DSA_SHAKE_192f: return "SLH-DSA-SHAKE-192f";
+    case KeyType::SLH_DSA_SHAKE_256s: return "SLH-DSA-SHAKE-256s";
+    case KeyType::SLH_DSA_SHAKE_256f: return "SLH-DSA-SHAKE-256f";
     // ML-KEM key exchange algorithms
-    case KeyType::ML_KEM_512: return "mlkem512";
-    case KeyType::ML_KEM_768: return "mlkem768";
-    case KeyType::ML_KEM_1024: return "mlkem1024";
+    case KeyType::ML_KEM_512: return "ML-KEM-512";
+    case KeyType::ML_KEM_768: return "ML-KEM-768";
+    case KeyType::ML_KEM_1024: return "ML-KEM-1024";
     default: return nullptr;
   }
 }
@@ -1021,6 +1028,49 @@ void Sign::update(pjs::Str *str, Data::Encoding enc) {
 }
 
 auto Sign::sign(PrivateKey *key, const SignOptions &options) -> Data* {
+#ifdef PIPY_USE_PQC
+  // Check if this is a PQC key using OpenSSL's method
+  char defname[100];
+  int deftype = EVP_PKEY_get_default_digest_name(key->pkey(), defname, sizeof(defname));
+  bool is_pqc_key = (deftype == 2 && strcmp(defname, "UNDEF") == 0);
+
+  if (is_pqc_key) {
+    // For PQC keys, use EVP_DigestSign with raw input like pkeyutl does
+    auto mctx = EVP_MD_CTX_new();
+    if (!mctx) throw_error();
+
+    try {
+      // Initialize digest sign context without specifying digest (nullptr means no digest)
+      if (EVP_DigestSignInit(mctx, nullptr, nullptr, nullptr, key->pkey()) <= 0) throw_error();
+
+      if (options.id) {
+        auto ctx = EVP_MD_CTX_get_pkey_ctx(mctx);
+        auto id = options.id->to_bytes();
+        EVP_PKEY_CTX_set1_id(ctx, id.data(), id.size());
+      }
+
+      // Get the accumulated input data from our digest context
+      unsigned char hash[EVP_MAX_MD_SIZE];
+      unsigned int size;
+      if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
+
+      // Use EVP_DigestSign with the raw data (one-shot operation for PQC)
+      size_t sig_len = 0;
+      if (EVP_DigestSign(mctx, nullptr, &sig_len, hash, size) <= 0) throw_error();
+
+      pjs::vl_array<unsigned char, 1000> sig(sig_len);
+      if (EVP_DigestSign(mctx, sig, &sig_len, hash, size) <= 0) throw_error();
+
+      EVP_MD_CTX_free(mctx);
+      return s_dp_sign.make(&sig[0], sig_len);
+
+    } catch (std::runtime_error &) {
+      EVP_MD_CTX_free(mctx);
+      throw;
+    }
+  }
+#endif
+
   unsigned char hash[EVP_MAX_MD_SIZE];
   unsigned int size;
   if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
@@ -1087,6 +1137,48 @@ void Verify::update(pjs::Str *str, Data::Encoding enc) {
 }
 
 bool Verify::verify(PublicKey *key, Data *signature, const SignOptions &options) {
+#ifdef PIPY_USE_PQC
+  // Check if this is a PQC key using OpenSSL's method
+  char defname[100];
+  int deftype = EVP_PKEY_get_default_digest_name(key->pkey(), defname, sizeof(defname));
+  bool is_pqc_key = (deftype == 2 && strcmp(defname, "UNDEF") == 0);
+
+  if (is_pqc_key) {
+    // For PQC keys, use EVP_DigestVerify with raw input like pkeyutl does
+    auto mctx = EVP_MD_CTX_new();
+    if (!mctx) throw_error();
+
+    try {
+      // Initialize digest verify context without specifying digest (nullptr means no digest)
+      if (EVP_DigestVerifyInit(mctx, nullptr, nullptr, nullptr, key->pkey()) <= 0) throw_error();
+
+      if (options.id) {
+        auto ctx = EVP_MD_CTX_get_pkey_ctx(mctx);
+        auto id = options.id->to_bytes();
+        EVP_PKEY_CTX_set1_id(ctx, id.data(), id.size());
+      }
+
+      // Get the accumulated input data from our digest context
+      unsigned char hash[EVP_MAX_MD_SIZE];
+      unsigned int size;
+      if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
+
+      // Use EVP_DigestVerify with the raw data (one-shot operation for PQC)
+      auto sig = signature->to_bytes();
+      auto result = EVP_DigestVerify(mctx, &sig[0], sig.size(), hash, size);
+
+      EVP_MD_CTX_free(mctx);
+
+      if (result < 0) throw_error();
+      return result == 1;
+
+    } catch (std::runtime_error &) {
+      EVP_MD_CTX_free(mctx);
+      throw;
+    }
+  }
+#endif
+
   unsigned char hash[EVP_MAX_MD_SIZE];
   unsigned int size;
   if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
@@ -1397,6 +1489,30 @@ using namespace pipy::crypto;
 template<> void EnumDef<KeyType>::init() {
   define(KeyType::RSA, "rsa");
   define(KeyType::DSA, "dsa");
+#ifdef PIPY_USE_PQC
+  // ML-DSA signature algorithms
+  define(KeyType::ML_DSA_44, "mldsa44");
+  define(KeyType::ML_DSA_65, "mldsa65");
+  define(KeyType::ML_DSA_87, "mldsa87");
+  // SLH-DSA signature algorithms - SHA2 variants
+  define(KeyType::SLH_DSA_SHA2_128s, "slh-dsa-sha2-128s");
+  define(KeyType::SLH_DSA_SHA2_128f, "slh-dsa-sha2-128f");
+  define(KeyType::SLH_DSA_SHA2_192s, "slh-dsa-sha2-192s");
+  define(KeyType::SLH_DSA_SHA2_192f, "slh-dsa-sha2-192f");
+  define(KeyType::SLH_DSA_SHA2_256s, "slh-dsa-sha2-256s");
+  define(KeyType::SLH_DSA_SHA2_256f, "slh-dsa-sha2-256f");
+  // SLH-DSA signature algorithms - SHAKE variants
+  define(KeyType::SLH_DSA_SHAKE_128s, "slh-dsa-shake-128s");
+  define(KeyType::SLH_DSA_SHAKE_128f, "slh-dsa-shake-128f");
+  define(KeyType::SLH_DSA_SHAKE_192s, "slh-dsa-shake-192s");
+  define(KeyType::SLH_DSA_SHAKE_192f, "slh-dsa-shake-192f");
+  define(KeyType::SLH_DSA_SHAKE_256s, "slh-dsa-shake-256s");
+  define(KeyType::SLH_DSA_SHAKE_256f, "slh-dsa-shake-256f");
+  // ML-KEM key exchange algorithms
+  define(KeyType::ML_KEM_512, "mlkem512");
+  define(KeyType::ML_KEM_768, "mlkem768");
+  define(KeyType::ML_KEM_1024, "mlkem1024");
+#endif
 }
 
 //

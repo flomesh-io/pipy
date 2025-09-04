@@ -63,7 +63,6 @@ enum class ProtocolVersion {
 struct PqcOptions : public pipy::Options {
   pjs::Ref<pjs::Str> key_exchange;
   pjs::Ref<pjs::Str> signature;
-  bool hybrid = true;
   
   PqcOptions() {}
   PqcOptions(pjs::Object *options);
@@ -109,7 +108,7 @@ public:
   void set_client_alpn(const std::vector<std::string> &protocols);
   void set_server_alpn(const std::set<pjs::Ref<pjs::Str>> &protocols);
 #ifdef PIPY_USE_PQC
-  void set_pqc_algorithms(const std::string &kem_alg, const std::string &sig_alg, bool hybrid);
+  void set_pqc_algorithms(const std::string &kem_alg, const std::string &sig_alg);
 #ifdef PIPY_USE_OQS_PROVIDER
   void load_pqc_provider();
 #endif

@@ -47,20 +47,21 @@ interface PqcOptions {
    * Available algorithms depend on OpenSSL version:
    * - OpenSSL >= 3.2: Both key exchange and signature algorithms supported
    */
-  keyExchange?: "ML-KEM-512" | "ML-KEM-768" | "ML-KEM-1024" | string,
+  keyExchange?: 'ML-KEM-512' | 'ML-KEM-768' | 'ML-KEM-1024',
   
   /**
    * Signature algorithm for post-quantum cryptography.
    * Defaults to "ML-DSA-44" if not specified and pqc is enabled.
-   * Available when OpenSSL version >= 3.2.
+   * Available when OpenSSL version >= 3.5.
    */
-  signature?: "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87" | "SLH-DSA-128s" | "SLH-DSA-128f" | "SLH-DSA-192s" | "SLH-DSA-192f" | "SLH-DSA-256s" | "SLH-DSA-256f" | string,
-  
-  /**
-   * Whether to use hybrid algorithms (combining classical and post-quantum algorithms).
-   * Defaults to true.
-   */
-  hybrid?: boolean,
+  signature?:
+    | 'ML-DSA-44' | 'ML-DSA-65' | 'ML-DSA-87'
+    | 'SLH-DSA-SHA2-128s' | 'SLH-DSA-SHA2-128f'
+    | 'SLH-DSA-SHA2-192s' | 'SLH-DSA-SHA2-192f'
+    | 'SLH-DSA-SHA2-256s' | 'SLH-DSA-SHA2-256f'
+    | 'SLH-DSA-SHAKE-128s' | 'SLH-DSA-SHAKE-128f'
+    | 'SLH-DSA-SHAKE-192s' | 'SLH-DSA-SHAKE-192f'
+    | 'SLH-DSA-SHAKE-256s' | 'SLH-DSA-SHAKE-256f',
 }
 
 interface ProxyProtocolHeader {
