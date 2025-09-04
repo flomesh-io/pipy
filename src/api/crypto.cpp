@@ -70,20 +70,27 @@ static void throw_error() {
 static const char* get_pqc_algorithm_name(KeyType type) {
   switch (type) {
     // ML-DSA signature algorithms
-    case KeyType::ML_DSA_44: return "mldsa44";
-    case KeyType::ML_DSA_65: return "mldsa65";
-    case KeyType::ML_DSA_87: return "mldsa87";
-    // SLH-DSA signature algorithms
-    case KeyType::SLH_DSA_128s: return "slhdsa128s";
-    case KeyType::SLH_DSA_128f: return "slhdsa128f";
-    case KeyType::SLH_DSA_192s: return "slhdsa192s";
-    case KeyType::SLH_DSA_192f: return "slhdsa192f";
-    case KeyType::SLH_DSA_256s: return "slhdsa256s";
-    case KeyType::SLH_DSA_256f: return "slhdsa256f";
+    case KeyType::ML_DSA_44: return "ML-DSA-44";
+    case KeyType::ML_DSA_65: return "ML-DSA-65";
+    case KeyType::ML_DSA_87: return "ML-DSA-87";
+    // SLH-DSA signature algorithms - SHA2 variants
+    case KeyType::SLH_DSA_SHA2_128s: return "SLH-DSA-SHA2-128s";
+    case KeyType::SLH_DSA_SHA2_128f: return "SLH-DSA-SHA2-128f";
+    case KeyType::SLH_DSA_SHA2_192s: return "SLH-DSA-SHA2-192s";
+    case KeyType::SLH_DSA_SHA2_192f: return "SLH-DSA-SHA2-192f";
+    case KeyType::SLH_DSA_SHA2_256s: return "SLH-DSA-SHA2-256s";
+    case KeyType::SLH_DSA_SHA2_256f: return "SLH-DSA-SHA2-256f";
+    // SLH-DSA signature algorithms - SHAKE variants
+    case KeyType::SLH_DSA_SHAKE_128s: return "SLH-DSA-SHAKE-128s";
+    case KeyType::SLH_DSA_SHAKE_128f: return "SLH-DSA-SHAKE-128f";
+    case KeyType::SLH_DSA_SHAKE_192s: return "SLH-DSA-SHAKE-192s";
+    case KeyType::SLH_DSA_SHAKE_192f: return "SLH-DSA-SHAKE-192f";
+    case KeyType::SLH_DSA_SHAKE_256s: return "SLH-DSA-SHAKE-256s";
+    case KeyType::SLH_DSA_SHAKE_256f: return "SLH-DSA-SHAKE-256f";
     // ML-KEM key exchange algorithms
-    case KeyType::ML_KEM_512: return "mlkem512";
-    case KeyType::ML_KEM_768: return "mlkem768";
-    case KeyType::ML_KEM_1024: return "mlkem1024";
+    case KeyType::ML_KEM_512: return "ML-KEM-512";
+    case KeyType::ML_KEM_768: return "ML-KEM-768";
+    case KeyType::ML_KEM_1024: return "ML-KEM-1024";
     default: return nullptr;
   }
 }
