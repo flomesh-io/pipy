@@ -140,26 +140,11 @@ Options::Options(pjs::Object *options, const char *base_name) {
 
   if (pqc_options) {
     pqc = PqcOptions(pqc_options);
-    pqc_enabled = true;
 
-    // Set default algorithms if not specified
-    if (!pqc.key_exchange) {
-      pqc.key_exchange = pjs::Str::make("ML-KEM-512");
-    }
-
-    // Only set signature default for OpenSSL versions that support it
-    if (TLSContext::openssl_supports_pqc_signatures()) {
-      // For OpenSSL >= 3.5, use built-in PQC signature algorithms
-      // For OpenSSL 3.2-3.4, use oqs-provider PQC signature algorithms
-      if (!pqc.signature) {
-        pqc.signature = pjs::Str::make("ML-DSA-44");
-      }
-    } else {
-      // No PQC signature support available
-      if (pqc.signature) {
-        Log::warn("[tls] PQC signature algorithms are not available in this build configuration, ignoring signature setting");
-        pqc.signature = nullptr;
-      }
+    // No PQC signature support available
+    if (pqc.signature && !TLSContext::openssl_supports_pqc_signatures()) {
+      Log::warn("[tls] PQC signature algorithms are not available in this build configuration, ignoring signature setting");
+      pqc.signature = nullptr;
     }
   }
 #endif
@@ -197,7 +182,7 @@ TLSContext::TLSContext(bool is_server, const Options &options) {
   }
 
 #ifdef PIPY_USE_PQC
-  if (options.pqc_enabled) {
+  if (options.pqc.key_exchange || options.pqc.signature) {
     // Load oqs-provider if needed and available
     if (should_use_oqs_provider()) {
 #ifdef PIPY_USE_OQS_PROVIDER

@@ -43,7 +43,6 @@ interface CertificateOptions {
 interface PqcOptions {
   /**
    * Key exchange algorithm for post-quantum cryptography.
-   * Defaults to "ML-KEM-512" if not specified and pqc is enabled.
    * Available algorithms depend on OpenSSL version:
    * - OpenSSL >= 3.2: Both key exchange and signature algorithms supported
    */
@@ -51,7 +50,6 @@ interface PqcOptions {
   
   /**
    * Signature algorithm for post-quantum cryptography.
-   * Defaults to "ML-DSA-44" if not specified and pqc is enabled.
    * Available when OpenSSL version >= 3.5.
    */
   signature?:

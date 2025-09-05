@@ -84,7 +84,6 @@ struct Options : public pipy::Options {
 #endif
 #ifdef PIPY_USE_PQC
   PqcOptions pqc;
-  bool pqc_enabled = false;
 #endif
 
   Options() {}
