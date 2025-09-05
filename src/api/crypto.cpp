@@ -66,36 +66,6 @@ static void throw_error() {
   throw std::runtime_error(str);
 }
 
-#ifdef PIPY_USE_PQC
-static const char* get_pqc_algorithm_name(KeyType type) {
-  switch (type) {
-    // ML-DSA signature algorithms
-    case KeyType::ML_DSA_44: return "ML-DSA-44";
-    case KeyType::ML_DSA_65: return "ML-DSA-65";
-    case KeyType::ML_DSA_87: return "ML-DSA-87";
-    // SLH-DSA signature algorithms - SHA2 variants
-    case KeyType::SLH_DSA_SHA2_128s: return "SLH-DSA-SHA2-128s";
-    case KeyType::SLH_DSA_SHA2_128f: return "SLH-DSA-SHA2-128f";
-    case KeyType::SLH_DSA_SHA2_192s: return "SLH-DSA-SHA2-192s";
-    case KeyType::SLH_DSA_SHA2_192f: return "SLH-DSA-SHA2-192f";
-    case KeyType::SLH_DSA_SHA2_256s: return "SLH-DSA-SHA2-256s";
-    case KeyType::SLH_DSA_SHA2_256f: return "SLH-DSA-SHA2-256f";
-    // SLH-DSA signature algorithms - SHAKE variants
-    case KeyType::SLH_DSA_SHAKE_128s: return "SLH-DSA-SHAKE-128s";
-    case KeyType::SLH_DSA_SHAKE_128f: return "SLH-DSA-SHAKE-128f";
-    case KeyType::SLH_DSA_SHAKE_192s: return "SLH-DSA-SHAKE-192s";
-    case KeyType::SLH_DSA_SHAKE_192f: return "SLH-DSA-SHAKE-192f";
-    case KeyType::SLH_DSA_SHAKE_256s: return "SLH-DSA-SHAKE-256s";
-    case KeyType::SLH_DSA_SHAKE_256f: return "SLH-DSA-SHAKE-256f";
-    // ML-KEM key exchange algorithms
-    case KeyType::ML_KEM_512: return "ML-KEM-512";
-    case KeyType::ML_KEM_768: return "ML-KEM-768";
-    case KeyType::ML_KEM_1024: return "ML-KEM-1024";
-    default: return nullptr;
-  }
-}
-#endif
-
 static void read_bio(BIO *bio, Data &data) {
   Data::Builder db(data, &s_dp);
   uint8_t buf[DATA_CHUNK_SIZE];
@@ -249,7 +219,7 @@ auto PublicKey::load_by_engine(const std::string &id) -> EVP_PKEY* {
 
 PrivateKey::GenerateOptions::GenerateOptions(pjs::Object *options) {
   Value(options, "type")
-    .get_enum(type)
+    .get(type)
     .check();
   Value(options, "bits")
     .get(bits)
@@ -272,12 +242,17 @@ PrivateKey::PrivateKey(pjs::Str *data) {
 }
 
 PrivateKey::PrivateKey(const GenerateOptions &options) {
+  // Traditional RSA/DSA key generation
+  int id;
+  const auto &type = options.type->str();
+  if (type == "RSA" || type == "rsa") {
+    id = EVP_PKEY_RSA;
+  } else if (type == "DSA" || type == "dsa") {
+    id = EVP_PKEY_DSA;
+  } else {
 #ifdef PIPY_USE_PQC
-  // Check if this is a PQC algorithm
-  const char* pqc_alg_name = get_pqc_algorithm_name(options.type);
-  if (pqc_alg_name) {
     // Generate PQC key using EVP_PKEY_keygen_init with algorithm name
-    auto ctx = EVP_PKEY_CTX_new_from_name(nullptr, pqc_alg_name, nullptr);
+    auto ctx = EVP_PKEY_CTX_new_from_name(nullptr, options.type->c_str(), nullptr);
     if (!ctx) throw_error();
 
     try {
@@ -288,16 +263,11 @@ PrivateKey::PrivateKey(const GenerateOptions &options) {
       EVP_PKEY_CTX_free(ctx);
       throw;
     }
-    return;
-  }
-#endif
 
-  // Traditional RSA/DSA key generation
-  int id;
-  switch (options.type) {
-    case KeyType::RSA: id = EVP_PKEY_RSA; break;
-    case KeyType::DSA: id = EVP_PKEY_DSA; break;
-    default: throw std::runtime_error("unknown key type");
+    return;
+#else
+    throw std::runtime_error("unknown key type");
+#endif // PIPY_USE_PQC
   }
 
   auto ctx = EVP_PKEY_CTX_new_id(id, nullptr);
@@ -1481,39 +1451,6 @@ int JWT::jose2der(char *out, const char *inp, int len) {
 namespace pjs {
 
 using namespace pipy::crypto;
-
-//
-// KeyType
-//
-
-template<> void EnumDef<KeyType>::init() {
-  define(KeyType::RSA, "rsa");
-  define(KeyType::DSA, "dsa");
-#ifdef PIPY_USE_PQC
-  // ML-DSA signature algorithms
-  define(KeyType::ML_DSA_44, "mldsa44");
-  define(KeyType::ML_DSA_65, "mldsa65");
-  define(KeyType::ML_DSA_87, "mldsa87");
-  // SLH-DSA signature algorithms - SHA2 variants
-  define(KeyType::SLH_DSA_SHA2_128s, "slh-dsa-sha2-128s");
-  define(KeyType::SLH_DSA_SHA2_128f, "slh-dsa-sha2-128f");
-  define(KeyType::SLH_DSA_SHA2_192s, "slh-dsa-sha2-192s");
-  define(KeyType::SLH_DSA_SHA2_192f, "slh-dsa-sha2-192f");
-  define(KeyType::SLH_DSA_SHA2_256s, "slh-dsa-sha2-256s");
-  define(KeyType::SLH_DSA_SHA2_256f, "slh-dsa-sha2-256f");
-  // SLH-DSA signature algorithms - SHAKE variants
-  define(KeyType::SLH_DSA_SHAKE_128s, "slh-dsa-shake-128s");
-  define(KeyType::SLH_DSA_SHAKE_128f, "slh-dsa-shake-128f");
-  define(KeyType::SLH_DSA_SHAKE_192s, "slh-dsa-shake-192s");
-  define(KeyType::SLH_DSA_SHAKE_192f, "slh-dsa-shake-192f");
-  define(KeyType::SLH_DSA_SHAKE_256s, "slh-dsa-shake-256s");
-  define(KeyType::SLH_DSA_SHAKE_256f, "slh-dsa-shake-256f");
-  // ML-KEM key exchange algorithms
-  define(KeyType::ML_KEM_512, "mlkem512");
-  define(KeyType::ML_KEM_768, "mlkem768");
-  define(KeyType::ML_KEM_1024, "mlkem1024");
-#endif
-}
 
 //
 // PublicKey

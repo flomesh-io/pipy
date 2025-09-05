@@ -36,38 +36,6 @@ namespace pipy {
 namespace crypto {
 
 //
-// KeyType
-//
-
-enum class KeyType {
-  RSA,
-  DSA,
-#ifdef PIPY_USE_PQC
-  // ML-DSA signature algorithms
-  ML_DSA_44,
-  ML_DSA_65,
-  ML_DSA_87,
-  // SLH-DSA signature algorithms
-  SLH_DSA_SHA2_128s,
-  SLH_DSA_SHAKE_128s,
-  SLH_DSA_SHA2_128f,
-  SLH_DSA_SHAKE_128f,
-  SLH_DSA_SHA2_192s,
-  SLH_DSA_SHAKE_192s,
-  SLH_DSA_SHA2_192f,
-  SLH_DSA_SHAKE_192f,
-  SLH_DSA_SHA2_256s,
-  SLH_DSA_SHAKE_256s,
-  SLH_DSA_SHA2_256f,
-  SLH_DSA_SHAKE_256f,
-  // ML-KEM key exchange algorithms
-  ML_KEM_512,
-  ML_KEM_768,
-  ML_KEM_1024,
-#endif
-};
-
-//
 // CipherOptions
 //
 
@@ -99,7 +67,7 @@ struct SignOptions : public Options {
 class PrivateKey : public pjs::ObjectTemplate<PrivateKey> {
 public:
   struct GenerateOptions : public Options {
-    KeyType type = KeyType::RSA;
+    pjs::Ref<pjs::Str> type;
     int bits = 2048;
     GenerateOptions() {}
     GenerateOptions(pjs::Object *options);
