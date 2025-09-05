@@ -193,11 +193,9 @@ TLSContext::TLSContext(bool is_server, const Options &options) {
     }
     
     // Both key_exchange and signature have been processed with defaults/nulls in Options constructor
+    std::string kem_alg = options.pqc.key_exchange ? options.pqc.key_exchange->str() : "";
     std::string sig_alg = options.pqc.signature ? options.pqc.signature->str() : "";
-    set_pqc_algorithms(
-      options.pqc.key_exchange->str(),
-      sig_alg
-    );
+    set_pqc_algorithms(kem_alg, sig_alg);
   }
 #endif
 }
