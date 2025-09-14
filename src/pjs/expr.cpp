@@ -556,8 +556,14 @@ bool ArrayLiteral::declare(Module *module, Scope &scope, Error &error, bool is_l
 }
 
 void ArrayLiteral::resolve(Module *module, Scope &scope, Error &error) {
-  for (const auto &p : m_list) {
-    p->resolve(module, scope, error);
+  if (m_is_left_value) {
+    for (const auto &v : m_unpack_vars) {
+      v->resolve(module, scope, error);
+    }
+  } else {
+    for (const auto &p : m_list) {
+      p->resolve(module, scope, error);
+    }
   }
 }
 
