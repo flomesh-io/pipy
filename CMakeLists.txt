@@ -90,18 +90,15 @@ endif()
 
 if(WIN32)
   set(LIB_Z zlib.lib)
-  set(LIB_CRYPTO libcrypto.lib)
-  set(LIB_SSL libssl.lib)
-  set(LIB_BROTLI libbrotlidec-static.lib)
   set(EXT_SHELL cmd)
   set(EXE_PACK "Release\\pack.exe")
 else(WIN32)
   set(LIB_Z libz.a)
-  set(LIB_CRYPTO libcrypto.a)
-  set(LIB_SSL libssl.a)
-  set(LIB_BROTLI libbrotlidec-static.a)
   set(EXT_SHELL sh)
   set(EXE_PACK pack)
+endif(WIN32)
+set(LIB_BROTLI libbrotlidec-static${CMAKE_STATIC_LIBRARY_SUFFIX})
+
 endif(WIN32)
 
 if(PIPY_ZLIB)
@@ -185,7 +182,7 @@ else()
     BINARY_DIR ${OPENSSL_LIB_DIR}
     CONFIGURE_COMMAND "${configure_command}"
     BUILD_COMMAND "${make_command}"
-    BUILD_BYPRODUCTS ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL}
+    BUILD_BYPRODUCTS ${OPENSSL_LIB_DIR}/libcrypto${CMAKE_STATIC_LIBRARY_SUFFIX} ${OPENSSL_LIB_DIR}/libssl${CMAKE_STATIC_LIBRARY_SUFFIX}
     INSTALL_COMMAND ""
   )
 endif()
@@ -339,7 +336,7 @@ foreach(component Crypto SSL)
     set_target_properties(${lib} PROPERTIES
       INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INC_DIR}"
       IMPORTED_LINK_INTERFACE_LANGUAGES "C"
-      IMPORTED_LOCATION ${OPENSSL_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}${lower_c}${CMAKE_STATIC_LIBRARY_SUFFIX})
+      IMPORTED_LOCATION ${OPENSSL_LIB_DIR}/lib${lower_c}${CMAKE_STATIC_LIBRARY_SUFFIX})
     if(TARGET OpenSSL::SSL AND TARGET OpenSSL::Crypto)
       set_target_properties(OpenSSL::SSL PROPERTIES
         INTERFACE_LINK_LIBRARIES OpenSSL::Crypto)
