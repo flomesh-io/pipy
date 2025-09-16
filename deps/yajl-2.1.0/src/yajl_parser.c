@@ -344,7 +344,6 @@ yajl_do_parse(yajl_handle hand, const unsigned char * jsonText,
                     }
                     /* intentional fall-through */
                 }
-                    __attribute__ ((fallthrough));
                 case yajl_tok_colon:
                 case yajl_tok_comma:
                 case yajl_tok_right_bracket:
