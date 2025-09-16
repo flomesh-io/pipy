@@ -97,9 +97,8 @@ else(WIN32)
   set(EXT_SHELL sh)
   set(EXE_PACK pack)
 endif(WIN32)
-set(LIB_BROTLI libbrotlidec-static${CMAKE_STATIC_LIBRARY_SUFFIX})
 
-endif(WIN32)
+set(LIB_BROTLI libbrotlidec-static${CMAKE_STATIC_LIBRARY_SUFFIX})
 
 if(PIPY_ZLIB)
   set(ZLIB_INC_DIR ${PIPY_ZLIB}/include)
