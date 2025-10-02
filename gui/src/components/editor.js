@@ -22,9 +22,7 @@ import TreeItem from '@material-ui/lab/TreeItem';
 import Typography from '@material-ui/core/Typography';
 
 // Components
-import Console from './console';
 import DialogNewCodebase from './dialog-new-codebase';
-import Flowchart from './flowchart';
 import Pane from 'react-split-pane/lib/Pane';
 import Loading from './loading';
 import Nothing from './nothing';
@@ -39,16 +37,12 @@ import ArrowDownIcon from '@material-ui/icons/ExpandMore';
 import BaseIcon from '@material-ui/icons/VerticalAlignTopSharp';
 import CodebaseIcon from '@material-ui/icons/CodeSharp';
 import CommitIcon from '@material-ui/icons/AssignmentTurnedInSharp';
-import ConsoleIcon from '@material-ui/icons/DvrSharp';
 import DeleteFileIcon from '@material-ui/icons/DeleteSharp';
 import DerivativeIcon from '@material-ui/icons/SubdirectoryArrowRightSharp';
 import FlagIcon from '@material-ui/icons/FlagSharp';
 import PushIcon from '@material-ui/icons/CloudUploadSharp';
 import ResetIcon from '@material-ui/icons/RotateLeft';
-import RestartIcon from '@material-ui/icons/ReplaySharp';
 import SaveFileIcon from '@material-ui/icons/SaveSharp';
-import StartIcon from '@material-ui/icons/PlayArrowSharp';
-import StopIcon from '@material-ui/icons/StopSharp';
 
 // CSS styles
 const useStyles = makeStyles(theme => ({
@@ -72,24 +66,6 @@ const useStyles = makeStyles(theme => ({
     height: '100%',
     backgroundColor: '#202020',
   },
-  graphPane: {
-    height: '100%',
-    backgroundColor: '#202020',
-    padding: theme.spacing(2),
-    display: 'flex',
-    flexDirection: 'row',
-    flexWrap: 'nowrap',
-    overflow: 'auto',
-  },
-  graph: {
-    position: 'relative',
-    flexShrink: 0,
-  },
-  consolePane: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#202020',
-  },
   folder: {
     opacity: '65%',
     fontStyle: 'italic',
@@ -107,12 +83,7 @@ const useStyles = makeStyles(theme => ({
 // Global states
 //
 
-const splitterPos = [
-  ['260px', 1],
-  [1, '200px'],
-  [1, 1],
-];
-
+const splitterPos = [['360px', 1]]
 const codebaseStates = {};
 
 //
@@ -125,35 +96,7 @@ class File {
     this.model = model;
     this.version = model.getAlternativeVersionId();
 
-    let graphUpdatingTimeout = null;
-
-    const loadGraph = async () => {
-      const res = await fetch('/api/v1/graph', {
-        method: 'POST',
-        headers: {
-          'content-type': 'text/plain',
-        },
-        body: this.model.getValue(),
-      });
-      if (res.status === 200) {
-        let graph = null;
-        try {
-          graph = await res.json();
-        } catch (err) {}
-        if (graph) {
-          this.graph = graph;
-          this.onDidChangeGraph?.();
-        }
-      }
-    }
-
-    loadGraph();
-
     model.onDidChangeContent(() => {
-      if (graphUpdatingTimeout !== null) {
-        window.clearTimeout(graphUpdatingTimeout);
-      }
-      graphUpdatingTimeout = window.setTimeout(loadGraph, 1000);
       this.onDidChangeContent?.();
     });
   }
@@ -225,7 +168,6 @@ function Editor({ root, dts }) {
   const editorDiv = React.useRef();
   const editorRef = React.useRef();
   const layoutUpdaterRef = React.useRef();
-  const consoleContext = React.useContext(Console.Context);
 
   const states = React.useMemo(
     () => (
@@ -253,9 +195,7 @@ function Editor({ root, dts }) {
   const [isSaved, setSaved] = React.useState(states.currentFile?.saved());
   const [treeExpanded, setTreeExpanded] = React.useState(states.treeExpanded);
   const [treeSelected, setTreeSelected] = React.useState(states.treeSelected);
-  const [currentGraph, setCurrentGraph] = React.useState(states.currentFile?.graph);
   const [working, setWorking] = React.useState('');
-  const [openConsole, setOpenConsole] = React.useState(states.isConsoleOpen);
   const [openDialogNewFile, setOpenDialogNewFile] = React.useState(false);
   const [openDialogResetFile, setOpenDialogResetFile] = React.useState(false);
   const [openDialogDeleteFile, setOpenDialogDeleteFile] = React.useState(false);
@@ -317,16 +257,7 @@ function Editor({ root, dts }) {
     }
   );
 
-  const queryProgram = useQuery(
-    'program',
-    async () => {
-      const res = await fetch('/api/v1/program');
-      if (res.status === 200) return await res.text();
-    }
-  );
-
   const isLocalHost = (root === '/');
-  const isRunning = (isLocalHost ? Boolean(queryProgram.data) : queryProgram.data === root);
 
   const updateLayout = () => {
     layoutUpdaterRef.current?.();
@@ -341,17 +272,14 @@ function Editor({ root, dts }) {
 
       if (states.currentFile) {
         states.currentFile.onDidChangeContent = null;
-        states.currentFile.onDidChangeGraph = null;
       }
 
       const file = states.files[filename];
       if (file) {
         states.currentFile = file;
         file.onDidChangeContent = () => setSaved(file.saved());
-        file.onDidChangeGraph = () => setCurrentGraph(file.graph);
         editorRef.current.setModel(file.model);
         setSelected(true);
-        setCurrentGraph(file.graph);
         setSaved(file.saved());
         updateLayout();
         return;
@@ -375,7 +303,6 @@ function Editor({ root, dts }) {
           states.files[filename] = file;
           states.currentFile = file;
           file.onDidChangeContent = () => setSaved(file.saved());
-          file.onDidChangeGraph = () => setCurrentGraph(file.graph);
           editorRef.current.setModel(model);
           setSelected(true);
           setSaved(file.saved());
@@ -448,37 +375,6 @@ function Editor({ root, dts }) {
         if (res.status === 201) {
           queryClient.invalidateQueries(`files:${root}`);
         }
-      }
-    } finally {
-      setWorking('');
-    }
-  }
-
-  const startProgram = async filename => {
-    consoleContext.clearLog();
-    setOpenConsole(true);
-    setWorking('Starting program...');
-    try {
-      const res = await fetch('/api/v1/program', {
-        method: 'POST',
-        body: filename,
-      });
-      if (res.status === 201) {
-        queryClient.invalidateQueries('program');
-      }
-    } finally {
-      setWorking('');
-    }
-  }
-
-  const stopProgram = async () => {
-    setWorking('Stopping program...');
-    try {
-      const res = await fetch('/api/v1/program', {
-        method: 'DELETE',
-      });
-      if (res.status === 204) {
-        queryClient.invalidateQueries('program');
       }
     } finally {
       setWorking('');
@@ -565,12 +461,6 @@ function Editor({ root, dts }) {
     [saveFile]
   );
 
-  // Update layout when open/close console
-  React.useEffect(
-    () => updateLayout(),
-    [openConsole]
-  );
-
   const changeSplitter = (i, pos) => {
     splitterPos[i] = pos;
     updateLayout();
@@ -611,25 +501,6 @@ function Editor({ root, dts }) {
 
   const handleClickCommit = () => {
     commitChanges(true);
-  }
-
-  const handleStart = async () => {
-    consoleContext.clearLog();
-    startProgram(root);
-  }
-
-  const handleRestart = async () => {
-    consoleContext.clearLog();
-    startProgram(root);
-  }
-
-  const handleStop = async () => {
-    stopProgram();
-  }
-
-  const handleOpenConsole = open => {
-    states.isConsoleOpen = open;
-    setOpenConsole(open);
   }
 
   const handleClickDeleteCodebase = () => {
@@ -718,30 +589,7 @@ function Editor({ root, dts }) {
           </React.Fragment>
         )}
         <ToolbarStretch/>
-        <ToolbarButton
-          disabled={isRunning}
-          onClick={handleStart}
-        >
-          <StartIcon fontSize="small"/>
-        </ToolbarButton>
-        <ToolbarButton
-          disabled={!isRunning}
-          onClick={handleStop}
-        >
-          <StopIcon fontSize="small"/>
-        </ToolbarButton>
-        <ToolbarButton
-          disabled={!isRunning}
-          onClick={handleRestart}
-        >
-          <RestartIcon fontSize="small"/>
-        </ToolbarButton>
-        <ToolbarGap/>
-        <ToolbarButton
-          onClick={() => handleOpenConsole(!openConsole)}
-        >
-          <ConsoleIcon fontSize="small"/>
-        </ToolbarButton>
+
         <ToolbarGap/>
         {!isLocalHost && (
           <ToolbarTextButton
@@ -793,47 +641,16 @@ function Editor({ root, dts }) {
             )}
           </Pane>
 
-          <SplitPane
-            split="horizontal"
-            initialSize={splitterPos[0][1]}
-            onChange={pos => changeSplitter(1, pos)}
-          >
-            <SplitPane split="vertical" initialSize={splitterPos[1][0]} onChange={pos => changeSplitter(2, pos)}>
+          {/* Editor */}
+          <Pane className={classes.codePane} initialSize={splitterPos[0][1]}>
+            <div
+              ref={editorDiv}
+              className={classes.codePane}
+              style={{ display: isSelected ? 'block' : 'none' }}
+            />
+            {!isSelected && <Nothing text="No file selected"/>}
+          </Pane>
 
-              {/* Editor */}
-              <Pane className={classes.codePane} initialSize={splitterPos[2][0]}>
-                <div
-                  ref={editorDiv}
-                  className={classes.codePane}
-                  style={{ display: isSelected ? 'block' : 'none' }}
-                />
-                {!isSelected && <Nothing text="No file selected"/>}
-              </Pane>
-
-              {/* Flowchart */}
-              <Pane className={classes.graphPane} initialSize={splitterPos[2][1]}>
-                {currentGraph?.roots?.length ? (
-                  currentGraph.roots.map(
-                    root => (
-                      <div key={root} className={classes.graph}>
-                        <Flowchart nodes={currentGraph.nodes} root={root}/>
-                      </div>
-                    )
-                  )
-                ) : (
-                  <Nothing text="No pipelines"/>
-                )}
-              </Pane>
-            </SplitPane>
-
-            {/* Console */}
-            {openConsole && (
-              <Pane className={classes.consolePane} initialSize={splitterPos[1][1]}>
-                <Console onClose={() => handleOpenConsole(false)}/>
-              </Pane>
-            )}
-
-          </SplitPane>
         </SplitPane>
       </div>
 

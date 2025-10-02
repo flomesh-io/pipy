@@ -1,10 +1,23 @@
 export default function (repoRoot) {
-  if (repoRoot) {
-    repoRoot = os.path.resolve(repoRoot)
-  }
-
   var codebases = {}
   var files = {}
+
+  if (repoRoot) {
+    repoRoot = os.path.resolve(repoRoot)
+    function searchDir(dir) {
+      var list = os.readDir(dir)
+      if (list.includes('codebase.json')) {
+        var path = os.path.join('/', dir.substring(repoRoot.length))
+        if (path.endsWith('/')) path = path.substring(0, path.length - 1)
+        codebases[path] = Codebase(path)
+      } else {
+        list.filter(name => name.endsWith('/')).forEach(
+          name => searchDir(os.path.join(dir, name))
+        )
+      }
+    }
+    searchDir(repoRoot)
+  }
 
   function Codebase(path, base) {
     var version = null
@@ -13,17 +26,32 @@ export default function (repoRoot) {
     var deleted = new Set
 
     if (repoRoot) {
-      var rootDir = os.path.resolve(repoRoot, path)
-      var fileDir = os.path.resolve(rootDir, 'files')
+      var rootDir = os.path.join(repoRoot, path)
+      var fileDir = os.path.join(rootDir, 'files')
       var metaFilename = os.path.join(rootDir, 'codebase.json')
       try {
         var metainfo = JSON.decode(os.read(metaFilename))
         version = 'version' in metainfo ? metainfo.version : null
         base = metainfo.base || null
+        function searchDir(dir) {
+          os.readDir(dir).forEach(name => {
+            if (name.endsWith('/')) {
+              searchDir(os.path.join(dir, name))
+            } else {
+              var filename = os.path.join('/', dir.substring(fileDir.length), name)
+              committed[filename] = os.readFile(os.path.join(dir, name))
+            }
+          })
+        }
+        searchDir(fileDir)
       } catch {}
+    }
+
+    base = base || null
+
+    if (fileDir && metaFilename) {
+      os.mkdir(fileDir, { recursive: true })
       os.write(metaFilename, JSON.encode({ version, base }))
-    } else {
-      base = base || null
     }
 
     function forEachAncestor(cb) {
@@ -41,6 +69,7 @@ export default function (repoRoot) {
       forEachAncestor(p => p.getFiles().forEach(k => { baseFiles[k] = true }))
       return {
         path,
+        base,
         version,
         files: Object.keys(committed),
         editFiles: Object.keys(edited),
@@ -75,22 +104,30 @@ export default function (repoRoot) {
     }
 
     function commit(ver) {
-      if (repoRoot) {
+      if (fileDir && metaFilename) {
+        Object.entries(edited).forEach(
+          ([k, v]) => {
+            var pathname = os.path.join(fileDir, k)
+            os.mkdir(os.path.dirname(pathname), { recursive: true })
+            os.write(pathname, v)
+          }
+        )
+        deleted.forEach(
+          k => {
+            var pathname = os.path.join(fileDir, k)
+            os.unlink(pathname)
+          }
+        )
         os.write(metaFilename, JSON.encode({ version: ver, base }))
       }
       Object.entries(edited).forEach(
         ([k, v]) => {
-          var pathname = os.path.join(fileDir, k)
-          os.mkdir(os.path.dirname(pathname), { recursive: true })
-          os.write(pathname, v)
           committed[k] = v
           delete edited[k]
         }
       )
       deleted.forEach(
         k => {
-          var pathname = os.path.join(fileDir, k)
-          os.unlink(pathname)
           delete committed[k]
         }
       )
@@ -104,7 +141,7 @@ export default function (repoRoot) {
     }
 
     function erase() {
-      if (repoRoot) {
+      if (rootDir) {
         try {
           os.rmdir(rootDir, { recursive: true })
         } catch {}
@@ -135,16 +172,18 @@ export default function (repoRoot) {
   }
 
   function newCodebase(path, base) {
-    if (path in codebases) {
-      throw 'Codebase already exists'
+    var name = path.endsWith('/') ? path.substring(0, path.length - 1) : path
+    if (name in codebases) {
+      throw [400, 'Codebase already exists']
     }
-    if (Object.keys(codebases).some(p => path.startsWith(p))) {
-      throw 'Nesting codebase path'
+    path = name + '/'
+    if (Object.keys(codebases).some(p => path.startsWith(p + '/'))) {
+      throw [400, 'Nesting codebase path']
     }
     if (base && !(base in codebases)) {
-      throw 'Base codebase not found'
+      throw [400, 'Base codebase not found']
     }
-    return (codebases[path] = Codebase(path, base))
+    return (codebases[name] = Codebase(name, base))
   }
 
   function getCodebase(path) {
@@ -154,13 +193,19 @@ export default function (repoRoot) {
   function deleteCodebase(path) {
     var codebase = codebases[path]
     if (!codebase) {
-      throw 'Codebase not found'
+      throw [404, 'Codebase not found']
     }
     if (codebase.getDerived().length > 0) {
-      throw 'Derived codebases exist'
+      throw [400, 'Derived codebases exist']
     }
     codebase.erase()
     delete codebases[path]
+  }
+
+  function findCodebase(path) {
+    var name = Object.keys(codebases).find(p => path.startsWith(p + '/'))
+    if (name) return codebases[name]
+    return null
   }
 
   function getFile(path) {
@@ -173,6 +218,7 @@ export default function (repoRoot) {
     newCodebase,
     getCodebase,
     deleteCodebase,
+    findCodebase,
     getFile,
   }
 }

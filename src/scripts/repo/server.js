@@ -59,7 +59,10 @@ function responseCT(status, ct, body) {
 }
 
 function responseError(e) {
-  if (typeof e === 'object') {
+  console.error(e)
+  if (e instanceof Array && typeof e[0] === 'number') {
+    return response(e[0], e[1])
+  } if (typeof e === 'object') {
     return response(e.status || 500, e)
   } else {
     return response(500, { status: 500, message: e })

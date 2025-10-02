@@ -14,7 +14,6 @@ import TreeItem from '@material-ui/lab/TreeItem';
 import Typography from '@material-ui/core/Typography';
 
 // Components
-import Codebase from '../components/codebase';
 import DialogNewCodebase from '../components/dialog-new-codebase';
 import Loading from '../components/loading';
 
@@ -131,15 +130,6 @@ function Index({ data }) {
         <Loading/>
       </div>
     );
-  }
-
-  if (!queryCodebaseList.isSuccess) {
-    const dts = Object.fromEntries(
-      data.allDts.nodes.map(
-        ({ filename, internal }) => [filename, internal.content]
-      )
-    );  
-    return <Codebase root="/" dts={dts}/>;
   }
 
   const tree = {};
