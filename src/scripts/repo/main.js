@@ -29,6 +29,7 @@ try {
     }
   )
 
+  var html = new http.Directory('/html')
   var store = initStore(repoPathname)
 
   pipy.listen(adminPort, createServer(
@@ -43,13 +44,19 @@ try {
         ...Object.fromEntries(
           ['GET', 'HEAD'].map(method => [
             method,
-            responder(params => {
+            responder((params, req) => {
               var path = '/' + params['*']
+              var isBrowser = (req.head.headers['accept']?.indexOf?.('text/html') >= 0)
+              if (isBrowser) {
+                req.head.path = '/repo/[...]/index.html'
+                return html.serve(req)
+              }
               var file = store.getFile(path)
               if (file) {
                 return new Message({
                   headers: {
                     'etag': file.version,
+                    'last-modified': file.time,
                     'content-type': file.contentType,
                   }
                 }, file.content)
@@ -137,7 +144,7 @@ try {
       },
 
     },
-    new http.Directory('/html')
+    html
   ))
 
 } catch (err) {

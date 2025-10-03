@@ -4,24 +4,33 @@ export default function (repoRoot) {
 
   if (repoRoot) {
     repoRoot = os.path.resolve(repoRoot)
+
     function searchDir(dir) {
       var list = os.readDir(dir)
       if (list.includes('codebase.json')) {
         var path = os.path.join('/', dir.substring(repoRoot.length))
         if (path.endsWith('/')) path = path.substring(0, path.length - 1)
-        codebases[path] = Codebase(path)
+        var cb = Codebase(path)
+        codebases[path] = cb
       } else {
         list.filter(name => name.endsWith('/')).forEach(
           name => searchDir(os.path.join(dir, name))
         )
       }
     }
+
     searchDir(repoRoot)
+
+    Object.values(codebases).forEach(
+      cb => cb.generate()
+    )
   }
 
   function Codebase(path, base) {
     var version = null
+    var time = null
     var committed = {}
+    var patched = {}
     var edited = {}
     var deleted = new Set
 
@@ -32,14 +41,16 @@ export default function (repoRoot) {
       try {
         var metainfo = JSON.decode(os.read(metaFilename))
         version = 'version' in metainfo ? metainfo.version : null
+        time = metainfo.time || Date.now()
         base = metainfo.base || null
+        patched = metainfo.patched || {}
         function searchDir(dir) {
           os.readDir(dir).forEach(name => {
             if (name.endsWith('/')) {
               searchDir(os.path.join(dir, name))
             } else {
               var filename = os.path.join('/', dir.substring(fileDir.length), name)
-              committed[filename] = os.readFile(os.path.join(dir, name))
+              committed[filename] = os.read(os.path.join(dir, name))
             }
           })
         }
@@ -47,18 +58,24 @@ export default function (repoRoot) {
       } catch {}
     }
 
+    time = time || Date.now()
     base = base || null
 
-    if (fileDir && metaFilename) {
-      os.mkdir(fileDir, { recursive: true })
-      os.write(metaFilename, JSON.encode({ version, base }))
-    }
+    saveInfo()
 
     function forEachAncestor(cb) {
       var ancestors = new Set
       for (var p = base; p in codebases && !ancestors.has(p); p = codebases[p].getBase()) {
         ancestors.add(p)
-        cb(codebases[p])
+        var ret = cb(codebases[p])
+        if (ret) return ret
+      }
+    }
+
+    function saveInfo() {
+      if (fileDir && metaFilename) {
+        os.mkdir(fileDir, { recursive: true })
+        os.write(metaFilename, JSON.encode({ version, time, base, patched }))
       }
     }
 
@@ -66,7 +83,7 @@ export default function (repoRoot) {
       var erasedFiles = []
       var baseFiles = {}
       deleted.forEach(v => erasedFiles.push(v))
-      forEachAncestor(p => p.getFiles().forEach(k => { baseFiles[k] = true }))
+      forEachAncestor(p => p.allCommittedFiles().forEach(k => { baseFiles[k] = true }))
       return {
         path,
         base,
@@ -89,8 +106,7 @@ export default function (repoRoot) {
       if (deleted.has(path)) return null
       if (path in edited) return edited[path]
       if (path in committed) return committed[path]
-      if (base in codebases) return codebases[base].getFile(path)
-      return null
+      return forEachAncestor(p => p.getCommittedFile(path)) || null
     }
 
     function setFile(path, data) {
@@ -104,7 +120,14 @@ export default function (repoRoot) {
     }
 
     function commit(ver) {
-      if (fileDir && metaFilename) {
+      if (ver) {
+        version = ver
+        var isPatch = false
+      } else {
+        var isPatch = true
+      }
+
+      if (fileDir) {
         Object.entries(edited).forEach(
           ([k, v]) => {
             var pathname = os.path.join(fileDir, k)
@@ -118,21 +141,42 @@ export default function (repoRoot) {
             os.unlink(pathname)
           }
         )
-        os.write(metaFilename, JSON.encode({ version: ver, base }))
       }
+
       Object.entries(edited).forEach(
         ([k, v]) => {
           committed[k] = v
-          delete edited[k]
+          if (isPatch) patched[k] = Date.now()
         }
       )
-      deleted.forEach(
-        k => {
-          delete committed[k]
-        }
-      )
+
+      deleted.forEach(k => {
+        delete committed[k]
+        if (isPatch) delete patched[k]
+      })
+
       deleted.clear()
-      version = ver
+      edited = {}
+      if (!isPatch) patched = {}
+
+      saveInfo()
+
+      if (isPatch) {
+        generate()
+      } else {
+        var time = Date.now()
+        var done = new Set
+        for (var queue = [path]; queue.length > 0; done.add(k)) {
+          var k = queue.pop()
+          var cb = codebases[k]
+          if (cb) {
+            cb.generate(time)
+            cb.getDerived().filter(k => !done.has(k)).forEach(
+              k => queue.push(k)
+            )
+          }
+        }
+      }
     }
 
     function rollback() {
@@ -148,18 +192,86 @@ export default function (repoRoot) {
       }
     }
 
+    function generate(t) {
+      if (t) {
+        time = t
+        saveInfo()
+      }
+
+      var prefix = os.path.join(path, '/')
+      Object.keys(files).filter(p => p.startsWith(prefix)).forEach(
+        path => delete files[path]
+      )
+
+      var all = { ...committed }
+      forEachAncestor(
+        cb => cb.allCommittedFiles().forEach(
+          path => {
+            all[path] ??= cb.getCommittedFile(path)
+          }
+        )
+      )
+
+      var paths = Object.keys(all)
+      var index = new Data
+      var etags = new Data
+      var ts = new Date(time).toUTCString()
+
+      paths.forEach(
+        p => {
+          var fullpath = os.path.join(prefix, p)
+          var v = version
+          var t = ts
+          var pt = patched[p]
+          if (pt) {
+            t = new Date(pt).toUTCString()
+            v = v + '.' + pt
+          }
+          files[fullpath] = {
+            version: v,
+            time: t,
+            contentType: 'text/plain',
+            content: all[p],
+          }
+          index.push(p)
+          index.push('\n')
+          etags.push(p)
+          etags.push('#')
+          etags.push(v)
+          etags.push('\n')
+        }
+      )
+
+      files[prefix] = {
+        version,
+        time: ts,
+        contentType: 'text/plain',
+        content: index,
+      }
+
+      files[os.path.join(prefix, '_etags')] = {
+        version,
+        time: ts,
+        contentType: 'text/plain',
+        content: etags,
+      }
+    }
+
     return {
       getInfo,
       getPath: () => path,
       getVersion: () => version,
       getBase: () => base,
-      getFiles: () => Object.keys(committed),
+      getDerived,
+      allCommittedFiles: () => Object.keys(committed),
+      getCommittedFile: path => committed[path] || null,
       getFile,
       setFile,
       deleteFile,
       commit,
       rollback,
       erase,
+      generate,
     }
   }
 
