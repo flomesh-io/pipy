@@ -120,10 +120,6 @@ protected:
   auto normalize_path(const std::string &path) -> std::string;
 
 private:
-  static std::map<std::string, Codebase*> s_builtin_codebases;
-
-  static void load_builtin_codebases();
-
   thread_local static Codebase* s_current;
 };
 

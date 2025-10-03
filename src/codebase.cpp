@@ -507,12 +507,9 @@ auto CodebaseFromMemory::watch(const std::string &path, const std::function<void
 // Codebase
 //
 
-std::map<std::string, Codebase*> Codebase::s_builtin_codebases;
-
 auto Codebase::list_builtin() -> std::vector<std::string> {
   std::vector<std::string> list;
-  load_builtin_codebases();
-  for (const auto &p : s_builtin_codebases) {
+  for (const auto &p : s_codebases) {
     list.push_back(p.first);
   }
   return list;
@@ -535,14 +532,8 @@ Codebase* Codebase::from_fs(const std::string &path, const std::string &script) 
 }
 
 Codebase* Codebase::from_builtin(const std::string &path) {
-  load_builtin_codebases();
-  auto i = s_builtin_codebases.find(path);
-  if (i == s_builtin_codebases.end()) return nullptr;
-  return i->second;
-}
-
-void Codebase::load_builtin_codebases() {
-  if (s_builtin_codebases.size() > 0) return;
+  auto i = s_codebases.find(path);
+  if (i == s_codebases.end()) return nullptr;
 
   Data out;
   auto *decompressor = Decompressor::brotli(
@@ -551,7 +542,8 @@ void Codebase::load_builtin_codebases() {
     }
   );
 
-  decompressor->input(Data(s_codebases_br, sizeof(s_codebases_br), &s_dp));
+  const auto &data = i->second;
+  decompressor->input(Data(data.first, data.second, &s_dp));
   decompressor->finalize();
 
   size_t p = 0, size = out.size();
@@ -577,26 +569,17 @@ void Codebase::load_builtin_codebases() {
     return std::vector<uint8_t>(buffer + s, buffer + p);
   };
 
+  auto codebase = new CodebaseFromMemory("/main.js");
+
   while (!eof()) {
     auto filename = read_string();
     auto size = std::stoi(read_string());
     auto data = read_bytes(size);
-    auto i = filename.find('/', 1);
-    if (i != std::string::npos) {
-      i = filename.find('/', i + 1);
-      if (i != std::string::npos) {
-        auto codebase_name = filename.substr(0, i);
-        auto codebase = s_builtin_codebases[codebase_name];
-        if (!codebase) {
-          codebase = new CodebaseFromMemory("/main.js");
-          s_builtin_codebases[codebase_name] = codebase;
-        }
-        codebase->set(filename.substr(i), SharedData::make(Data(data, &s_dp)));
-      }
-    }
+    codebase->set(filename.substr(path.length()), SharedData::make(Data(data, &s_dp)));
   }
 
   delete [] buffer;
+  return codebase;
 }
 
 auto Codebase::normalize_path(const std::string &path) -> std::string {

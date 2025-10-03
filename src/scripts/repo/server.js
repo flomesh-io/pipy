@@ -1,12 +1,20 @@
 var $params
 
-export function createServer(routes) {
+export function createServer(routes, html) {
   routes = Object.entries(routes).map(
     ([k, v]) => ({
       match: k === '*' ? () => ({}) : new http.Match(k),
       pipelines: v,
     })
   )
+
+  var serveHTML = pipeline($=>$
+    .replaceData()
+    .replaceMessage(
+      req => html.serve(req) || new Message({ status: 404 })
+    )
+  )
+
   return pipeline($=>$
     .demuxHTTP().to($=>$
       .pipe(
@@ -14,7 +22,7 @@ export function createServer(routes) {
           if (evt instanceof MessageStart) {
             var path = evt.head.path
             var route = routes.find(r => $params = r.match(path))
-            if (!route) return response404
+            if (!route) return html ? serveHTML : response404
             return route.pipelines[evt.head.method] || response405
           }
         },

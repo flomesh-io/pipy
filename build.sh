@@ -188,9 +188,11 @@ function build() {
   __build_deps_check
 
   cd ${PIPY_DIR}
+	rm -rf src/scripts/repo/html
   if [ $PIPY_GUI == "ON" ] ; then
     npm install
     npm run build
+	  mv public src/scripts/repo/html
   fi
   mkdir ${PIPY_DIR}/build 2>&1 > /dev/null || true
   rm -fr ${PIPY_DIR}/build/*

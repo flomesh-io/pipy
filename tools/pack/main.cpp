@@ -354,6 +354,11 @@ auto compress(const std::vector<char> &input) -> std::vector<char> {
   return data;
 }
 
+struct Codebase {
+  std::string name;
+  std::map<std::string, std::vector<char>> files;
+};
+
 int main(int argc, const char **argv) {
   if (argc < 3) {
     usage();
@@ -368,7 +373,7 @@ int main(int argc, const char **argv) {
   std::cout << "Codebase List: " << codebase_list << std::endl;
   std::cout << "Excluded List: " << excluded_list << std::endl;
 
-  std::map<std::string, std::vector<char>> files;
+  std::vector<Codebase> codebases;
   auto excluded = split(excluded_list, ',');
 
   for (const auto &item : split(codebase_list, ',')) {
@@ -389,17 +394,24 @@ int main(int argc, const char **argv) {
         usage();
         return -1;
       }
+
       auto base_name = "/" + name;
       auto base_path = path;
+
+      Codebase cb;
+      cb.name = base_name;
+
       for (const auto &filename : list_tree(path)) {
         auto name = path_join(base_name, filename);
         auto path = path_join(base_path, filename);
         if (starts_with(name, excluded)) continue;
-        if (!read_file(path, files[name])) {
+        if (!read_file(path, cb.files[name])) {
           std::cerr << "cannot read file: " << path << std::endl;
           return -1;
         }
       }
+
+      codebases.push_back(std::move(cb));
 
     } else {
       std::vector<std::string> dirnames;
@@ -407,41 +419,31 @@ int main(int argc, const char **argv) {
         std::cerr << "cannot read dir: " << path << std::endl;
         return -1;
       }
+
       for (const auto &dirname : dirnames) {
         if (dirname.back() == '/') {
           auto base_name = path_join("/" + name, dirname);
           auto base_path = path_join(path, dirname);
+
+          Codebase cb;
+          cb.name = base_name;
+          cb.name.pop_back();
+
           for (const auto &filename : list_tree(base_path)) {
             auto name = path_join(base_name, filename);
             auto path = path_join(base_path, filename);
             if (starts_with(name, excluded)) continue;
-            if (!read_file(path, files[name])) {
+            if (!read_file(path, cb.files[name])) {
               std::cerr << "cannot read file: " << path << std::endl;
               return -1;
             }
           }
+
+          codebases.push_back(std::move(cb));
         }
       }
     }
   }
-
-  std::vector<char> buffer;
-
-  for (const auto &p : files) {
-    const auto &filename = p.first;
-    const auto &data = p.second;
-    std::string size = std::to_string(data.size());
-    std::cout << filename << std::endl;
-    buffer.insert(buffer.end(), filename.begin(), filename.end());
-    buffer.push_back('\0');
-    buffer.insert(buffer.end(), size.begin(), size.end());
-    buffer.push_back('\0');
-    buffer.insert(buffer.end(), data.begin(), data.end());
-  }
-
-  std::cout << "Compressing..." << std::endl;
-  auto data = compress(buffer);
-  std::cout << "Compressed down to size: " << data.size() << std::endl;
 
   std::ofstream f(output_filename, std::ios::out | std::ios::trunc);
   if (!f.is_open()) {
@@ -449,18 +451,53 @@ int main(int argc, const char **argv) {
     return -1;
   }
 
-  f << "static unsigned char s_codebases_br[" << std::to_string(data.size()) << "] = {" << std::endl;
+  f << "#include <map>" << std::endl;
+  f << "#include <string>" << std::endl << std::endl;
 
-  for (size_t row = 0; row < data.size(); row += 16) {
-    f << ' ';
-    for (size_t col = 0; col < 16; col++) {
-      auto i = row + col;
-      if (i >= data.size()) break;
-      char hex[100];
-      std::sprintf(hex, " 0x%02x,", (uint8_t)data[i]);
-      f << hex;
+  for (size_t i = 0; i < codebases.size(); i++) {
+    const auto &cb = codebases[i];
+    std::vector<char> buffer;
+
+    for (const auto &p : cb.files) {
+      const auto &filename = p.first;
+      const auto &data = p.second;
+      std::string size = std::to_string(data.size());
+      // std::cout << filename << std::endl;
+      buffer.insert(buffer.end(), filename.begin(), filename.end());
+      buffer.push_back('\0');
+      buffer.insert(buffer.end(), size.begin(), size.end());
+      buffer.push_back('\0');
+      buffer.insert(buffer.end(), data.begin(), data.end());
     }
-    f << std::endl;
+
+    std::cout << "Compressing codebase " << cb.name << "..." << std::flush;
+    auto data = compress(buffer);
+    std::cout << " down to size: " << data.size() << std::endl;
+
+    f << "// Codebase " << cb.name << std::endl;
+    f << "static const unsigned char s_codebase_" << i << "[" << std::to_string(data.size()) << "] = {" << std::endl;
+
+    for (size_t row = 0; row < data.size(); row += 16) {
+      f << ' ';
+      for (size_t col = 0; col < 16; col++) {
+        auto i = row + col;
+        if (i >= data.size()) break;
+        char hex[100];
+        std::sprintf(hex, " 0x%02x,", (uint8_t)data[i]);
+        f << hex;
+      }
+      f << std::endl;
+    }
+
+    f << "};" << std::endl << std::endl;
+  }
+
+  f << "// Codebase list" << std::endl;
+  f << "static const std::map<std::string, std::pair<const unsigned char *, size_t>> s_codebases = {" << std::endl;
+
+  for (size_t i = 0; i < codebases.size(); i++) {
+    const auto &cb = codebases[i];
+    f << "  { \"" << cb.name << "\", { s_codebase_" << i << ", sizeof(s_codebase_" << i << ") }}," << std::endl;
   }
 
   f << "};" << std::endl;

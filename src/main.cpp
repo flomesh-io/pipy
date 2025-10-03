@@ -30,7 +30,6 @@
 #include "api/pipy.hpp"
 #include "api/stats.hpp"
 #include "codebase.hpp"
-#include "codebase-store.hpp"
 #include "fs.hpp"
 #include "filters/http.hpp"
 #include "filters/tls.hpp"

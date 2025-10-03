@@ -15,6 +15,8 @@ all: full
 full:
 	npm install
 	npm run build
+	rm -rf $(PIPY_DIR)/src/scripts/repo/html
+	mv $(PIPY_DIR)/public $(PIPY_DIR)/src/scripts/repo/html
 	mkdir -p build
 	cd build && $(CMAKE) .. \
 	  -DCMAKE_BUILD_TYPE=Release \
@@ -29,6 +31,7 @@ full:
 	&& $(MAKE)
 
 no-gui:
+	rm -rf $(PIPY_DIR)/src/scripts/repo/html
 	mkdir -p build
 	cd build && $(CMAKE) .. \
 	  -DCMAKE_BUILD_TYPE=Release \

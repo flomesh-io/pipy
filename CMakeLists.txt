@@ -431,7 +431,6 @@ set(PIPY_SRC
   src/api/zlib.cpp
   src/buffer.cpp
   src/codebase.cpp
-  src/codebase-store.cpp
   src/compressor.cpp
   src/context.cpp
   src/data.cpp
