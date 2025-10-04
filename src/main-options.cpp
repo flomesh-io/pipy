@@ -78,9 +78,6 @@ void MainOptions::show_help() {
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
   std::cout << "  --admin-port=<[[ip]:]port>           Enable administration service on the specified port" << std::endl;
   std::cout << "  --admin-port-off                     Do not start administration service at startup" << std::endl;
-  std::cout << "  --admin-tls-cert=<filename>          Administration service certificate" << std::endl;
-  std::cout << "  --admin-tls-key=<filename>           Administration service private key" << std::endl;
-  std::cout << "  --admin-tls-trusted=<filename>       Client certificate(s) trusted by administration service" << std::endl;
   std::cout << "  --tls-cert=<filename>                Client certificate in communication to administration service" << std::endl;
   std::cout << "  --tls-key=<filename>                 Client private key in communication to administration service" << std::endl;
   std::cout << "  --tls-trusted=<filename>             Administration service certificate(s) trusted by client" << std::endl;
@@ -252,18 +249,12 @@ void MainOptions::parse(const std::list<std::string> &args) {
         admin_port_off = true;
       } else if (k == "--admin-port") {
         admin_port = v;
-      } else if (k == "--admin-tls-cert") {
-        admin_tls_cert = load_certificate(v);
-      } else if (k == "--admin-tls-key") {
-        admin_tls_key = load_private_key(v);
-      } else if (k == "--admin-tls-trusted") {
-        load_certificate_list(v, admin_tls_trusted);
       } else if (k == "--tls-cert") {
-        tls_cert = load_certificate(v);
+        tls_cert = v;
       } else if (k == "--tls-key") {
-        tls_key = load_private_key(v);
+        tls_key = v;
       } else if (k == "--tls-trusted") {
-        load_certificate_list(v, tls_trusted);
+        tls_trusted = v;
       } else if (k == "--openssl-engine") {
         openssl_engine = v;
       } else {
@@ -300,57 +291,8 @@ void MainOptions::parse(const std::list<std::string> &args) {
     }
   }
 
-  if (bool(admin_tls_cert) != bool(admin_tls_key)) {
-    throw std::runtime_error("--admin-tls-cert and --admin-tls-key must be used in conjunction");
-  }
-
-  if (!admin_tls_trusted.empty() && !admin_tls_cert) {
-    throw std::runtime_error("--admin-tls-cert and --admin-tls-key are required for --admin-tls-trusted");
-  }
-
-  if (bool(tls_cert) != bool(tls_key)) {
+  if (tls_cert.empty() != tls_key.empty()) {
     throw std::runtime_error("--tls-cert and --tls-key must be used in conjunction");
-  }
-}
-
-auto MainOptions::load_private_key(const std::string &filename) -> crypto::PrivateKey* {
-  std::vector<uint8_t> buf;
-  if (!fs::read_file(filename, buf)) {
-    std::string msg("cannot open file: ");
-    throw std::runtime_error(msg + filename);
-  }
-  pjs::Ref<Data> data = s_dp.make(&buf[0], buf.size());
-  return crypto::PrivateKey::make(data);
-}
-
-auto MainOptions::load_certificate(const std::string &filename) -> crypto::Certificate* {
-  std::vector<uint8_t> buf;
-  if (!fs::read_file(filename, buf)) {
-    std::string msg("cannot open file: ");
-    throw std::runtime_error(msg + filename);
-  }
-  pjs::Ref<Data> data = s_dp.make(&buf[0], buf.size());
-  return crypto::Certificate::make(data);
-}
-
-void MainOptions::load_certificate_list(const std::string &filename, std::vector<pjs::Ref<crypto::Certificate>> &list) {
-  if (fs::is_file(filename)) {
-    list.push_back(load_certificate(filename));
-
-  } else if (fs::is_dir(filename)) {
-    std::list<std::string> names;
-    if (!fs::read_dir(filename, names)) {
-      std::string msg("cannot read directory: ");
-      throw std::runtime_error(msg + filename);
-    }
-    for (const auto &name : names) {
-      list.push_back(load_certificate(
-        utils::path_join(filename, name)
-      ));
-    }
-  } else {
-    std::string msg("file or directory not found: ");
-    throw std::runtime_error(msg + filename);
   }
 }
 

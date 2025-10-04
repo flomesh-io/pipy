@@ -64,24 +64,15 @@ public:
   bool        log_local_only = false;
   bool        admin_port_off = false;
   std::string admin_port;
+  std::string tls_cert;
+  std::string tls_key;
+  std::string tls_trusted;
   std::string instance_uuid;
   std::string instance_name;
   std::string openssl_engine;
 
-  pjs::Ref<crypto::Certificate>               admin_tls_cert;
-  pjs::Ref<crypto::PrivateKey>                admin_tls_key;
-  std::vector<pjs::Ref<crypto::Certificate>>  admin_tls_trusted;
-  pjs::Ref<crypto::Certificate>               tls_cert;
-  pjs::Ref<crypto::PrivateKey>                tls_key;
-  std::vector<pjs::Ref<crypto::Certificate>>  tls_trusted;
-
   void parse(int argc, char *argv[]);
   void parse(const std::list<std::string> &args);
-
-private:
-  auto load_private_key(const std::string &filename) -> crypto::PrivateKey*;
-  auto load_certificate(const std::string &filename) -> crypto::Certificate*;
-  void load_certificate_list(const std::string &filename, std::vector<pjs::Ref<crypto::Certificate>> &list);
 };
 
 } // namespace pipy

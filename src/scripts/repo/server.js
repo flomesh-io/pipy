@@ -1,18 +1,11 @@
 var $params
 
-export function createServer(routes, html) {
+export function createServer(routes, fallback) {
   routes = Object.entries(routes).map(
     ([k, v]) => ({
       match: k === '*' ? () => ({}) : new http.Match(k),
       pipelines: v,
     })
-  )
-
-  var serveHTML = pipeline($=>$
-    .replaceData()
-    .replaceMessage(
-      req => html.serve(req) || new Message({ status: 404 })
-    )
   )
 
   return pipeline($=>$
@@ -22,7 +15,7 @@ export function createServer(routes, html) {
           if (evt instanceof MessageStart) {
             var path = evt.head.path
             var route = routes.find(r => $params = r.match(path))
-            if (!route) return html ? serveHTML : response404
+            if (!route) return fallback || response404
             return route.pipelines[evt.head.method] || response405
           }
         },

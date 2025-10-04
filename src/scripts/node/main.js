@@ -4,6 +4,7 @@ import Codebase from './codebase.js'
 
 var codebaseURL = ''
 var codebaseDir = '~/.pipy/tmp'
+var tlsSettings = null
 var argvHost = [...pipy.argv]
 var argvProc = []
 
@@ -41,6 +42,26 @@ try {
         switch (opt) {
         case '--codebase-dir':
           codebaseDir = val
+          break
+        case '--tls-cert':
+          tlsSettings ??= {}
+          tlsSettings.certificate ??= {}
+          tlsSettings.certificate.cert = new crypto.Certificate(os.read(val))
+          break
+        case '--tls-key':
+          tlsSettings ??= {}
+          tlsSettings.certificate ??= {}
+          tlsSettings.certificate.key = new crypto.PrivateKey(os.read(val))
+          break
+        case '--tls-trusted':
+          tlsSettings ??= {}
+          if (os.stat(val)?.isDirectory) {
+            tlsSettings.trusted = os.readDir(val).map(
+              name => new crypto.Certificate(os.read(os.path.join(val, name)))
+            )
+          } else {
+            tlsSettings.trusted = [new crypto.Certificate(os.read(val))]
+          }
           break
         default:
           throw `Unknown option in repo mode: ${opt}`
@@ -83,6 +104,7 @@ var codebase = Codebase(
   new URL(codebaseURL),
   codebaseDir,
   argvProc,
+  tlsSettings,
 )
 
 pipy.exit(() => {

@@ -530,6 +530,9 @@ int pipy_main(int argc, char *argv[]) {
       args.push_back(argv[0]);
       args.push_back("--listen=[" + admin_ip + "]:" + std::to_string(admin_port));
       if (!opts.filename.empty()) args.push_back(opts.filename);
+      if (!opts.tls_cert.empty()) args.push_back("--tls-cert" + opts.tls_cert);
+      if (!opts.tls_key.empty()) args.push_back("--tls-key" + opts.tls_key);
+      if (!opts.tls_trusted.empty()) args.push_back("--tls-trusted" + opts.tls_trusted);
       admin_ip.clear();
       admin_port = 0;
       admin_open = false;

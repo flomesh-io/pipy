@@ -1,5 +1,11 @@
-export default function (url, rootDir, argv) {
-  var agent = new http.Agent(url.host)
+export default function (url, rootDir, argv, tls) {
+  var agent = new http.Agent(
+    url.host,
+    {
+      tls: url.protocol === 'https:' ? (tls || {}) : null
+    }
+  )
+
   var codebaseVersion = null
   var codebaseTime = ''
   var codebaseFiles = {}
@@ -7,6 +13,11 @@ export default function (url, rootDir, argv) {
 
   function start() {
     download().then(obj => {
+      if (!obj) {
+        console.error('Failed to download codebase')
+        return new Timeout(10).wait().then(start)
+      }
+
       if (!('/main.js' in obj.files)) {
         console.error('File /main.js not found in codebase')
         return new Timeout(10).wait().then(start)
@@ -87,12 +98,12 @@ export default function (url, rootDir, argv) {
               }
               return downloadNext()
             }
-          )
+          ).catch(() => null)
         }
 
         return downloadNext()
       }
-    )
+    ).catch(() => null)
   }
 
   function run() {
@@ -110,11 +121,9 @@ export default function (url, rootDir, argv) {
           onStart: pid => {
             subprocPID = pid
             console.info('Subprocess started with PID =', pid)
-            // onSubprocStart?.(pid)
           },
           onExit: code => {
             console.info('Subprocess exited with code =', code)
-            // onSubprocExit?.(code)
             subprocPID = 0
           },
         }
@@ -155,7 +164,7 @@ export default function (url, rootDir, argv) {
 
   function watch() {
     new Timeout(5).wait().then(
-      () => agent.request('HEAD', url.path)
+      () => agent.request('HEAD', url.path).catch(() => null)
     ).then(
       res => {
         var status = res?.head?.status
