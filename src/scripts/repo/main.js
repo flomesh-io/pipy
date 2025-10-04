@@ -1,6 +1,5 @@
 #!/usr/bin/env -S pipy --args
 
-import parseOptions from './options.js'
 import initStore from './store.js'
 
 import { createServer, responder, response } from './server.js'
@@ -9,6 +8,22 @@ var repoPathname = ''
 var adminPort = 6060
 
 try {
+  function parseOptions(argv, cb) {
+    var pos = 0
+    argv.forEach(opt => {
+      if (opt.startsWith('-')) {
+        var i = opt.indexOf('=')
+        if (i > 0) {
+          cb(opt.substring(0, i), opt.substring(i + 1))
+        } else {
+          cb(opt, true)
+        }
+      } else {
+        cb(pos++, opt)
+      }
+    })
+  }
+
   parseOptions(
     pipy.argv.slice(1),
     function (opt, val) {
@@ -149,6 +164,6 @@ try {
 
 } catch (err) {
   println('pipy:', err.toString())
-  println(err)
+  if (typeof err === 'object') println(err)
   pipy.exit(-1)
 }
