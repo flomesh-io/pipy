@@ -69,15 +69,13 @@ void MainOptions::show_help() {
   std::cout << "  --log-history-limit=<size>           Set size limit of log history in bytes" << std::endl;
   std::cout << "  --log-local=<stdout|stderr|null>     Select local output for system log" << std::endl;
   std::cout << "  --log-local-only                     Do not send out system log" << std::endl;
-  std::cout << "  --no-reload                          Do not check for remote codebase updates" << std::endl;
-  std::cout << "  --no-status                          Do not report current status to the repo" << std::endl;
-  std::cout << "  --no-metrics                         Do not report metrics to the repo" << std::endl;
   std::cout << "  --trace-objects                      Enable tracing the locations of object construction" << std::endl;
   std::cout << "  --instance-uuid=<uuid>               Specify a UUID for this worker process" << std::endl;
   std::cout << "  --instance-name=<name>               Specify a name for this worker process" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
   std::cout << "  --admin-port=<[[ip]:]port>           Enable administration service on the specified port" << std::endl;
   std::cout << "  --admin-port-off                     Do not start administration service at startup" << std::endl;
+  std::cout << "  --codebase-dir=<dirname>             Specify a temporary directory where a remote codebase can be downloaded to" << std::endl;
   std::cout << "  --tls-cert=<filename>                Client certificate in communication to administration service" << std::endl;
   std::cout << "  --tls-key=<filename>                 Client private key in communication to administration service" << std::endl;
   std::cout << "  --tls-trusted=<filename>             Administration service certificate(s) trusted by client" << std::endl;
@@ -249,6 +247,8 @@ void MainOptions::parse(const std::list<std::string> &args) {
         admin_port_off = true;
       } else if (k == "--admin-port") {
         admin_port = v;
+      } else if (k == "--codebase-dir") {
+        codebase_dir = v;
       } else if (k == "--tls-cert") {
         tls_cert = v;
       } else if (k == "--tls-key") {

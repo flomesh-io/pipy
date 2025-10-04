@@ -544,12 +544,16 @@ int pipy_main(int argc, char *argv[]) {
       args.clear();
       args.push_back(argv[0]);
       args.push_back(opts.filename);
+      if (!opts.codebase_dir.empty()) args.push_back("--codebase-dir=" + opts.codebase_dir);
       args.push_back("--args");
       bool seen_positional = false;
       for (int i = 1; i < argc; i++) {
-        if (argv[i][0] != '-' && !seen_positional) {
+        std::string arg(argv[i]);
+        if (arg[0] != '-' && !seen_positional) {
           seen_positional = true;
-        } else {
+        } else if (
+          !utils::starts_with(arg, "--codebase-dir=")
+        ) {
           args.push_back(argv[i]);
         }
       }

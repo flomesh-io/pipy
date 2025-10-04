@@ -64,6 +64,7 @@ public:
   bool        log_local_only = false;
   bool        admin_port_off = false;
   std::string admin_port;
+  std::string codebase_dir;
   std::string tls_cert;
   std::string tls_key;
   std::string tls_trusted;
