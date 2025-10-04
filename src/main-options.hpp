@@ -41,7 +41,6 @@ namespace pipy {
 
 class MainOptions {
 public:
-  static auto global() -> MainOptions&;
   static void show_help();
 
   std::vector<std::string> arguments;
@@ -51,9 +50,6 @@ public:
   bool        help = false;
   bool        file = false;
   bool        eval = false;
-  bool        no_reload = false;
-  bool        no_status = false;
-  bool        no_metrics = false;
   bool        trace_objects = false;
   bool        reuse_port = false;
   int         threads = 1;
@@ -68,8 +64,6 @@ public:
   bool        log_local_only = false;
   bool        admin_port_off = false;
   std::string admin_port;
-  std::string init_repo;
-  std::string init_code;
   std::string instance_uuid;
   std::string instance_name;
   std::string openssl_engine;
@@ -83,8 +77,6 @@ public:
 
   void parse(int argc, char *argv[]);
   void parse(const std::list<std::string> &args);
-  void parse(const std::string &args);
-  auto to_string() -> std::string;
 
 private:
   auto load_private_key(const std::string &filename) -> crypto::PrivateKey*;

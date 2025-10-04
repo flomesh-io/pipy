@@ -438,27 +438,6 @@ private:
 };
 
 //
-// JSON arguments
-//
-
-static void json_args_append(std::string &json, const char *key, int value) {
-  json += json.empty() ? '{' : ',';
-  json += '"';
-  json += key;
-  json += "\":";
-  json += std::to_string(value);
-}
-
-static void json_args_append(std::string &json, const char *key, const std::string &value) {
-  json += json.empty() ? '{' : ',';
-  json += '"';
-  json += key;
-  json += "\":\"";
-  json += utils::escape(value);
-  json += '"';
-}
-
-//
 // Program entrance
 //
 
@@ -468,7 +447,7 @@ int pipy_main(int argc, char *argv[]) {
   int exit_code = 0;
 
   try {
-    auto &opts = MainOptions::global();
+    MainOptions opts; // = MainOptions::global();
     opts.parse(argc, argv);
 
     if (opts.version) {
@@ -480,32 +459,6 @@ int pipy_main(int argc, char *argv[]) {
       MainOptions::show_help();
       return 0;
     }
-
-    Status::LocalInstance::since = utils::now();
-    Status::LocalInstance::source = opts.filename;
-    Status::LocalInstance::name = opts.instance_name;
-
-    if (opts.instance_uuid.empty()) {
-      Status::LocalInstance::uuid = utils::make_uuid_v4();
-    } else {
-      Status::LocalInstance::uuid = opts.instance_uuid;
-    }
-
-    os::init();
-    Net::init();
-    Log::set_filename(opts.log_file);
-    Log::set_rotate(opts.log_file_rotate_interval, opts.log_file_max_size, opts.log_file_max_count);
-    Log::set_level(opts.log_level);
-    Log::set_topics(opts.log_topics);
-    Log::set_local_output(opts.log_local);
-    Log::set_local_only(opts.log_local_only);
-    Log::init();
-    logging::Logger::set_history_size(opts.log_history_limit);
-    Listener::set_reuse_port(opts.reuse_port);
-    pjs::Class::set_tracing(opts.trace_objects);
-    pjs::Math::init();
-    crypto::Crypto::init(opts.openssl_engine);
-    tls::TLSSession::init();
 
     std::string admin_ip("::");
     int admin_port = 6060; // default repo port
@@ -567,40 +520,40 @@ int pipy_main(int argc, char *argv[]) {
       }
     }
 
-    if (!is_repo) {
-      if (!opts.init_repo.empty()) throw std::runtime_error("invalid option --init-repo for non-repo mode");
-      if (!opts.init_code.empty()) throw std::runtime_error("invalid option --init-code for non-repo mode");
-    }
-
     Codebase *codebase = nullptr;
     std::vector<std::string> args = opts.arguments;
 
     // Start as codebase repo service
-    if (is_repo) {
+    if (is_repo || is_repo_proxy) {
       codebase = Codebase::from_builtin("/pipy/repo");
-      std::string json_args;
-      json_args_append(json_args, "pathname", opts.filename);
-      json_args_append(json_args, "listen", '[' + admin_ip + "]:" + std::to_string(admin_port));
-      json_args += '}';
-      args.insert(args.begin() + 1, json_args);
-
-    // Start as codebase repo proxy
-    } else if (is_repo_proxy) {
-      codebase = Codebase::from_builtin("/pipy/repo");
-      std::string json_args;
-      json_args_append(json_args, "url", opts.filename);
-      json_args_append(json_args, "listen", '[' + admin_ip + "]:" + std::to_string(admin_port));
-      json_args += '}';
-      args.insert(args.begin() + 1, json_args);
+      args.clear();
+      args.push_back(argv[0]);
+      args.push_back("--listen=[" + admin_ip + "]:" + std::to_string(admin_port));
+      if (!opts.filename.empty()) args.push_back(opts.filename);
+      admin_ip.clear();
+      admin_port = 0;
+      admin_open = false;
+      opts = MainOptions();
 
     // Start using a remote codebase
     } else if (is_remote) {
-      codebase = Codebase::from_builtin("/pipy/worker");
-      std::string json_args;
-      json_args_append(json_args, "url", opts.filename);
-      json_args_append(json_args, "threads", opts.threads);
-      json_args += '}';
-      args.insert(args.begin() + 1, json_args);
+      codebase = Codebase::from_builtin("/pipy/node");
+      args.clear();
+      args.push_back(argv[0]);
+      args.push_back(opts.filename);
+      args.push_back("--args");
+      bool seen_positional = false;
+      for (int i = 1; i < argc; i++) {
+        if (argv[i][0] != '-' && !seen_positional) {
+          seen_positional = true;
+        } else {
+          args.push_back(argv[i]);
+        }
+      }
+      admin_ip.clear();
+      admin_port = 0;
+      admin_open = false;
+      opts = MainOptions();
 
     // Start using a builtin codebase
     } else if (is_builtin) {
@@ -618,6 +571,33 @@ int pipy_main(int argc, char *argv[]) {
     }
 
     codebase = Codebase::from_root(codebase);
+
+    pjs::Class::set_tracing(opts.trace_objects);
+    Log::set_filename(opts.log_file);
+    Log::set_rotate(opts.log_file_rotate_interval, opts.log_file_max_size, opts.log_file_max_count);
+    Log::set_level(opts.log_level);
+    Log::set_topics(opts.log_topics);
+    Log::set_local_output(opts.log_local);
+    Log::set_local_only(opts.log_local_only);
+    logging::Logger::set_history_size(opts.log_history_limit);
+    Listener::set_reuse_port(opts.reuse_port);
+
+    // TODO: Move all these into the worker script
+    Status::LocalInstance::since = utils::now();
+    Status::LocalInstance::source = opts.filename;
+    Status::LocalInstance::name = opts.instance_name;
+    if (opts.instance_uuid.empty()) {
+      Status::LocalInstance::uuid = utils::make_uuid_v4();
+    } else {
+      Status::LocalInstance::uuid = opts.instance_uuid;
+    }
+
+    os::init();
+    Net::init();
+    Log::init();
+    pjs::Math::init();
+    crypto::Crypto::init(opts.openssl_engine);
+    tls::TLSSession::init();
 
     if (opts.threads > 1 && !is_repo && !is_repo_proxy) {
       pjs::Ref<WorkerManager> wm = WorkerManager::make(

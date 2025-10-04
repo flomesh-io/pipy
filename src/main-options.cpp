@@ -36,11 +36,6 @@ namespace pipy {
 
 static Data::Producer s_dp("Command Line Options");
 
-auto MainOptions::global() -> MainOptions& {
-  static MainOptions s_global;
-  return s_global;
-}
-
 void MainOptions::show_help() {
   std::cout << "Usage: pipy [options] [<expression | pathname | URL>]" << std::endl;
   std::cout << std::endl;
@@ -78,8 +73,6 @@ void MainOptions::show_help() {
   std::cout << "  --no-status                          Do not report current status to the repo" << std::endl;
   std::cout << "  --no-metrics                         Do not report metrics to the repo" << std::endl;
   std::cout << "  --trace-objects                      Enable tracing the locations of object construction" << std::endl;
-  std::cout << "  --init-repo=<dirname>                Populate the repo with codebases under the specified directory" << std::endl;
-  std::cout << "  --init-code=<codebase>               Start running the specified codebase after repo initialization" << std::endl;
   std::cout << "  --instance-uuid=<uuid>               Specify a UUID for this worker process" << std::endl;
   std::cout << "  --instance-name=<name>               Specify a name for this worker process" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
@@ -247,18 +240,8 @@ void MainOptions::parse(const std::list<std::string> &args) {
         else throw std::runtime_error("unknown log output: " + v);
       } else if (k == "--log-local-only") {
         log_local_only = true;
-      } else if (k == "--no-reload") {
-        no_reload = true;
-      } else if (k == "--no-status") {
-        no_status = true;
-      } else if (k == "--no-metrics") {
-        no_metrics = true;
       } else if (k == "--trace-objects") {
         trace_objects = true;
-      } else if (k == "--init-repo") {
-        init_repo = v;
-      } else if (k == "--init-code") {
-        init_code = v;
       } else if (k == "--instance-uuid") {
         instance_uuid = v;
       } else if (k == "--instance-name") {
@@ -328,70 +311,6 @@ void MainOptions::parse(const std::list<std::string> &args) {
   if (bool(tls_cert) != bool(tls_key)) {
     throw std::runtime_error("--tls-cert and --tls-key must be used in conjunction");
   }
-}
-
-void MainOptions::parse(const std::string &args) {
-  parse(utils::split(args, ' '));
-}
-
-auto MainOptions::to_string() -> std::string {
-  std::list<std::string> list;
-  std::string str;
-
-  if (threads > 1) list.push_back("--threads=" + std::to_string(threads));
-  if (!log_file.empty()) list.push_back("--log-file=" + log_file);
-  switch (log_level) {
-    case Log::DEBUG: {
-      std::list<std::string> topics;
-      bool missing = false;
-      for (int i = 0; s_topic_names[i].name; i++) {
-        const auto &tn = s_topic_names[i];
-        if (log_topics & tn.topic) {
-          topics.push_back(tn.name);
-        } else {
-          missing = true;
-        }
-      }
-      std::string topic_str;
-      if (missing) {
-        for (const auto &t : topics) {
-          topic_str += topic_str.empty() ? ':' : '+';
-          topic_str += t;
-        }
-      }
-      list.push_back("--log-level=debug" + topic_str);
-      break;
-    }
-    case Log::WARN: list.push_back("--log-level=warn"); break;
-    case Log::INFO: list.push_back("--log-level=info"); break;
-    case Log::ERROR: list.push_back("--log-level=error"); break;
-  }
-  list.push_back("--log-history-limit=" + std::to_string(log_history_limit));
-  switch (log_local) {
-    case Log::OUTPUT_NULL: list.push_back("--log-local=null"); break;
-    case Log::OUTPUT_STDOUT: list.push_back("--log-local=stdout"); break;
-    case Log::OUTPUT_STDERR: list.push_back("--log-local=stderr"); break;
-  }
-  if (log_local_only) list.push_back("--log-local-only");
-  if (no_status) list.push_back("--no-status");
-  if (no_metrics) list.push_back("--no-metrics");
-  if (trace_objects) list.push_back("--trace-objects");
-  if (!init_repo.empty()) list.push_back("--init-repo=" + init_repo);
-  if (!init_code.empty()) list.push_back("--init-code=" + init_code);
-  if (!instance_uuid.empty()) list.push_back("--instance-uuid" + instance_uuid);
-  if (!instance_name.empty()) list.push_back("--instance-name" + instance_name);
-  if (reuse_port) list.push_back("--reuse-port");
-  if (admin_port_off) list.push_back("--admin-port-off");
-  if (!admin_port.empty()) list.push_back("--admin-port=" + admin_port);
-
-  if (!openssl_engine.empty()) list.push_back("--openssl-engine=" + openssl_engine);
-
-  for (const auto &opt : list) {
-    if (!str.empty()) str += ' ';
-    str += opt;
-  }
-
-  return str;
 }
 
 auto MainOptions::load_private_key(const std::string &filename) -> crypto::PrivateKey* {

@@ -33,9 +33,8 @@ try {
         throw `Redundant positional argument: ${val}`
       } else {
         switch (opt) {
-        case '--admin-port':
-          adminPort = Number.parseInt(val)
-          if (Number.isNaN(adminPort)) adminPort = val
+        case '--listen':
+          adminPort = val
           break
         default:
           throw `Unknown option in repo mode: ${opt}`
