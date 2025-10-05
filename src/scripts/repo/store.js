@@ -22,7 +22,11 @@ export default function (repoRoot) {
     searchDir(repoRoot)
 
     Object.values(codebases).forEach(
-      cb => cb.generate()
+      cb => {
+        if (cb.getVersion()) {
+          cb.generate()
+        }
+      }
     )
   }
 
@@ -44,17 +48,6 @@ export default function (repoRoot) {
         time = metainfo.time || Date.now()
         base = metainfo.base || null
         patched = metainfo.patched || {}
-        function searchDir(dir) {
-          os.readDir(dir).forEach(name => {
-            if (name.endsWith('/')) {
-              searchDir(os.path.join(dir, name))
-            } else {
-              var filename = os.path.join('/', dir.substring(fileDir.length), name)
-              committed[filename] = os.read(os.path.join(dir, name))
-            }
-          })
-        }
-        searchDir(fileDir)
       } catch {}
     }
 
@@ -62,6 +55,20 @@ export default function (repoRoot) {
     base = base || null
 
     saveInfo()
+
+    if (fileDir) {
+      function searchDir(dir) {
+        os.readDir(dir).forEach(name => {
+          if (name.endsWith('/')) {
+            searchDir(os.path.join(dir, name))
+          } else {
+            var filename = os.path.join('/', dir.substring(fileDir.length), name)
+            committed[filename] = os.read(os.path.join(dir, name))
+          }
+        })
+      }
+      searchDir(fileDir)
+    }
 
     function forEachAncestor(cb) {
       var ancestors = new Set
@@ -120,7 +127,11 @@ export default function (repoRoot) {
     }
 
     function commit(ver) {
-      if (ver) {
+      if (ver || !version) {
+        if (!ver) {
+          ver = '1'
+          time = Date.now()
+        }
         version = ver
         var isPatch = false
       } else {
@@ -164,13 +175,14 @@ export default function (repoRoot) {
       if (isPatch) {
         generate()
       } else {
-        var time = Date.now()
+        var t = Date.now()
         var done = new Set
         for (var queue = [path]; queue.length > 0; done.add(k)) {
           var k = queue.pop()
           var cb = codebases[k]
           if (cb) {
-            cb.generate(time)
+            println(version)
+            cb.generate(t)
             cb.getDerived().filter(k => !done.has(k)).forEach(
               k => queue.push(k)
             )

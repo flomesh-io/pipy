@@ -103,6 +103,8 @@ try {
       )
     )
 
+    console.info('Started in repo proxy mode listening on port', listenPort, 'forwarding to', url.href)
+
   } else {
     var store = initStore(repoPathname)
     var service = createServer(
@@ -234,6 +236,8 @@ try {
     } else {
       pipy.listen(listenPort, service)
     }
+
+    console.info('Started in repo mode listening on port', listenPort)
   }
 
 } catch (err) {
