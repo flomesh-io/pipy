@@ -103,7 +103,6 @@ static const struct {
   { Log::ELF      , "elf" },
   { Log::BPF      , "bpf" },
   { Log::USER     , "user" },
-  { Log::CODEBASE , "codebase" },
   { Log::NO_TOPIC , nullptr },
 };
 

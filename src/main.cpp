@@ -475,8 +475,6 @@ int pipy_main(int argc, char *argv[]) {
     bool is_repo_proxy = false;
     bool is_remote = false;
     bool is_builtin = false;
-    bool is_tls = false;
-    bool is_file = false;
     bool is_file_found = false;
 
     if (!opts.eval) {
@@ -491,10 +489,8 @@ int pipy_main(int argc, char *argv[]) {
 
       } else if (utils::starts_with(opts.filename, "https://")) {
         is_remote = true;
-        is_tls = true;
 
       } else {
-        is_file = true;
         auto full_path = fs::abs_path(opts.filename);
         if (fs::exists(full_path)) {
           is_file_found = true;

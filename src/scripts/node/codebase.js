@@ -179,12 +179,58 @@ export default function (url, rootDir, argv, tls) {
             codebaseVersion, '=>', headers['etag'], 'and time change',
             codebaseTime, '=>', headers['last-modified']
           )
-          start()
-        } else {
-          watch()
+          return start()
         }
+        return agent.request('GET', os.path.join(url.path, '_etags')).then(
+          res => {
+            var status = res?.head?.status
+            if (status < 200 || status >= 300 || !status) return watch()
+            if (res.body?.size > 1024 * 1024) return watch()
+            var oldSet = new Set(Object.keys(codebaseFiles))
+            var newSet = {}
+            res.body.toString().split('\n').forEach(
+              line => {
+                line = line.trim()
+                var i = line.lastIndexOf('#')
+                if (i >= 0) {
+                  var path = line.substring(0,i)
+                  var etag = line.substring(i+1)
+                  var old = codebaseFiles[path]
+                  if (old?.etag !== etag) {
+                    newSet[path] = true
+                  }
+                  oldSet.delete(path)
+                }
+              }
+            )
+            oldSet.forEach(path => { newSet[path] = true })
+            return Promise.all(Object.keys(newSet).map(
+              path => agent.request('GET', os.path.join(url.path, path)).then(
+                res => {
+                  var status = res?.head?.status
+                  if (200 <= status && status < 300) {
+                    var etag = res.head.headers['etag'] || ''
+                    var data = res.body || new Data
+                    codebaseFiles[path] = { etag, data }
+                    var dir = os.path.dirname(path)
+                    os.mkdir(os.path.join(rootDir, dir), { recursive: true })
+                    os.write(os.path.join(rootDir, path), res.body || new Data)
+                    console.info('Downloaded file', path)
+                  } else if (status === 404) {
+                    delete codebaseFiles[path]
+                    os.rm(os.path.join(rootDir, path), { force: true })
+                    console.info('Erased 404 file', path)
+                  }
+                }
+              )
+            )).then(() => watch())
+          }
+        )
       }
-    )
+    ).catch(err => {
+      console.error(err)
+      watch()
+    })
   }
 
   return { start, kill }
