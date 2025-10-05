@@ -7,7 +7,7 @@ export default function (repoRoot) {
 
     function searchDir(dir) {
       var list = os.readDir(dir)
-      if (list.includes('codebase.json')) {
+      if (list.includes('__codebase__.json')) {
         var path = os.path.join('/', dir.substring(repoRoot.length))
         if (path.endsWith('/')) path = path.substring(0, path.length - 1)
         var cb = Codebase(path)
@@ -39,9 +39,8 @@ export default function (repoRoot) {
     var deleted = new Set
 
     if (repoRoot) {
-      var rootDir = os.path.join(repoRoot, path)
-      var fileDir = os.path.join(rootDir, 'files')
-      var metaFilename = os.path.join(rootDir, 'codebase.json')
+      var fileDir = os.path.join(repoRoot, path)
+      var metaFilename = os.path.join(fileDir, '__codebase__.json')
       try {
         var metainfo = JSON.decode(os.read(metaFilename))
         version = 'version' in metainfo ? metainfo.version : null
@@ -59,6 +58,7 @@ export default function (repoRoot) {
     if (fileDir) {
       function searchDir(dir) {
         os.readDir(dir).forEach(name => {
+          if (name === '__codebase__.json') return
           if (name.endsWith('/')) {
             searchDir(os.path.join(dir, name))
           } else {
@@ -117,13 +117,17 @@ export default function (repoRoot) {
     }
 
     function setFile(path, data) {
-      deleted.delete(path)
-      edited[path] = data
+      if (!path.startsWith('/__codebase__.json')) {
+        deleted.delete(path)
+        edited[path] = data
+      }
     }
 
     function deleteFile(path) {
-      delete edited[path]
-      deleted.add(path)
+      if (!path.startsWith('/__codebase__.json')) {
+        delete edited[path]
+        deleted.add(path)
+      }
     }
 
     function commit(ver) {
@@ -197,9 +201,9 @@ export default function (repoRoot) {
     }
 
     function erase() {
-      if (rootDir) {
+      if (fileDir) {
         try {
-          os.rmdir(rootDir, { recursive: true })
+          os.rmdir(fileDir, { recursive: true })
         } catch {}
       }
     }
