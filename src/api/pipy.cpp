@@ -722,7 +722,6 @@ namespace pjs {
 using namespace pipy;
 
 template<> void ClassDef<Pipy>::init() {
-  super<Function>();
   ctor();
 
   variable("tty", class_of<Pipy::TTY>());
