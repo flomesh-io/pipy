@@ -104,6 +104,9 @@ void WorkerThread::main(const std::vector<std::string> &argv) {
     }
   }
 
+  m_worker->stop(true);
+  m_worker = nullptr;
+
   Log::shutdown();
   Timer::cancel_all();
 
