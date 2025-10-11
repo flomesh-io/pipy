@@ -157,14 +157,16 @@ try {
 
           'POST': responder((params, req) => {
             var path = '/' + params['*']
-            var info = JSON.decode(req.body)
+            var body = req.body
+            var info = body && body.size > 0 ? JSON.decode(body) : {}
             var codebase = store.newCodebase(path, info.base)
             return response(201, codebase.getInfo())
           }),
 
           'PATCH': responder((params, req) => {
             var path = '/' + params['*']
-            var info = JSON.decode(req.body)
+            var body = req.body
+            var info = body && body.size > 0 ? JSON.decode(body) : {}
             var codebase = store.getCodebase(path)
             if (codebase) {
               if (info.version !== codebase.getVersion()) {
