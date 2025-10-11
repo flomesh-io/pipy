@@ -1,5 +1,9 @@
 #!/bin/sh
 
+PIPY_DIR=$(cd "$(dirname "$0")" && pwd)
+
+cd "$PIPY_DIR"
+
 if [ -n "$CI_COMMIT_SHA" ]; then
   VERSION="$CI_COMMIT_TAG"
   COMMIT="$CI_COMMIT_SHA"
