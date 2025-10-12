@@ -156,17 +156,20 @@ try {
           }),
 
           'POST': responder((params, req) => {
+            var body = req.body.toString()
+            console.log('POST', req.head.path, 'BODY', body.toString())
             var path = '/' + params['*']
-            var body = req.body
-            var info = body && body.size > 0 ? JSON.decode(body) : {}
+            var info = JSON.parse(body || '{}')
             var codebase = store.newCodebase(path, info.base)
             return response(201, codebase.getInfo())
           }),
 
           'PATCH': responder((params, req) => {
+            var body = req.body.toString()
+            console.log('PATCH', req.head.path, 'BODY', body.toString())
             var path = '/' + params['*']
             var body = req.body
-            var info = body && body.size > 0 ? JSON.decode(body) : {}
+            var info = JSON.parse(body || '{}')
             var codebase = store.getCodebase(path)
             if (codebase) {
               if (info.version !== codebase.getVersion()) {
@@ -178,6 +181,7 @@ try {
           }),
 
           'DELETE': responder(params => {
+            console.log('DELETE', req.head.path)
             var path = '/' + params['*']
             store.deleteCodebase(path)
             return response(204)

@@ -185,7 +185,6 @@ export default function (repoRoot) {
           var k = queue.pop()
           var cb = codebases[k]
           if (cb) {
-            println(version)
             cb.generate(t)
             cb.getDerived().filter(k => !done.has(k)).forEach(
               k => queue.push(k)
@@ -236,7 +235,7 @@ export default function (repoRoot) {
       paths.forEach(
         p => {
           var fullpath = os.path.join(prefix, p)
-          var v = version
+          var v = version.toString()
           var t = ts
           var pt = patched[p]
           if (pt) {
