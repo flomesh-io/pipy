@@ -168,7 +168,6 @@ try {
             var body = req.body.toString()
             console.log('PATCH', req.head.path, 'BODY', body.toString())
             var path = '/' + params['*']
-            var body = req.body
             var info = JSON.parse(body || '{}')
             var codebase = store.getCodebase(path)
             if (codebase) {
