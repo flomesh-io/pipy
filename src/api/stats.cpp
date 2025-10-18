@@ -829,11 +829,11 @@ void MetricDataSum::sum(MetricData &data, bool initial) {
     auto *shape = pjs::Str::make(e->shape)->retain();
 
     auto &ent = m_entry_map[name];
-    if (!ent || (initial && (
+    if (!ent ||
       ent->type != type ||
       ent->shape != shape ||
       ent->dimensions != e->dimensions
-    ))) {
+    ) {
       if (!ent) {
         ent = new Entry;
         m_entries.push(ent);
