@@ -48,7 +48,6 @@ RUN rm -fr pipy/build \
 
 FROM alpine:3.16.1 as prod
 COPY --from=builder /pipy/bin/pipy /usr/local/bin/pipy
-COPY --from=builder /pipy/tutorial /etc/pipy/tutorial
 COPY tools/sidecar/* /usr/local/bin/
 RUN apk add --no-cache ca-certificates libstdc++ libcap su-exec tar curl busybox-extras iptables tzdata socat logrotate 
 RUN adduser -Su 1340 pipy \
