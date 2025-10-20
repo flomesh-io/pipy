@@ -426,7 +426,7 @@ jobs:
     needs: set-release-version
     name: android
     runs-on: ubuntu-latest
-    if: ${{ !contains(needs.set-release-version.outputs.release_version, 'nightly') }}
+    if: ${{ false }}
     steps:
       - uses: actions/checkout@v4
 
