@@ -51,7 +51,7 @@ COPY --from=builder /pipy/bin/pipy /usr/local/bin/pipy
 COPY tools/sidecar/* /usr/local/bin/
 RUN apk add --no-cache ca-certificates libstdc++ libcap su-exec tar curl busybox-extras iptables tzdata socat logrotate 
 RUN adduser -Su 1340 pipy \
-    && chmod -R g=u /usr/local/bin/pipy /etc/pipy \
+    && chmod -R g=u /usr/local/bin/pipy \
     && chown -R pipy:0 /usr/local/bin/pipy /etc/pipy 
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
