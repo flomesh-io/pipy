@@ -103,6 +103,7 @@ private:
   pjs::Object* respond_dump(const std::string &path, Status &status);
   pjs::Object* respond_dump_objects(const std::map<std::string, size_t> &counts);
   pjs::Object* respond_metrics(const stats::MetricData &metric_data);
+  pjs::Object* respond_metrics(const stats::MetricDataSum &metric_data_sum);
 
   static const std::string s_path_log;
   static const std::string s_path_dump;
@@ -200,6 +201,16 @@ void AdminService::open(const std::string &ip, int port, WorkerManager *wm) {
         wm->status([=](Status &status) {
           InputContext ic;
           promise->settle(true, respond_dump(path, status));
+          promise->release();
+        });
+        promise->retain();
+        return promise;
+      } else if (path == s_path_metrics) {
+        auto promise = pjs::Promise::make();
+        auto metric_data = new stats::MetricData;
+        wm->stats([=](stats::MetricDataSum &metric_data) {
+          InputContext ic;
+          promise->settle(true, respond_metrics(metric_data));
           promise->release();
         });
         promise->retain();
@@ -332,6 +343,16 @@ pjs::Object* AdminService::respond_metrics(const stats::MetricData &metric_data)
   Data buf;
   Data::Builder db(buf, &s_dp);
   metric_data.to_prometheus(std::string(), [&](const void *str, size_t len) {
+    db.push(str, len);
+  });
+  db.flush();
+  return Message::make(Data::make(std::move(buf)));
+}
+
+pjs::Object* AdminService::respond_metrics(const stats::MetricDataSum &metric_data_sum) {
+  Data buf;
+  Data::Builder db(buf, &s_dp);
+  metric_data_sum.to_prometheus([&](const void *str, size_t len) {
     db.push(str, len);
   });
   db.flush();
