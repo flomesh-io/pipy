@@ -31,7 +31,7 @@ COPY . /pipy
 
 RUN yum install -y --quiet openssh-clients cmake clang autoconf automake zlib zlib-devel pkgconf file nodejs npm make
 
-RUN if [ "$PIPY_GUI" == "ON" ] ; then cd pipy && npm install && npm run build; fi
+RUN if [ "$PIPY_GUI" == "ON" ] ; then cd pipy && npm install && npm run build && rm -fr src/scripts/repo/html && mv public src/scripts/repo/html; fi
 
 RUN rm -fr pipy/build \
         && mkdir pipy/build \
@@ -43,7 +43,7 @@ RUN rm -fr pipy/build \
         && export CI_COMMIT_SHA \
         && export CI_COMMIT_TAG=${VERSION}-${REVISION} \
         && export CI_COMMIT_DATE \
-        && cmake -DPIPY_GUI=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DPIPY_SAMPLES=${PIPY_GUI} -DCMAKE_BUILD_TYPE=Release .. \
+        && cmake -DPIPY_GUI=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DCMAKE_BUILD_TYPE=Release .. \
         && make -j$(getconf _NPROCESSORS_ONLN) \
         && mkdir ${pkg_confdir} \
         && cp /pipy/bin/pipy ${pkg_bindir}
@@ -55,7 +55,7 @@ COPY tools/* /usr/local/bin/
 RUN yum install -y --quiet ca-certificates libstdc++ libcap tar curl iptables tzdata socat logrotate 
 RUN useradd -ru 1340 pipy \
     && chmod -R g=u /usr/local/bin/pipy \
-    && chown -R pipy:0 /usr/local/bin/pipy /etc/pipy 
+    && chown -R pipy:0 /usr/local/bin/pipy
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 

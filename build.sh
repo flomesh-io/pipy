@@ -192,7 +192,7 @@ function build() {
   if [ $PIPY_GUI == "ON" ] ; then
     npm install
     npm run build
-	  mv public src/scripts/repo/html
+    mv public src/scripts/repo/html
   fi
   mkdir ${PIPY_DIR}/build 2>&1 > /dev/null || true
   rm -fr ${PIPY_DIR}/build/*
