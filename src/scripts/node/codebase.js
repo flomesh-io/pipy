@@ -1,4 +1,15 @@
 export default function (url, rootDir, argv, tls) {
+  var startTime = Date.now()
+  var instanceUUID = findArg('--instance-uuid') || algo.uuid()
+  var instanceName = findArg('--instance-name') || ''
+  var adminPort = findArg('--admin-port') || ''
+
+  function findArg(name) {
+    var prefix = name + '='
+    var arg = argv.find(arg => arg.startsWith(prefix))
+    return arg ? arg.substring(prefix.length) : undefined
+  }
+
   var agent = new http.Agent(
     url.host,
     {
@@ -49,6 +60,7 @@ export default function (url, rootDir, argv, tls) {
 
         run()
         watch()
+        heartbeat()
       })
     })
   }
@@ -231,6 +243,24 @@ export default function (url, rootDir, argv, tls) {
       console.error(err)
       watch()
     })
+  }
+
+  function heartbeat() {
+    new Timeout(5).wait().then(
+      () => {
+        var status = {
+          timestamp: Date.now(),
+          since: startTime,
+          uuid: instanceUUID,
+          name: instanceName,
+          version: codebaseVersion,
+          admin: adminPort,
+        }
+        return agent.request('POST', url.path, null, JSON.encode(status))
+      }
+    ).finally(
+      () => heartbeat()
+    )
   }
 
   return { start, kill }

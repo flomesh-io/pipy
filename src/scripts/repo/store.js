@@ -37,6 +37,7 @@ export default function (repoRoot) {
     var patched = {}
     var edited = {}
     var deleted = new Set
+    var instances = {}
 
     if (repoRoot) {
       var fileDir = os.path.join(repoRoot, path)
@@ -91,6 +92,7 @@ export default function (repoRoot) {
       var baseFiles = {}
       deleted.forEach(v => erasedFiles.push(v))
       forEachAncestor(p => p.allCommittedFiles().forEach(k => { baseFiles[k] = true }))
+      var currentTime = Date.now()
       return {
         path,
         base,
@@ -100,6 +102,19 @@ export default function (repoRoot) {
         erasedFiles,
         baseFiles: Object.keys(baseFiles),
         derived: getDerived(),
+        instances: Object.fromEntries(
+          Object.entries(instances).map(
+            ([id, info]) => {
+              var t = info.timestamp
+              if (currentTime - t >= 120000) {
+                delete instances[id]
+                return null
+              } else {
+                return [id, info]
+              }
+            }
+          ).filter(i=>i)
+        )
       }
     }
 
@@ -127,6 +142,14 @@ export default function (repoRoot) {
       if (!path.startsWith('/__codebase__.json')) {
         delete edited[path]
         deleted.add(path)
+      }
+    }
+
+    function setStatus(id, ip, status) {
+      instances[id] = {
+        ip,
+        timestamp: Date.now(),
+        status,
       }
     }
 
@@ -278,6 +301,7 @@ export default function (repoRoot) {
       getVersion: () => version,
       getBase: () => base,
       getDerived,
+      setStatus,
       allCommittedFiles: () => Object.keys(committed),
       getCommittedFile: path => committed[path] || null,
       getFile,

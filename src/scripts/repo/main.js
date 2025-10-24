@@ -138,7 +138,23 @@ try {
                 return response(404)
               })
             ])
-          )
+          ),
+
+          'POST': responder((params, req) => {
+            var status = JSON.decode(req.body)
+            var path = '/' + params['*']
+            if (path.endsWith('/')) path = path.substring(0, path.length - 1)
+            var codebase = store.getCodebase(path)
+            if (codebase) {
+              codebase.setStatus(
+                status.uuid,
+                $remoteAddress,
+                status,
+              )
+              return response(201)
+            }
+            return response(404)
+          })
         },
 
         '/api/v1/repo': {
@@ -232,14 +248,20 @@ try {
       )
     )
 
+    var $remoteAddress
+
     if (tlsSettings) {
       pipy.listen(listenPort, $=>$
+        .onStart(inb => { $remoteAddress = inb.remoteAddress })
         .acceptTLS(tlsSettings).to($=>$
           .pipe(service)
         )
       )
     } else {
-      pipy.listen(listenPort, service)
+      pipy.listen(listenPort, $=>$
+        .onStart(inb => { $remoteAddress = inb.remoteAddress })
+        .pipe(service)
+      )
     }
 
     console.info('Started in repo mode listening on port', listenPort)
