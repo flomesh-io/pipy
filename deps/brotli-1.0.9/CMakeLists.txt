@@ -2,7 +2,7 @@
 # several CI services, such as Travis and Drone, use it.  Solaris 11
 # has 2.8.6, and it's not difficult to support if you already have to
 # support 2.8.7.
-cmake_minimum_required(VERSION 2.8.6)
+cmake_minimum_required(VERSION 3.10)
 
 project(brotli C)
 
