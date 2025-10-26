@@ -79,3 +79,6 @@ yarn-error.log
 
 # Debugging/testing files
 rfc-8998.hpp
+
+.zig-cache/
+zig-out/

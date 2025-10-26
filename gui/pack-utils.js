@@ -29,7 +29,7 @@ module.exports = {
 
   writeBinaryHeaderFile: (filename, name, data) => {
     const fd = fs.openSync(filename, 'w+');
-    fs.writeSync(fd, `static unsigned char ${name}[${data.length}] = {\n`);
+    fs.writeSync(fd, `static unsigned char ${name}[${data.length}] __attribute__((aligned(16))) = {\n`);
     for (let i = 0, n = data.length; i < n; i += 16) {
       const line = [];
       for (let j = 0; j < 16 && i + j < n; j++) {
