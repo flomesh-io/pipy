@@ -105,6 +105,8 @@ private:
   pjs::Object* respond_metrics(const stats::MetricData &metric_data);
   pjs::Object* respond_metrics(const stats::MetricDataSum &metric_data_sum);
 
+  pjs::Ref<http::ResponseHead> response_head(int status, const char *content_type = nullptr);
+
   static const std::string s_path_log;
   static const std::string s_path_dump;
   static const std::string s_path_metrics;
@@ -207,7 +209,6 @@ void AdminService::open(const std::string &ip, int port, WorkerManager *wm) {
         return promise;
       } else if (path == s_path_metrics) {
         auto promise = pjs::Promise::make();
-        auto metric_data = new stats::MetricData;
         wm->stats([=](stats::MetricDataSum &metric_data) {
           InputContext ic;
           promise->settle(true, respond_metrics(metric_data));
@@ -233,9 +234,7 @@ int AdminService::open(const std::string &ip, int port, const std::function<pjs:
           if (res) {
             ret.set(res);
           } else {
-            auto head = http::ResponseHead::make();
-            head->status = 404;
-            ret.set(Message::make(head, nullptr));
+            ret.set(Message::make(response_head(404), nullptr));
           }
         }
       )),
@@ -346,7 +345,7 @@ pjs::Object* AdminService::respond_metrics(const stats::MetricData &metric_data)
     db.push(str, len);
   });
   db.flush();
-  return Message::make(Data::make(std::move(buf)));
+  return Message::make(response_head(200, "text/plain"), Data::make(std::move(buf)));
 }
 
 pjs::Object* AdminService::respond_metrics(const stats::MetricDataSum &metric_data_sum) {
@@ -356,7 +355,18 @@ pjs::Object* AdminService::respond_metrics(const stats::MetricDataSum &metric_da
     db.push(str, len);
   });
   db.flush();
-  return Message::make(Data::make(std::move(buf)));
+  return Message::make(response_head(200, "text/plain"), Data::make(std::move(buf)));
+}
+
+pjs::Ref<http::ResponseHead> AdminService::response_head(int status, const char *content_type) {
+  auto head = http::ResponseHead::make();
+  head->status = status;
+  if (content_type) {
+    auto headers = pjs::Object::make();
+    headers->set("content-type", content_type);
+    head->headers = headers;
+  }
+  return head;
 }
 
 //
