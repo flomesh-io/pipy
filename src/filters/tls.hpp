@@ -172,6 +172,14 @@ public:
   auto protocol() -> pjs::Str*;
   auto hostname() -> pjs::Str*;
   auto peer() -> crypto::Certificate*;
+  auto cipher_name() -> std::string;
+  auto cipher_version() -> std::string;
+  auto cipher_bits() -> int;
+  auto negotiated_group() -> std::string;
+  auto signature() -> std::string;
+  auto signature_type() -> std::string;
+  auto peer_signature() -> std::string;
+  auto peer_signature_type() -> std::string;
 
 private:
   TLSSession(

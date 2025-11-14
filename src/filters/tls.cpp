@@ -532,6 +532,46 @@ auto TLSSession::peer() -> crypto::Certificate* {
   return m_peer;
 }
 
+auto TLSSession::cipher_name() -> std::string {
+  return SSL_get_cipher_name(m_ssl);
+}
+
+auto TLSSession::cipher_version() -> std::string {
+  return SSL_get_cipher_version(m_ssl);
+}
+
+auto TLSSession::cipher_bits() -> int {
+  return SSL_get_cipher_bits(m_ssl, nullptr);
+}
+
+auto TLSSession::negotiated_group() -> std::string {
+  return SSL_group_to_name(m_ssl, SSL_get_negotiated_group(m_ssl));
+}
+
+auto TLSSession::signature() -> std::string {
+  int nid;
+  SSL_get_signature_nid(m_ssl, &nid);
+  return OBJ_nid2sn(nid);
+}
+
+auto TLSSession::signature_type() -> std::string {
+  int nid;
+  SSL_get_signature_type_nid(m_ssl, &nid);
+  return OBJ_nid2sn(nid);
+}
+
+auto TLSSession::peer_signature() -> std::string {
+  int nid;
+  SSL_get_peer_signature_nid(m_ssl, &nid);
+  return OBJ_nid2sn(nid);
+}
+
+auto TLSSession::peer_signature_type() -> std::string {
+  int nid;
+  SSL_get_peer_signature_type_nid(m_ssl, &nid);
+  return OBJ_nid2sn(nid);
+}
+
 void TLSSession::on_input(Event *evt) {
   if (m_closed_input) return;
 
@@ -1428,6 +1468,14 @@ template<> void ClassDef<TLSSession>::init() {
   accessor("protocol", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->protocol()); });
   accessor("hostname", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->hostname()); });
   accessor("peer", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->peer()); });
+  accessor("cipherName", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->cipher_name()); });
+  accessor("cipherVersion", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->cipher_version()); });
+  accessor("cipherBits", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->cipher_bits()); });
+  accessor("negotiatedGroup", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->negotiated_group()); });
+  accessor("signature", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->signature()); });
+  accessor("signatureType", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->signature_type()); });
+  accessor("peerSignature", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->peer_signature()); });
+  accessor("peerSignatureType", [](Object *obj, Value &ret) { ret.set(obj->as<TLSSession>()->peer_signature_type()); });
 }
 
 } // namespace pjs
