@@ -533,11 +533,13 @@ auto TLSSession::peer() -> crypto::Certificate* {
 }
 
 auto TLSSession::cipher_name() -> std::string {
-  return SSL_get_cipher_name(m_ssl);
+  auto s = SSL_get_cipher_name(m_ssl);
+  return s ? s : "";
 }
 
 auto TLSSession::cipher_version() -> std::string {
-  return SSL_get_cipher_version(m_ssl);
+  auto s = SSL_get_cipher_version(m_ssl);
+  return s ? s : "";
 }
 
 auto TLSSession::cipher_bits() -> int {
@@ -545,31 +547,36 @@ auto TLSSession::cipher_bits() -> int {
 }
 
 auto TLSSession::negotiated_group() -> std::string {
-  return SSL_group_to_name(m_ssl, SSL_get_negotiated_group(m_ssl));
+  auto s = SSL_group_to_name(m_ssl, SSL_get_negotiated_group(m_ssl));
+  return s ? s : "";
 }
 
 auto TLSSession::signature() -> std::string {
   int nid;
   SSL_get_signature_nid(m_ssl, &nid);
-  return OBJ_nid2sn(nid);
+  auto s = OBJ_nid2sn(nid);
+  return s ? s : "";
 }
 
 auto TLSSession::signature_type() -> std::string {
   int nid;
   SSL_get_signature_type_nid(m_ssl, &nid);
-  return OBJ_nid2sn(nid);
+  auto s = OBJ_nid2sn(nid);
+  return s ? s : "";
 }
 
 auto TLSSession::peer_signature() -> std::string {
   int nid;
   SSL_get_peer_signature_nid(m_ssl, &nid);
-  return OBJ_nid2sn(nid);
+  auto s = OBJ_nid2sn(nid);
+  return s ? s : "";
 }
 
 auto TLSSession::peer_signature_type() -> std::string {
   int nid;
   SSL_get_peer_signature_type_nid(m_ssl, &nid);
-  return OBJ_nid2sn(nid);
+  auto s = OBJ_nid2sn(nid);
+  return s ? s : "";
 }
 
 void TLSSession::on_input(Event *evt) {
