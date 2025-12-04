@@ -459,6 +459,8 @@ private:
 
 class Socket : public pjs::ObjectTemplate<Socket> {
 public:
+  void bind(const std::string &ip_port);
+  void bind(const std::string &ip, int port);
   auto get_raw_option(int level, int option, Data *data) -> int;
   auto set_raw_option(int level, int option, Data *data) -> int;
   auto io_control(int64_t op, const Data &input, Data *output = nullptr) -> int;
