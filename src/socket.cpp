@@ -1206,7 +1206,10 @@ void Socket::bind(const std::string &ip, int port) {
   if (m_fd) {
     tcp::endpoint ep(asio::ip::make_address(ip), port);
     auto addr = ep.data();
-    ::bind(m_fd, addr, sizeof(addr));
+    if (::bind(m_fd, addr, sizeof(*addr))) {
+      auto err = errno;
+      throw std::runtime_error("bind() failed with errno = " + std::to_string(err));
+    }
   } else {
     throw std::runtime_error("socket is gone");
   }
