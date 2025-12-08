@@ -33,6 +33,7 @@
 #include "fstream.hpp"
 #include "api/json.hpp"
 #include "api/url.hpp"
+#include "filters/fork.hpp"
 #include "filters/tee.hpp"
 #include "filters/pack.hpp"
 #include "filters/mux.hpp"
@@ -327,23 +328,26 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options) {
 
   PipelineLayout *ppl = PipelineLayout::make();
   PipelineLayout *ppl_pack = PipelineLayout::make();
+  PipelineLayout *ppl_fork = PipelineLayout::make();
 
-  Mux::Options mux_opts;
-  ppl->append(new Mux(pjs::Function::make(m_mux_grouper), mux_opts))->add_sub_pipeline(ppl_pack);
+  MuxQueue::Options mux_opts;
+  mux_opts.max_sessions = 1;
+  ppl->append(new MuxQueue(pjs::Function::make(m_mux_grouper), mux_opts))->add_sub_pipeline(ppl_pack);
   ppl_pack->append(new Pack(options.batch_size, options.batch));
-  ppl_pack->append(new http::RequestEncoder(http::RequestEncoder::Options()));
+  ppl_pack->append(new Fork())->add_sub_pipeline(ppl_fork);
+  ppl_fork->append(new http::RequestEncoder(http::RequestEncoder::Options()));
 
   if (is_tls) {
     PipelineLayout *ppl_connect = PipelineLayout::make();
-    ppl_pack->append(new tls::Client(options.tls))->add_sub_pipeline(ppl_connect);
-    ppl_pack = ppl_connect;
+    ppl_fork->append(new tls::Client(options.tls))->add_sub_pipeline(ppl_connect);
+    ppl_fork = ppl_connect;
   }
 
   Connect::Options conn_opts;
   conn_opts.buffer_limit = options.buffer_limit;
   conn_opts.retry_delay = 5;
   conn_opts.retry_count = -1;
-  ppl_pack->append(new Connect(url_obj->host(), conn_opts));
+  ppl_fork->append(new Connect(url_obj->host(), conn_opts));
 
   m_ppl = ppl;
 
