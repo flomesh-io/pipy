@@ -572,6 +572,8 @@ int pipy_main(int argc, char *argv[]) {
       args.push_back(argv[0]);
       args.push_back(opts.filename);
       if (!opts.codebase_dir.empty()) args.push_back("--codebase-dir=" + opts.codebase_dir);
+      if (!opts.tls_cert.empty()) args.push_back("--tls-cert=" + opts.tls_cert);
+      if (!opts.tls_key.empty()) args.push_back("--tls-key=" + opts.tls_key);
       args.push_back("--args");
       bool seen_positional = false;
       for (int i = 1; i < argc; i++) {
@@ -579,7 +581,9 @@ int pipy_main(int argc, char *argv[]) {
         if (arg[0] != '-' && !seen_positional) {
           seen_positional = true;
         } else if (
-          !utils::starts_with(arg, "--codebase-dir=")
+          !utils::starts_with(arg, "--codebase-dir=") &&
+          !utils::starts_with(arg, "--tls-cert=") &&
+          !utils::starts_with(arg, "--tls-key=")
         ) {
           args.push_back(argv[i]);
         }
