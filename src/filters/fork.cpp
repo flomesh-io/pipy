@@ -159,6 +159,10 @@ void Fork::on_branch_output(Branch *branch, Event *evt) {
     if (branch == m_winner) {
       Filter::output(evt);
     }
+  } else {
+    if (evt->is<StreamEnd>()) {
+      Filter::output(evt);
+    }
   }
 }
 
