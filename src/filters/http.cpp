@@ -770,7 +770,7 @@ void Encoder::on_event(Event *evt) {
       } else {
         m_buffer.push(*data);
         m_content_length += data->size();
-        if (m_buffer.size() > m_buffer_size) {
+        if (m_buffer_size > 0 && m_buffer.size() > m_buffer_size) {
           m_chunked = true;
           Data body;
           m_buffer.flush(body);

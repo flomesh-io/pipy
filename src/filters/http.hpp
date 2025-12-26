@@ -200,7 +200,7 @@ private:
 class RequestEncoder : public Filter, public Encoder {
 public:
   struct Options : pipy::Options {
-    size_t buffer_size = DATA_CHUNK_SIZE;
+    size_t buffer_size = 0;
     Options() {}
     Options(pjs::Object *options);
   };
@@ -227,7 +227,7 @@ private:
 class ResponseEncoder : public Filter, public Encoder {
 public:
   struct Options : pipy::Options {
-    size_t buffer_size = DATA_CHUNK_SIZE;
+    size_t buffer_size = 0;
     pjs::Ref<pjs::Function> on_message_start_f;
     Options() {}
     Options(pjs::Object *options);
@@ -263,7 +263,7 @@ class Demux :
 {
 public:
   struct Options : public http2::Endpoint::Options {
-    size_t buffer_size = DATA_CHUNK_SIZE;
+    size_t buffer_size = 0;
     size_t max_header_size = DATA_CHUNK_SIZE;
     int max_messages = 0;
     Options() {}
@@ -340,7 +340,7 @@ public:
     public Muxer::Options,
     public http2::Endpoint::Options
   {
-    size_t buffer_size = DATA_CHUNK_SIZE;
+    size_t buffer_size = 0;
     size_t max_header_size = DATA_CHUNK_SIZE;
     int version = 1;
     double timeout = 0;
