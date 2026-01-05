@@ -41,6 +41,7 @@
 #include "api/crypto.hpp"
 #include "api/c-struct.hpp"
 #include "api/dns.hpp"
+#include "api/stun.hpp"
 #include "api/hessian.hpp"
 #include "api/http.hpp"
 #include "api/ip.hpp"
@@ -132,6 +133,9 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // DNS
   variable("DNS", class_of<DNS>());
+
+  // STUN
+  variable("STUN", class_of<STUN>());
 
   // Hessian
   variable("Hessian", class_of<Hessian>());
