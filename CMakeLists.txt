@@ -269,6 +269,7 @@ SET(PIPY_SRC
   src/api/ip.cpp
   src/api/json.cpp
   src/api/logging.cpp
+  src/api/nat.cpp
   src/api/os.cpp
   src/api/pipeline-api.cpp
   src/api/pipy.cpp
@@ -365,6 +366,7 @@ SET(PIPY_SRC
   src/main-options.cpp
   src/message.cpp
   src/module.cpp
+  src/nat-traversal.cpp
   src/net.cpp
   src/nmi.cpp
   src/options.cpp

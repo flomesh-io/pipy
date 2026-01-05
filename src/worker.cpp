@@ -51,6 +51,7 @@
 #include "api/ip.hpp"
 #include "api/json.hpp"
 #include "api/logging.hpp"
+#include "api/nat.hpp"
 #include "api/os.hpp"
 #include "api/pipy.hpp"
 #include "api/pipeline-api.hpp"
@@ -191,6 +192,9 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // http
   variable("http", class_of<http::Http>());
+
+  // nat
+  variable("nat", class_of<nat::NAT>());
 
   // crypto
   variable("crypto", class_of<crypto::Crypto>());
