@@ -277,6 +277,7 @@ SET(PIPY_SRC
   src/api/resp.cpp
   src/api/stats.cpp
   src/api/sqlite.cpp
+  src/api/stun.cpp
   src/api/swap.cpp
   src/api/thrift.cpp
   src/api/timeout.cpp
