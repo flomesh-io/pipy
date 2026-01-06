@@ -1,0 +1,3 @@
+stunServer: stun.l.google.com
+stunPort: 19302
+listenPort: 5000
