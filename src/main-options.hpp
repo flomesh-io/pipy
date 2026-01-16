@@ -63,6 +63,7 @@ public:
   int         log_topics = 0;
   bool        log_local_only = false;
   bool        admin_port_off = false;
+  bool        no_restart = false;
   std::string admin_port;
   std::string codebase_dir;
   std::string tls_cert;

@@ -574,6 +574,7 @@ int pipy_main(int argc, char *argv[]) {
       if (!opts.codebase_dir.empty()) args.push_back("--codebase-dir=" + opts.codebase_dir);
       if (!opts.tls_cert.empty()) args.push_back("--tls-cert=" + opts.tls_cert);
       if (!opts.tls_key.empty()) args.push_back("--tls-key=" + opts.tls_key);
+      if (opts.no_restart) args.push_back("--no-restart");
       args.push_back("--args");
       bool seen_positional = false;
       for (int i = 1; i < argc; i++) {
