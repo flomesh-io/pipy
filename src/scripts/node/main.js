@@ -7,6 +7,7 @@ var codebaseDir = '~/.pipy/tmp'
 var tlsSettings = null
 var argvHost = [...pipy.argv]
 var argvProc = []
+var noRestart = false
 
 try {
   function parseOptions(argv, f) {
@@ -63,6 +64,9 @@ try {
             tlsSettings.trusted = [new crypto.Certificate(os.read(val))]
           }
           break
+        case '--no-restart':
+          noRestart = true
+          break
         default:
           throw `Unknown option in repo mode: ${opt}`
         }
@@ -105,6 +109,7 @@ var codebase = Codebase(
   codebaseDir,
   argvProc,
   tlsSettings,
+  { noRestart }
 )
 
 pipy.exit(() => {

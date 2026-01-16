@@ -1,4 +1,4 @@
-export default function (url, rootDir, argv, tls) {
+export default function (url, rootDir, argv, tls, options) {
   var startTime = Date.now()
   var instanceUUID = findArg('--instance-uuid') || algo.uuid()
   var instanceName = findArg('--instance-name') || ''
@@ -184,14 +184,16 @@ export default function (url, rootDir, argv, tls) {
           console.error('GET', url.href, 'response error', status)
           return watch()
         }
-        var headers = res.head.headers
-        if (headers['etag'] !== codebaseVersion || headers['last-modified'] !== codebaseTime) {
-          console.info(
-            'Found new update of codebase with version change',
-            codebaseVersion, '=>', headers['etag'], 'and time change',
-            codebaseTime, '=>', headers['last-modified']
-          )
-          return start()
+        if (!options.noRestart) {
+          var headers = res.head.headers
+          if (headers['etag'] !== codebaseVersion || headers['last-modified'] !== codebaseTime) {
+            console.info(
+              'Found new update of codebase with version change',
+              codebaseVersion, '=>', headers['etag'], 'and time change',
+              codebaseTime, '=>', headers['last-modified']
+            )
+            return start()
+          }
         }
         return agent.request('GET', os.path.join(url.path, '_etags')).then(
           res => {
