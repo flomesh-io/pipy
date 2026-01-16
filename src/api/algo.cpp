@@ -489,9 +489,9 @@ void Quota::Counter::schedule_producing() {
             on_produce();
             break;
           }
+          release();
         }
       );
-      release();
     }
   );
 }
