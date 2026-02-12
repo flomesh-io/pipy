@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
   PIPY_DIR=$(dirname $(readlink -e $(basename $0)))
@@ -27,6 +28,10 @@ BUILD_CONTAINER=false
 BUILD_RPM=false
 BUILD_BINARY=true
 BUILD_ANDROID=false
+BUILD_DEB=false
+BUILD_PACMAN=false
+BUILD_APK=false
+BUILD_IPK=false
 BUILD_TYPE=Release
 PACKAGE_OUTPUTS=false
 
@@ -41,7 +46,7 @@ PIPY_GUI=${PIPY_GUI:-OFF}
 OS_ARCH=$(uname -m | sed 's#arm64#aarch64#g')
 ##### End Default environment variables #########
 
-SHORT_OPTS="crsgt:nhpda"
+SHORT_OPTS="crsgt:nhpdabmki"
 
 function usage() {
     echo "Usage: $0 [-h|-c|-r|-s|-g|-n|-t <version-revision>]" 1>&2
@@ -50,6 +55,10 @@ function usage() {
     echo "       -c                     Build a container image"
     echo "       -a                     Build a android binary"
     echo "       -r                     Build a CentOS/RHEL RPM package"
+    echo "       -b                     Build a Debian .deb package"
+    echo "       -m                     Build an Arch Linux pacman package"
+    echo "       -k                     Build an Alpine .apk package"
+    echo "       -i                     Build an OpenWrt .ipk package"
     echo "       -n                     Build a stand-alone executable (default: yes)"
     echo "       -d                     Build with debugging information (default: no)"
     echo "       -s                     Build with static linking (default: no)"
@@ -99,6 +108,22 @@ while true ; do
       ;;
     -a)
       BUILD_ANDROID=true
+      shift
+      ;;
+    -b)
+      BUILD_DEB=true
+      shift
+      ;;
+    -m)
+      BUILD_PACMAN=true
+      shift
+      ;;
+    -k)
+      BUILD_APK=true
+      shift
+      ;;
+    -i)
+      BUILD_IPK=true
       shift
       ;;
     -h)
@@ -253,6 +278,35 @@ if $BUILD_RPM; then
   rm -f $PIPY_DIR/rpm/pipy.tar.gz
 fi
 
+# Build packages with nFPM (deb, archlinux, apk, ipk)
+__NFPM_NEEDED=false
+$BUILD_DEB && __NFPM_NEEDED=true
+$BUILD_PACMAN && __NFPM_NEEDED=true
+$BUILD_APK && __NFPM_NEEDED=true
+$BUILD_IPK && __NFPM_NEEDED=true
+
+if $__NFPM_NEEDED; then
+  command -v nfpm >/dev/null 2>&1 || { echo "nfpm not found. Install: https://nfpm.goreleaser.com/install/"; exit 1; }
+
+  if [ ! -f "$PIPY_DIR/bin/pipy" ]; then
+    echo "bin/pipy not found. Build the binary first (remove -n flag)."
+    exit 1
+  fi
+
+  if [[ "$RELEASE_VERSION" != "nightly"* ]]; then
+    REVISION=1
+  fi
+
+  cd $PIPY_DIR
+  export VERSION REVISION OS_ARCH PKG_NAME
+  mkdir -p $PIPY_DIR/pkg
+
+  $BUILD_DEB    && nfpm package -f $PIPY_DIR/nfpm/nfpm.yaml -p deb       -t $PIPY_DIR/pkg/
+  $BUILD_PACMAN && nfpm package -f $PIPY_DIR/nfpm/nfpm.yaml -p archlinux -t $PIPY_DIR/pkg/
+  $BUILD_APK    && nfpm package -f $PIPY_DIR/nfpm/nfpm.yaml -p apk       -t $PIPY_DIR/pkg/
+  $BUILD_IPK    && nfpm package -f $PIPY_DIR/nfpm/nfpm.yaml -p ipk       -t $PIPY_DIR/pkg/
+fi
+
 if $BUILD_CONTAINER; then
   cd $PIPY_DIR
   if [[ "$RELEASE_VERSION" != "nightly"* ]]; then
@@ -294,7 +348,7 @@ if $BUILD_ANDROID; then
 
   export ANDROID_NDK_ROOT=$NDK
 
-  cd $PIPY_DIR/deps/openssl-3.2.0
+  cd $PIPY_DIR/deps/openssl-3.6.1
 
   mkdir -p android && cd android
 
@@ -316,12 +370,12 @@ if $BUILD_ANDROID; then
   cmake -DCMAKE_TOOLCHAIN_FILE=${NDK}/build/cmake/android.toolchain.cmake \
     -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-34 -DCMAKE_ANDROID_STL_TYPE=c++_static \
     -DANDROID_ALLOW_UNDEFINED_SYMBOLS=TRUE \
-    -DPIPY_OPENSSL=${PIPY_DIR}/deps/openssl-3.2.0/android/arm64-v8a  \
+    -DPIPY_OPENSSL=${PIPY_DIR}/deps/openssl-3.6.1/android/arm64-v8a  \
     -DPIPY_USE_SYSTEM_ZLIB=ON \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_CXX_FLAGS_RELEASE=-g0 \
-    -DPIPY_LTO=OFF -DPIPY_GUI=OFF -DPIPY_CODEBASES=OFF -PIPY_SAMPLES=OFF \
+    -DPIPY_LTO=OFF -DPIPY_GUI=OFF -DPIPY_CODEBASES=OFF -DPIPY_SAMPLES=OFF \
     -DZLIB_LIBRARY=/usr/lib/x86_64-linux-gnu/libz.a -DZLIB_INCLUDE_DIR=/usr/lib/x86_64-linux-gnu -GNinja ..
 
   ninja || exit $?

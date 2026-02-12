@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.14)
 project(baseline)
 
 if(NOT WIN32)
@@ -7,7 +7,7 @@ if(NOT WIN32)
 endif()
 
 include_directories(
-  "${CMAKE_SOURCE_DIR}/../../../deps/asio-1.28.0/include"
+  "${asio_SOURCE_DIR}/asio/include"
 )
 
 add_executable(baseline

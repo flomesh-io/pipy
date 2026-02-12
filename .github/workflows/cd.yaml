@@ -1,0 +1,684 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+env:
+  S3_PATH: repo/pipy
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Version
+  # ─────────────────────────────────────────────
+  set-release-version:
+    name: Set Version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set RELEASE_VERSION
+        id: version
+        run: |
+          CI_COMMIT_DATE=$(date +%Y%m%d%H%M)
+          git fetch --tags --force
+          RELEASE_VERSION=$(git name-rev --tags --name-only $(git rev-parse HEAD))
+          if [ "$RELEASE_VERSION" = 'undefined' ]; then
+            echo "release_version=nightly-${CI_COMMIT_DATE}" >> $GITHUB_OUTPUT
+          else
+            echo "release_version=${RELEASE_VERSION}" >> $GITHUB_OUTPUT
+          fi
+    outputs:
+      release_version: ${{ steps.version.outputs.release_version }}
+
+  # ─────────────────────────────────────────────
+  # Stage 1: Build
+  # ─────────────────────────────────────────────
+  build-linux:
+    name: Linux ${{ matrix.pkg_name }} ${{ matrix.arch }}
+    needs: set-release-version
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+            gui: false
+            pkg_name: pipy
+            build_flags: "-p"
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            gui: false
+            pkg_name: pipy
+            build_flags: "-p"
+          - runner: ubuntu-24.04
+            arch: x86_64
+            gui: true
+            pkg_name: pipy-gui
+            build_flags: "-gp"
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            gui: true
+            pkg_name: pipy-gui
+            build_flags: "-gp"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/DependencyVersions.cmake') }}
+          restore-keys: |
+            deps-${{ runner.os }}-${{ runner.arch }}-
+
+      - uses: actions/setup-node@v4
+        if: ${{ matrix.gui }}
+        with:
+          node-version: 20
+
+      - name: Build
+        id: build
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+          PKG_NAME: ${{ matrix.pkg_name }}
+        run: |
+          ./build.sh ${{ matrix.build_flags }} -t ${RELEASE_VERSION}
+          echo "tarball=$(ls ${PKG_NAME}-${RELEASE_VERSION}-*.tar.gz | head -n1)" >> $GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.pkg_name }}-${{ matrix.arch }}
+          path: ${{ steps.build.outputs.tarball }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.pkg_name }}-${{ matrix.arch }}
+          path: bin/pipy
+
+  build-linux-alpine:
+    name: Alpine ${{ matrix.pkg_name }} ${{ matrix.arch }}
+    needs: set-release-version
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+            gui: false
+            pkg_name: pipy
+            pipy_gui: "OFF"
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            gui: false
+            pkg_name: pipy
+            pipy_gui: "OFF"
+          - runner: ubuntu-latest
+            arch: x86_64
+            gui: true
+            pkg_name: pipy-gui
+            pipy_gui: "ON"
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            gui: true
+            pkg_name: pipy-gui
+            pipy_gui: "ON"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build in Alpine container
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+        run: |
+          docker build --target builder -t pipy-alpine-builder -f Dockerfile \
+            --build-arg PIPY_GUI=${{ matrix.pipy_gui }} \
+            --build-arg COMMIT_TAG=${RELEASE_VERSION} \
+            --build-arg COMMIT_ID=$(git log -1 --format=%H) \
+            --build-arg COMMIT_DATE="$(git log -1 --format=%cD)" .
+          mkdir -p bin
+          docker create --name extract pipy-alpine-builder true
+          docker cp extract:/pipy/bin/pipy ./bin/pipy
+          docker rm extract
+
+      - name: Package tar.gz
+        id: build
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+          PKG_NAME: ${{ matrix.pkg_name }}
+        run: |
+          mkdir -p buildroot/usr/local/bin
+          cp bin/pipy buildroot/usr/local/bin/pipy
+          TARBALL="${PKG_NAME}-${RELEASE_VERSION}-alpine-${{ matrix.arch }}.tar.gz"
+          tar zcf "${TARBALL}" -C buildroot usr/local/bin/pipy
+          rm -rf buildroot
+          echo "tarball=${TARBALL}" >> $GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-alpine-${{ matrix.pkg_name }}-${{ matrix.arch }}
+          path: ${{ steps.build.outputs.tarball }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-alpine-${{ matrix.pkg_name }}-${{ matrix.arch }}
+          path: bin/pipy
+
+  build-macos:
+    name: macOS ${{ matrix.pkg_name }} ${{ matrix.arch }}
+    needs: set-release-version
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            arch: x86_64
+            gui: false
+            pkg_name: pipy
+            build_flags: "-p"
+          - runner: macos-latest
+            arch: aarch64
+            gui: false
+            pkg_name: pipy
+            build_flags: "-p"
+          - runner: macos-15-intel
+            arch: x86_64
+            gui: true
+            pkg_name: pipy-gui
+            build_flags: "-gp"
+          - runner: macos-latest
+            arch: aarch64
+            gui: true
+            pkg_name: pipy-gui
+            build_flags: "-gp"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/DependencyVersions.cmake') }}
+          restore-keys: |
+            deps-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Install LLVM
+        run: brew install llvm@15
+
+      - uses: actions/setup-node@v4
+        if: ${{ matrix.gui }}
+        with:
+          node-version: 20
+
+      - name: Build
+        id: build
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+          PKG_NAME: ${{ matrix.pkg_name }}
+        run: |
+          export CC=$(brew --prefix llvm@15)/bin/clang
+          export CXX=$(brew --prefix llvm@15)/bin/clang++
+          ./build.sh ${{ matrix.build_flags }} -t ${RELEASE_VERSION}
+          echo "tarball=$(ls ${PKG_NAME}-${RELEASE_VERSION}-*.tar.gz | head -n1)" >> $GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.pkg_name }}-${{ matrix.arch }}
+          path: ${{ steps.build.outputs.tarball }}
+
+  build-android:
+    name: Android
+    needs: set-release-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with: { ndk-version: r26c }
+      - uses: seanmiddleditch/gha-setup-ninja@v4
+
+      - name: Build
+        id: build
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+          NDK: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          ./build.sh -nap -t ${RELEASE_VERSION}
+          echo "tarball=$(ls pipy-${RELEASE_VERSION}-android-*.tar.gz | head -n1)" >> $GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-pipy-arm64_v8a
+          path: ${{ steps.build.outputs.tarball }}
+
+  build-rpm-centos7:
+    name: RPM CentOS 7
+    needs: set-release-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        id: build
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+        run: |
+          ./build.sh -nr -t ${RELEASE_VERSION}
+          echo "rpm_name=$(cd rpm; ls *.rpm | head -n1)" >> $GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: centos7-rpm-pipy-x86_64
+          path: rpm/${{ steps.build.outputs.rpm_name }}
+
+  # ─────────────────────────────────────────────
+  # Stage 2: nFPM Packaging
+  # ─────────────────────────────────────────────
+  package-nfpm:
+    name: nFPM ${{ matrix.upload_artifact }}
+    needs: [set-release-version, build-linux, build-linux-alpine]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            pkg_name: pipy
+            formats: "deb rpm archlinux ipk"
+            binary_artifact: binary-pipy-x86_64
+            upload_artifact: nfpm-pipy-x86_64
+            conflicts: pipy-gui
+          - arch: aarch64
+            pkg_name: pipy
+            formats: "deb rpm archlinux ipk"
+            binary_artifact: binary-pipy-aarch64
+            upload_artifact: nfpm-pipy-aarch64
+            conflicts: pipy-gui
+          - arch: x86_64
+            pkg_name: pipy
+            formats: "apk"
+            binary_artifact: binary-alpine-pipy-x86_64
+            upload_artifact: nfpm-alpine-pipy-x86_64
+            conflicts: ""
+          - arch: aarch64
+            pkg_name: pipy
+            formats: "apk"
+            binary_artifact: binary-alpine-pipy-aarch64
+            upload_artifact: nfpm-alpine-pipy-aarch64
+            conflicts: ""
+          - arch: x86_64
+            pkg_name: pipy-gui
+            formats: "apk"
+            binary_artifact: binary-alpine-pipy-gui-x86_64
+            upload_artifact: nfpm-alpine-pipy-gui-x86_64
+            conflicts: ""
+          - arch: aarch64
+            pkg_name: pipy-gui
+            formats: "apk"
+            binary_artifact: binary-alpine-pipy-gui-aarch64
+            upload_artifact: nfpm-alpine-pipy-gui-aarch64
+            conflicts: ""
+          - arch: x86_64
+            pkg_name: pipy-gui
+            formats: "deb rpm archlinux"
+            binary_artifact: binary-pipy-gui-x86_64
+            upload_artifact: nfpm-pipy-gui-x86_64
+            conflicts: pipy
+          - arch: aarch64
+            pkg_name: pipy-gui
+            formats: "deb rpm archlinux"
+            binary_artifact: binary-pipy-gui-aarch64
+            upload_artifact: nfpm-pipy-gui-aarch64
+            conflicts: pipy
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.binary_artifact }}
+          path: bin
+
+      - run: chmod +x bin/pipy
+
+      - name: Install nFPM
+        run: |
+          echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | sudo tee /etc/apt/sources.list.d/goreleaser.list
+          sudo apt-get update
+          sudo apt-get install -y nfpm
+
+      - name: Build packages
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+          PKG_NAME: ${{ matrix.pkg_name }}
+          PIPY_CONFLICTS: ${{ matrix.conflicts }}
+          OS_ARCH: ${{ matrix.arch }}
+        run: |
+          export VERSION=$(echo "${RELEASE_VERSION}" | cut -d- -f1)
+          export REVISION=1
+          export PKG_NAME PIPY_CONFLICTS OS_ARCH
+          mkdir -p pkg
+          for fmt in ${{ matrix.formats }}; do
+            nfpm package -f nfpm/nfpm.yaml -p "$fmt" -t pkg/
+          done
+          ls -la pkg/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.upload_artifact }}
+          path: pkg/*
+
+  # ─────────────────────────────────────────────
+  # Stage 3: Docker
+  # ─────────────────────────────────────────────
+  build-docker:
+    name: Docker ${{ matrix.arch }}
+    needs: [set-release-version, package-nfpm]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nfpm-alpine-pipy-${{ matrix.arch }}
+          path: .
+
+      - name: Build Docker image
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+        run: |
+          docker build -f Dockerfile.alpine -t pipy:${RELEASE_VERSION} .
+
+      - name: Save Docker image
+        id: save
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+        run: |
+          TARBALL="pipy-docker-${RELEASE_VERSION}-alpine-${{ matrix.arch }}.tar.gz"
+          docker save pipy:${RELEASE_VERSION} | gzip > "${TARBALL}"
+          echo "tarball=${TARBALL}" >> $GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docker-pipy-${{ matrix.arch }}
+          path: ${{ steps.save.outputs.tarball }}
+
+  # ─────────────────────────────────────────────
+  # Push to S3
+  # ─────────────────────────────────────────────
+  push-to-s3:
+    name: Push to S3
+    needs:
+      - set-release-version
+      - build-linux
+      - build-linux-alpine
+      - build-macos
+      - build-android
+      - build-rpm-centos7
+      - package-nfpm
+      - build-docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Remove intermediate artifacts
+        run: rm -rf artifacts/binary-*
+
+      - name: Install s3cmd
+        run: sudo apt-get install -y s3cmd
+
+      - name: Configure S3
+        run: |
+          printf "[default]\naccess_key = %s\nsecret_key = %s\nhost_base = %s\nhost_bucket = %%(bucket)s.%s\n" \
+            "${{ secrets.S3_ACCESS_KEY }}" "${{ secrets.S3_SECRET_KEY }}" \
+            "${{ secrets.S3_GLOBAL_ACC_HOST_BASE }}" "${{ secrets.S3_GLOBAL_ACC_HOST_BASE }}" > ~/.s3cfg
+
+      - name: Batch Upload
+        if: ${{ env.S3_ACCESS_KEY != '' }}
+        env:
+          S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+          S3_ROOT: ${{ env.S3_PATH }}
+          BUCKET: ${{ secrets.S3_BUCKET }}
+        run: |
+          BASE_PATH="${S3_ROOT}"
+          if [[ "$RELEASE_VERSION" == "nightly"* ]]; then
+            BASE_PATH="${S3_ROOT}-nightly"
+          fi
+
+          echo "Target S3 Base Path: s3://${BUCKET}/${BASE_PATH}"
+
+          find artifacts -type f | while read FILE; do
+            FILENAME=$(basename "$FILE")
+
+            # Skip GUI files
+            if [[ "$FILENAME" == *"gui"* ]]; then
+              echo "Skipping GUI file: $FILENAME"
+              continue
+            fi
+
+            ARCH="x86_64"
+            TYPE="binary"
+            TARGET_NAME="$FILENAME"
+
+            # Architecture detection
+            if [[ "$FILENAME" == *"aarch64"* ]]; then
+              ARCH="aarch64"
+            elif [[ "$FILENAME" == *"arm64"* ]] || [[ "$FILENAME" == *"android"* ]]; then
+              ARCH="arm64-v8a"
+            fi
+
+            # Type detection
+            if [[ "$FILENAME" == *".rpm" ]]; then
+              TYPE="rpm"
+              TARGET_NAME=$(echo "$FILENAME" | sed 's/\.el7\./-el7-/g')
+            elif [[ "$FILENAME" == *".deb" ]]; then
+              TYPE="deb"
+              [[ "$FILENAME" == *"amd64"* ]] && ARCH="x86_64"
+              [[ "$FILENAME" == *"arm64"* ]] && ARCH="aarch64"
+            elif [[ "$FILENAME" == *".pkg.tar.zst" ]]; then
+              TYPE="pacman"
+            elif [[ "$FILENAME" == *".apk" ]]; then
+              TYPE="apk"
+            elif [[ "$FILENAME" == *".ipk" ]]; then
+              TYPE="ipk"
+            elif [[ "$FILENAME" == *"pipy-docker-"* ]]; then
+              TYPE="image"
+            elif [[ "$FILENAME" == *"alpine"* ]]; then
+              TYPE="binary"
+            elif [[ "$FILENAME" == *"android"* ]]; then
+              TYPE="binary"
+            elif [[ "$FILENAME" == *"macos"* ]]; then
+              TYPE="binary"
+            elif [[ "$FILENAME" == *"generic_linux"* ]]; then
+              TYPE="binary"
+            else
+              echo "Unknown file type: $FILENAME, skipping..."
+              continue
+            fi
+
+            S3_URI="s3://${BUCKET}/${BASE_PATH}/${ARCH}/${TYPE}/${TARGET_NAME}"
+            echo "Uploading $FILENAME -> $S3_URI"
+            s3cmd put "$FILE" "$S3_URI"
+          done
+
+  # ─────────────────────────────────────────────
+  # Create Release
+  # ─────────────────────────────────────────────
+  create-release:
+    name: Create Release
+    if: ${{ !contains(needs.set-release-version.outputs.release_version, 'nightly') }}
+    needs:
+      - set-release-version
+      - build-linux
+      - build-linux-alpine
+      - build-macos
+      - build-android
+      - build-rpm-centos7
+      - package-nfpm
+      - build-docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Remove intermediate artifacts
+        run: rm -rf artifacts/binary-*
+
+      - name: Generate Release Body
+        env:
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.set-release-version.outputs.release_version }}
+        run: |
+          BASE="https://github.com/${REPO}/releases/download/${TAG}"
+
+          # find file in artifact dir
+          ff() { find "artifacts/$1" -name "$2" -type f 2>/dev/null | head -n1 | xargs -r basename; }
+          # make download link or dash
+          link() { local F="$1"; [ -n "$F" ] && echo "[\`${F}\`](${BASE}/${F})" || echo "-"; }
+
+          # Linux glibc
+          LINUX_X86=$(ff linux-pipy-x86_64 "*.tar.gz")
+          LINUX_ARM=$(ff linux-pipy-aarch64 "*.tar.gz")
+          LINUX_X86_GUI=$(ff linux-pipy-gui-x86_64 "*.tar.gz")
+          LINUX_ARM_GUI=$(ff linux-pipy-gui-aarch64 "*.tar.gz")
+
+          # Linux musl (Alpine)
+          ALPINE_X86=$(ff linux-alpine-pipy-x86_64 "*.tar.gz")
+          ALPINE_ARM=$(ff linux-alpine-pipy-aarch64 "*.tar.gz")
+          ALPINE_X86_GUI=$(ff linux-alpine-pipy-gui-x86_64 "*.tar.gz")
+          ALPINE_ARM_GUI=$(ff linux-alpine-pipy-gui-aarch64 "*.tar.gz")
+
+          # macOS
+          MACOS_X86=$(ff macos-pipy-x86_64 "*.tar.gz")
+          MACOS_ARM=$(ff macos-pipy-aarch64 "*.tar.gz")
+          MACOS_X86_GUI=$(ff macos-pipy-gui-x86_64 "*.tar.gz")
+          MACOS_ARM_GUI=$(ff macos-pipy-gui-aarch64 "*.tar.gz")
+
+          # Android
+          ANDROID=$(ff android-pipy-arm64_v8a "*.tar.gz")
+
+          # nFPM RPM
+          RPM_X86=$(ff nfpm-pipy-x86_64 "*.rpm")
+          RPM_ARM=$(ff nfpm-pipy-aarch64 "*.rpm")
+          RPM_X86_GUI=$(ff nfpm-pipy-gui-x86_64 "*.rpm")
+          RPM_ARM_GUI=$(ff nfpm-pipy-gui-aarch64 "*.rpm")
+
+          # CentOS 7 RPM
+          CENTOS7_RPM=$(ff centos7-rpm-pipy-x86_64 "*.rpm")
+
+          # DEB
+          DEB_X86=$(ff nfpm-pipy-x86_64 "*.deb")
+          DEB_ARM=$(ff nfpm-pipy-aarch64 "*.deb")
+          DEB_X86_GUI=$(ff nfpm-pipy-gui-x86_64 "*.deb")
+          DEB_ARM_GUI=$(ff nfpm-pipy-gui-aarch64 "*.deb")
+
+          # Pacman
+          PAC_X86=$(ff nfpm-pipy-x86_64 "*.pkg.tar.zst")
+          PAC_ARM=$(ff nfpm-pipy-aarch64 "*.pkg.tar.zst")
+          PAC_X86_GUI=$(ff nfpm-pipy-gui-x86_64 "*.pkg.tar.zst")
+          PAC_ARM_GUI=$(ff nfpm-pipy-gui-aarch64 "*.pkg.tar.zst")
+
+          # APK
+          APK_X86=$(ff nfpm-alpine-pipy-x86_64 "*.apk")
+          APK_ARM=$(ff nfpm-alpine-pipy-aarch64 "*.apk")
+          APK_X86_GUI=$(ff nfpm-alpine-pipy-gui-x86_64 "*.apk")
+          APK_ARM_GUI=$(ff nfpm-alpine-pipy-gui-aarch64 "*.apk")
+
+          # IPK
+          IPK_X86=$(ff nfpm-pipy-x86_64 "*.ipk")
+          IPK_ARM=$(ff nfpm-pipy-aarch64 "*.ipk")
+
+          # Docker
+          DOCKER_X86=$(ff docker-pipy-x86_64 "*.tar.gz")
+          DOCKER_ARM=$(ff docker-pipy-aarch64 "*.tar.gz")
+
+          cat > release_body.md << BODY
+          **Download based on your OS:**
+
+          | OS | Arch | Download | Download (with GUI) | Require |
+          |---|---|---|---|---|
+          | :penguin: Linux Native Binary | x86_64 | $(link "$LINUX_X86") | $(link "$LINUX_X86_GUI") | glibc >= 2.39 (Ubuntu 24.04+) |
+          | :penguin: Linux Native Binary | aarch64 | $(link "$LINUX_ARM") | $(link "$LINUX_ARM_GUI") | glibc >= 2.39 (Ubuntu 24.04+) |
+          | :penguin: Linux Native Binary (musl) | x86_64 | $(link "$ALPINE_X86") | $(link "$ALPINE_X86_GUI") | musl libc |
+          | :penguin: Linux Native Binary (musl) | aarch64 | $(link "$ALPINE_ARM") | $(link "$ALPINE_ARM_GUI") | musl libc |
+          | :apple: macOS | x86_64 | $(link "$MACOS_X86") | $(link "$MACOS_X86_GUI") | |
+          | :apple: macOS | aarch64 | $(link "$MACOS_ARM") | $(link "$MACOS_ARM_GUI") | |
+          | :robot: Android | arm64-v8a | $(link "$ANDROID") | - | |
+          | :penguin: RHEL/CentOS (RPM) | x86_64 | $(link "$RPM_X86") | $(link "$RPM_X86_GUI") | glibc >= 2.39; RHEL 9+ / Fedora 38+ |
+          | :penguin: RHEL/CentOS (RPM) | aarch64 | $(link "$RPM_ARM") | $(link "$RPM_ARM_GUI") | glibc >= 2.39; RHEL 9+ / Fedora 38+ |
+          | :penguin: CentOS 7 Dedicated (RPM) | x86_64 | $(link "$CENTOS7_RPM") | - | glibc >= 2.17; RHEL 7/8/9 |
+          | :penguin: Debian/Ubuntu (DEB) | x86_64 | $(link "$DEB_X86") | $(link "$DEB_X86_GUI") | glibc >= 2.39; Debian 13+ / Ubuntu 24.04+ |
+          | :penguin: Debian/Ubuntu (DEB) | aarch64 | $(link "$DEB_ARM") | $(link "$DEB_ARM_GUI") | glibc >= 2.39; Debian 13+ / Ubuntu 24.04+ |
+          | :penguin: Arch Linux (Pacman) | x86_64 | $(link "$PAC_X86") | $(link "$PAC_X86_GUI") | glibc >= 2.39 |
+          | :penguin: Arch Linux (Pacman) | aarch64 | $(link "$PAC_ARM") | $(link "$PAC_ARM_GUI") | glibc >= 2.39 |
+          | :penguin: Alpine Linux (APK) | x86_64 | $(link "$APK_X86") | $(link "$APK_X86_GUI") | musl libc |
+          | :penguin: Alpine Linux (APK) | aarch64 | $(link "$APK_ARM") | $(link "$APK_ARM_GUI") | musl libc  |
+          | :penguin: OpenWrt (IPK) | x86_64 | $(link "$IPK_X86") | - | glibc >= 2.39 |
+          | :penguin: OpenWrt (IPK) | aarch64 | $(link "$IPK_ARM") | - | glibc >= 2.39 |
+          | :whale: Docker (Alpine) | x86_64 | $(link "$DOCKER_X86") | - |  |
+          | :whale: Docker (Alpine) | aarch64 | $(link "$DOCKER_ARM") | - |  |
+          BODY
+
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' release_body.md
+          echo "Release Note Content:"
+          cat release_body.md
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          body_path: release_body.md
+          files: artifacts/**/*
+
+  # ─────────────────────────────────────────────
+  # Save Log
+  # ─────────────────────────────────────────────
+  save-log:
+    name: Save Log
+    if: ${{ always() && !contains(join(needs.*.result, ','), 'failure') }}
+    needs:
+      - set-release-version
+      - build-linux
+      - build-linux-alpine
+      - build-macos
+      - build-android
+      - build-rpm-centos7
+      - package-nfpm
+      - build-docker
+      - push-to-s3
+      - create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Save log
+        if: ${{ env.REPO_DISPATCH_PAT != '' }}
+        env:
+          REPO_DISPATCH_PAT: ${{ secrets.REPO_DISPATCH_PAT }}
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_DISPATCH_PAT }}
+          repository: ${{ secrets.REPO_FOR_LOG }}
+          event-type: save-log
+          client-payload: '{"github": ${{ toJSON(github) }}, "release_version": "${{ needs.set-release-version.outputs.release_version }}"}'

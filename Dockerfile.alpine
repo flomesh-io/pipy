@@ -1,0 +1,30 @@
+FROM alpine:3.19
+
+# Install APK (skip install scripts — Docker manages its own user)
+COPY pipy_*.apk /tmp/
+RUN apk add --no-cache --allow-untrusted --no-scripts /tmp/pipy_*.apk \
+    && rm -f /tmp/pipy_*.apk
+
+# Runtime dependencies (zlib/libstdc++ pulled in by APK deps automatically)
+RUN apk add --no-cache \
+    ca-certificates libcap su-exec tar curl \
+    busybox-extras iptables tzdata socat logrotate
+
+# Tutorial and tools (not part of APK)
+COPY tutorial /etc/pipy/tutorial
+COPY tools/* /usr/local/bin/
+
+# Docker-specific UID (override APK scripts user creation)
+RUN adduser -Su 1340 pipy 2>/dev/null || true \
+    && chmod -R g=u /usr/local/bin/pipy /etc/pipy \
+    && chown -R pipy:0 /usr/local/bin/pipy /etc/pipy
+
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh /usr/local/bin/*
+
+USER pipy
+EXPOSE 6000
+STOPSIGNAL SIGQUIT
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["pipy", "docker-start"]

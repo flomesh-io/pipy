@@ -24,6 +24,7 @@ BuildRequires: 	llvm-toolset-7.0-clang
 %endif
 BuildRequires: 	cmake3
 BuildRequires: 	gcc
+BuildRequires: 	git
 BuildRequires: 	make
 %if %{with gui}
 %if 0%{?rhel} >= 8 || 0%{?fedora}

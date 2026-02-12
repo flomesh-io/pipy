@@ -29,7 +29,9 @@ COPY . /pipy
 
 RUN apk add --no-cache --virtual .build-deps openssh-client cmake clang \
     alpine-sdk linux-headers autoconf automake libtool tiff jpeg zlib \
-    zlib-dev pkgconf nasm file musl-dev
+    zlib-dev pkgconf nasm file musl-dev \
+    && git config --global user.email "build@flomesh.io" \
+    && git config --global user.name "Build"
 
 RUN if [ "$PIPY_GUI" == "ON" ] ; then apk add --no-cache nodejs npm && cd pipy && npm install && npm run build; fi
 

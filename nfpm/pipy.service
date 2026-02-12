@@ -1,0 +1,20 @@
+[Unit]
+Description=Pipy - programmable network proxy
+Documentation=https://github.com/flomesh-io/pipy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pipy
+Group=pipy
+WorkingDirectory=/etc/pipy
+EnvironmentFile=-/etc/pipy/pipy.conf
+ExecStart=/usr/local/bin/pipy $PIPY_OPTIONS
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

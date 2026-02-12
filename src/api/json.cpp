@@ -25,8 +25,10 @@
 
 #include "json.hpp"
 #include "utils.hpp"
-#include "yajl/yajl_parse.h"
 #include "api/c-string.hpp"
+
+#include "rapidjson/reader.h"
+#include "rapidjson/error/en.h"
 
 #include <stack>
 
@@ -139,6 +141,104 @@ template<> void ClassDef<JSON>::init() {
 
 namespace pipy {
 
+using namespace rapidjson;
+
+// 1. Define adapter: Forward RapidJSON events to JSON::Visitor
+struct RapidJsonHandler : public BaseReaderHandler<UTF8<>, RapidJsonHandler> {
+  JSON::Visitor *m_visitor;
+
+  RapidJsonHandler(JSON::Visitor *v) : m_visitor(v) {}
+
+  bool Null() { m_visitor->null(); return true; }
+  bool Bool(bool b) { m_visitor->boolean(b); return true; }
+  bool Int(int i) { m_visitor->integer(i); return true; }
+  bool Uint(unsigned u) { m_visitor->integer(u); return true; }
+  bool Int64(int64_t i) { m_visitor->integer(i); return true; }
+  bool Uint64(uint64_t u) { m_visitor->number((double)u); return true; }
+  bool Double(double d) { m_visitor->number(d); return true; }
+  
+  bool String(const char* str, SizeType length, bool copy) {
+    m_visitor->string(str, length);
+    return true;
+  }
+  
+  bool StartObject() { m_visitor->map_start(); return true; }
+  bool Key(const char* str, SizeType length, bool copy) {
+    m_visitor->map_key(str, length);
+    return true;
+  }
+  bool EndObject(SizeType memberCount) { m_visitor->map_end(); return true; }
+  
+  bool StartArray() { m_visitor->array_start(); return true; }
+  bool EndArray(SizeType elementCount) { m_visitor->array_end(); return true; }
+};
+// 2. Custom input stream for traversing pipy::Data chunks
+class PipyDataStream {
+public:
+  typedef char Ch;
+
+  PipyDataStream(const Data &data) : m_chunks(data.chunks()), m_iter(m_chunks.begin()) {
+    if (m_iter != m_chunks.end()) {
+      auto chunk = *m_iter;
+      m_ptr = std::get<0>(chunk);
+      m_end = m_ptr + std::get<1>(chunk);
+      // Handle empty chunk cases
+      while (m_ptr == m_end) {
+        if (++m_iter == m_chunks.end()) break;
+        chunk = *m_iter;
+        m_ptr = std::get<0>(chunk);
+        m_end = m_ptr + std::get<1>(chunk);
+      }
+    } else {
+      m_ptr = m_end = nullptr;
+    }
+  }
+
+  // Interface required by RapidJSON Stream concept
+  Ch Peek() const {
+    if (m_ptr == m_end) return '\0';
+    return *m_ptr;
+  }
+
+  Ch Take() {
+    if (m_ptr == m_end) return '\0';
+    Ch c = *m_ptr++;
+    if (m_ptr == m_end) next_chunk();
+    return c;
+  }
+
+  size_t Tell() const { return m_count; }
+
+  // Output methods like Put are not needed here
+  Ch* PutBegin() { return 0; }
+  void Put(Ch) {}
+  void Flush() {}
+  size_t PutEnd(Ch*) { return 0; }
+
+private:
+  void next_chunk() {
+    while (true) {
+      if (++m_iter == m_chunks.end()) {
+        m_ptr = m_end; // Mark end
+        return;
+      }
+      auto chunk = *m_iter;
+      auto len = std::get<1>(chunk);
+      if (len > 0) {
+        m_ptr = std::get<0>(chunk);
+        m_end = m_ptr + len;
+        return;
+      }
+    }
+  }
+
+  Data::Chunks m_chunks;
+  Data::Chunks::Iterator m_iter;
+  const char* m_ptr;
+  const char* m_end;
+  size_t m_count = 0;
+};
+
 static Data::Producer s_dp("JSON");
 
 //
@@ -147,78 +247,41 @@ static Data::Producer s_dp("JSON");
 
 class JSONVisitor {
 public:
-  JSONVisitor(JSON::Visitor *visitor) : m_parser(yajl_alloc(&s_callbacks, nullptr, visitor)) {}
-  ~JSONVisitor() { yajl_free(m_parser); }
+  JSONVisitor(JSON::Visitor *visitor) : m_handler(visitor) {}
+  ~JSONVisitor() {  }
 
   bool visit(const std::string &str, std::string &err) {
-    if (yajl_status_ok == yajl_parse(m_parser, (const unsigned char*)str.c_str(), str.length()) &&
-        yajl_status_ok == yajl_complete_parse(m_parser)
-    ) return true;
-    get_error(0, err);
-    return false;
+    StringStream ss(str.c_str());
+    return parse(ss, err);
   }
 
   bool visit(const Data &data, std::string &err) {
-    size_t pos = 0;
-    for (const auto c : data.chunks()) {
-      auto ptr = std::get<0>(c);
-      auto len = std::get<1>(c);
-      auto ret = yajl_parse(m_parser, (const unsigned char*)ptr, len);
-      if (ret != yajl_status_ok) {
-        get_error(pos, err);
-        return false;
-      }
-      pos += len;
-    }
-    if (yajl_status_ok != yajl_complete_parse(m_parser)) {
-      get_error(pos, err);
+    PipyDataStream ds(data);
+    return parse(ds, err);
+  }
+
+private:
+  RapidJsonHandler m_handler;
+  Reader m_reader;
+
+  template <typename InputStream>
+  bool parse(InputStream &is, std::string &err) {
+    // kParseStopWhenDoneFlag ensures parsing stops after completing a JSON object, and reports an error if there is trailing garbage data
+    // or use kParseDefaultFlags
+    ParseResult result = m_reader.Parse<kParseStopWhenDoneFlag>(is, m_handler);
+    
+    if (!result) {
+      char buf[100];
+      std::snprintf(buf, sizeof(buf), 
+        "In JSON at position %u: %s", 
+        (unsigned)result.Offset(), 
+        GetParseError_En(result.Code())
+      );
+      err = buf;
       return false;
     }
     return true;
   }
-
-private:
-  yajl_handle m_parser;
-
-  void get_error(size_t base_position, std::string &err) {
-    auto err_str = yajl_get_error(m_parser, false, nullptr, 0);
-    char str_buf[1000];
-    std::snprintf(
-      str_buf, sizeof(str_buf),
-      "In JSON at position %d: %s",
-      int(base_position + yajl_get_bytes_consumed(m_parser)),
-      err_str
-    );
-    err.assign(str_buf);
-    yajl_free_error(m_parser, err_str);
-  }
-
-  static yajl_callbacks s_callbacks;
-
-  static int yajl_null(void *ctx) { static_cast<JSON::Visitor*>(ctx)->null(); return 1; }
-  static int yajl_boolean(void *ctx, int val) { static_cast<JSON::Visitor*>(ctx)->boolean(val); return 1; }
-  static int yajl_integer(void *ctx, long long val) { static_cast<JSON::Visitor*>(ctx)->integer(val); return 1; }
-  static int yajl_double(void *ctx, double val) { static_cast<JSON::Visitor*>(ctx)->number(val); return 1; }
-  static int yajl_string(void *ctx, const unsigned char *val, size_t len) { static_cast<JSON::Visitor*>(ctx)->string((const char *)val, len); return 1; }
-  static int yajl_start_map(void *ctx) { static_cast<JSON::Visitor*>(ctx)->map_start(); return 1; }
-  static int yajl_map_key(void *ctx, const unsigned char *key, size_t len) { static_cast<JSON::Visitor*>(ctx)->map_key((const char *)key, len); return 1; }
-  static int yajl_end_map(void *ctx) { static_cast<JSON::Visitor*>(ctx)->map_end(); return 1; }
-  static int yajl_start_array(void *ctx) { static_cast<JSON::Visitor*>(ctx)->array_start(); return 1; }
-  static int yajl_end_array(void *ctx) { static_cast<JSON::Visitor*>(ctx)->array_end(); return 1; }
-};
-
-yajl_callbacks JSONVisitor::s_callbacks = {
-  &JSONVisitor::yajl_null,
-  &JSONVisitor::yajl_boolean,
-  &JSONVisitor::yajl_integer,
-  &JSONVisitor::yajl_double,
-  nullptr,
-  &JSONVisitor::yajl_string,
-  &JSONVisitor::yajl_start_map,
-  &JSONVisitor::yajl_map_key,
-  &JSONVisitor::yajl_end_map,
-  &JSONVisitor::yajl_start_array,
-  &JSONVisitor::yajl_end_array,
 };
 
 //
