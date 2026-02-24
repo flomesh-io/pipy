@@ -888,7 +888,7 @@ template<> void ClassDef<PipelineDesigner>::init() {
   filter("detectProtocol", [](Context &ctx, PipelineDesigner *obj) {
     Function *handler;
     Object *options = nullptr;
-    if (!ctx.arguments(1, &handler)) return;
+    if (!ctx.arguments(1, &handler, &options)) return;
     obj->detect_protocol(handler, options);
   });
 
