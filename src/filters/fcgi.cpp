@@ -205,7 +205,7 @@ void Endpoint::request_close(Request *request) {
 void Endpoint::process_event(Event *evt) {
   if (auto data = evt->as<Data>()) {
     Deframer::deframe(*data);
-  } else if (auto eos = evt->as<StreamEnd>()) {
+  } else if (evt->as<StreamEnd>()) {
   }
 }
 

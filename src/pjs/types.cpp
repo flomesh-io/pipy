@@ -2244,7 +2244,7 @@ void Promise::dequeue(bool run) {
         delete then;
       }
     } else if (m_state == REJECTED) {
-      if (auto period = Period::current()) {
+      if (Period::current()) {
         if (Period::s_uncaught_exception_handler) {
           Period::s_uncaught_exception_handler(m_result);
         }
