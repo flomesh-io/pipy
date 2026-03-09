@@ -160,7 +160,8 @@ void TLSContext::set_protocol_versions(ProtocolVersion min, ProtocolVersion max)
 }
 
 void TLSContext::set_ciphers(const std::string &ciphers) {
-  SSL_CTX_set_ciphersuites(m_ctx, ciphers.c_str());
+  SSL_CTX_set_ciphersuites(m_ctx, ciphers.c_str()); // for TLS1.3
+  SSL_CTX_set_cipher_list(m_ctx, ciphers.c_str()); // for TLS1.2 and below
 }
 
 void TLSContext::set_dhparam(const std::string &data) {
