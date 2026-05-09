@@ -1,4 +1,4 @@
-FROM alpine:3.16.1 as builder
+FROM alpine:3.22.2 as builder
 LABEL maintainer="Kevein Liu<khas@flomesh.io>"
 
 ENV  pkg_prefix              /usr/local
@@ -46,7 +46,7 @@ RUN rm -fr pipy/build \
     && apk del .build-deps
 
 
-FROM alpine:3.16.1 as prod
+FROM alpine:3.22.2 as prod
 COPY --from=builder /pipy/bin/pipy /usr/local/bin/pipy
 COPY --from=builder /pipy/tutorial /etc/pipy/tutorial
 COPY tools/* /usr/local/bin/
