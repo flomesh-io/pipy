@@ -80,6 +80,7 @@ void MainOptions::show_help() {
   std::cout << "  --tls-key=<filename>                 Client private key in communication to administration service" << std::endl;
   std::cout << "  --tls-trusted=<filename>             Administration service certificate(s) trusted by client" << std::endl;
   std::cout << "  --no-restart                         Do not auto-restart process when working in remote codebase mode" << std::endl;
+  std::cout << "  --keep-alive                         Automatically restart the worker process when it exits abnormally" << std::endl;
   std::cout << "  --openssl-engine=<id>                Select an OpenSSL engine" << std::endl;
   std::cout << std::endl;
 }
@@ -257,6 +258,8 @@ void MainOptions::parse(const std::list<std::string> &args) {
         tls_trusted = v;
       } else if (k == "--no-restart") {
         no_restart = true;
+      } else if (k == "--keep-alive") {
+        keep_alive = true;
       } else if (k == "--openssl-engine") {
         openssl_engine = v;
       } else {

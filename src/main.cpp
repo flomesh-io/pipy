@@ -575,6 +575,7 @@ int pipy_main(int argc, char *argv[]) {
       if (!opts.tls_cert.empty()) args.push_back("--tls-cert=" + opts.tls_cert);
       if (!opts.tls_key.empty()) args.push_back("--tls-key=" + opts.tls_key);
       if (opts.no_restart) args.push_back("--no-restart");
+      if (opts.keep_alive) args.push_back("--keep-alive");
       args.push_back("--args");
       bool seen_positional = false;
       for (int i = 1; i < argc; i++) {

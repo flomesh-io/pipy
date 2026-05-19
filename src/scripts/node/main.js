@@ -8,6 +8,7 @@ var tlsSettings = null
 var argvHost = [...pipy.argv]
 var argvProc = []
 var noRestart = false
+var keepAlive = false
 
 try {
   function parseOptions(argv, f) {
@@ -67,6 +68,9 @@ try {
         case '--no-restart':
           noRestart = true
           break
+        case '--keep-alive':
+          keepAlive = true
+          break
         default:
           throw `Unknown option in repo mode: ${opt}`
         }
@@ -109,7 +113,7 @@ var codebase = Codebase(
   codebaseDir,
   argvProc,
   tlsSettings,
-  { noRestart }
+  { noRestart, keepAlive }
 )
 
 pipy.exit(() => {

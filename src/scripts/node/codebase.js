@@ -21,6 +21,7 @@ export default function (url, rootDir, argv, tls, options) {
   var codebaseTime = ''
   var codebaseFiles = {}
   var subprocPID = 0
+  var hasKilled = false
 
   function start() {
     download().then(obj => {
@@ -38,7 +39,7 @@ export default function (url, rootDir, argv, tls, options) {
         console.info('Starting subprocess')
 
         try {
-          os.rmdir(rootDir, { recursive: true })
+          os.rmdir(rootDir, { recursive: true, force: true })
           os.mkdir(rootDir, { recursive: true })
 
           Object.entries(obj.files).forEach(
@@ -57,6 +58,7 @@ export default function (url, rootDir, argv, tls, options) {
         codebaseVersion = obj.version
         codebaseTime = obj.time
         codebaseFiles = obj.files
+        hasKilled = false
 
         run()
         watch()
@@ -136,7 +138,13 @@ export default function (url, rootDir, argv, tls, options) {
           },
           onExit: code => {
             console.info('Subprocess exited with code =', code)
-            subprocPID = 0
+            if (subprocPID) {
+              subprocPID = 0
+              if (options.keepAlive && !hasKilled) {
+                console.info('Restarting subprocess in 5 seconds...')
+                new Timeout(5).wait().then(start)
+              }
+            }
           },
         }
       )
@@ -154,6 +162,7 @@ export default function (url, rootDir, argv, tls, options) {
         }
       }
 
+      hasKilled = true
       os.kill(subprocPID)
       console.info('Sent SIGTERM to subprocess')
 
