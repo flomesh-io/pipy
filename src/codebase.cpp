@@ -879,7 +879,12 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
     nullptr,
     nullptr,
     [=](http::ResponseHead *head, Data *body) {
-      if (!head || head->status != 200 || !body) {
+      if (head && head->status == 404) {
+        Log::warn("[codebase] GET %s -> %d %s", path.c_str(), head->status, head->statusText->c_str());
+        download_next(on_update);
+        return;
+
+      } else if (!head || head->status != 200 || !body) {
         response_error("GET", path.c_str(), head);
         on_update(false);
         return;
