@@ -387,10 +387,7 @@ Quota::Counter::Counter(
   m_counter_map[key] = this;
 }
 
-Quota::Counter::~Counter() {
-  std::lock_guard<std::mutex> lk(m_counter_map_mutex);
-  m_counter_map.erase(m_key);
-}
+Quota::Counter::~Counter() = default;
 
 auto Quota::Counter::get(
   const std::string &key,
@@ -502,6 +499,8 @@ void Quota::Counter::on_produce() {
 }
 
 void Quota::Counter::finalize() {
+  std::lock_guard<std::mutex> lk(m_counter_map_mutex);
+  m_counter_map.erase(m_key);
   m_net.post([this]() {
     delete this;
   });
