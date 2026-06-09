@@ -104,6 +104,7 @@ export default function (url, rootDir, argv, tls, options) {
               var status = res?.head?.status
               if (status < 200 || status >= 300 || !status) {
                 console.error('GET', httpPath, 'response error', status)
+                if (status === 404) return downloadNext()
                 return null
               }
               files[filePath] = {
