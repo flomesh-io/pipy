@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - '*'
+      - "*"
     branches:
       - main
     paths-ignore:
@@ -312,7 +312,7 @@ jobs:
   x86-macos:
     needs: set-release-version
     name: x86-macos
-    runs-on: macos-13
+    runs-on: macos-15-intel
     if: ${{ !contains(needs.set-release-version.outputs.release_version, 'nightly') }}
     steps:
       - uses: actions/checkout@v4
@@ -544,7 +544,7 @@ jobs:
       - name: Save log
         uses: peter-evans/repository-dispatch@v3
         with:
-          token:  ${{ secrets.REPO_DISPATCH_PAT }}
+          token: ${{ secrets.REPO_DISPATCH_PAT }}
           repository: ${{ secrets.REPO_FOR_LOG }}
           event-type: save-log
           client-payload: |
