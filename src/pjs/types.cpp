@@ -3545,6 +3545,7 @@ auto RegExp::exec(Str *str) -> Array* {
 }
 
 bool RegExp::test(Str *str) {
+  if (m_source->str() == ".*") return true;
   std::smatch match;
   std::regex_search(str->str(), match, m_regex);
   return !match.empty();
