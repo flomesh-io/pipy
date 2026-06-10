@@ -195,7 +195,7 @@ try {
             return response(404)
           }),
 
-          'DELETE': responder(params => {
+          'DELETE': responder((params, req) => {
             console.log('DELETE', req.head.path)
             var path = '/' + params['*']
             store.deleteCodebase(path)
