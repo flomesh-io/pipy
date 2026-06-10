@@ -250,7 +250,13 @@ export default function (repoRoot) {
         )
       )
 
-      var paths = Object.keys(all)
+      var paths = Object.keys(all).sort((a, b) => {
+        if (a === '/main.js') return -1
+        if (b === '/main.js') return 1
+        if (a === '/config.js') return -1
+        if (b === '/config.js') return 1
+        return a < b ? -1 : (a > b ? 1 : 0)
+      })
       var index = new Data
       var etags = new Data
       var ts = new Date(time).toUTCString()
