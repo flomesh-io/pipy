@@ -255,6 +255,10 @@ export default function (repoRoot) {
       var etags = new Data
       var ts = new Date(time).toUTCString()
 
+      if (paths.includes('/main.js')) {
+        index.push('/main.js\n')
+      }
+
       paths.forEach(
         p => {
           var fullpath = os.path.join(prefix, p)
@@ -271,8 +275,10 @@ export default function (repoRoot) {
             contentType: 'text/plain',
             content: all[p],
           }
-          index.push(p)
-          index.push('\n')
+          if (p !== '/main.js') {
+            index.push(p)
+            index.push('\n')
+          }
           etags.push(p)
           etags.push('#')
           etags.push(v)
