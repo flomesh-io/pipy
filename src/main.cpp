@@ -265,12 +265,14 @@ private:
       m_url->path(),
       m_headers,
       Data::make(std::move(buffer)),
-      [this](http::ResponseHead *head, Data *body) {
+      [this](http::ResponseHead *head, Data *) {
         m_local_ip = m_fetch->outbound()->local_address()->str();
+
+        auto status = head ? head->status : 0;
 
         // "206 Partial Content" is used by a "smart" repo
         // to indicate that subsequent metric reports can be incremental
-        if (head->status != 206) {
+        if (status != 206) {
           m_initial_metrics = true;
         }
       }
