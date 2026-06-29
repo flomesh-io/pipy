@@ -52,7 +52,7 @@ jobs:
   x86-binary:
     needs: set-release-version
     name: x86-binary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -324,6 +324,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
         run: |
           set -x
+          brew install llvm@15
           export CC=$(brew --prefix llvm@15)/bin/clang
           export CXX=$(brew --prefix llvm@15)/bin/clang++
           ./build.sh -p -t ${RELEASE_VERSION}
@@ -380,6 +381,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
         run: |
           set -x
+          brew install llvm@15
           export CC=$(brew --prefix llvm@15)/bin/clang
           export CXX=$(brew --prefix llvm@15)/bin/clang++
           ./build.sh -p -t ${RELEASE_VERSION}
