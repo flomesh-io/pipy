@@ -30,10 +30,13 @@ COPY rpmmacros /rpmmacros
 COPY pipy.tar.gz /pipy.tar.gz
 COPY pipy.spec /pipy.spec
 
-RUN yum install -y -q unzip rpm-build rpmdevtools \
+RUN sed -i 's@^mirrorlist=@#mirrorlist=@g;s@^#baseurl=http://mirror.centos.org/centos/$releasever@baseurl=https://vault.centos.org/7.9.2009@g' /etc/yum.repos.d/*.repo \
+    && yum install -y -q unzip rpm-build rpmdevtools \
     && rpmdev-setuptree \
     && mv /rpmmacros ~/.rpmmacros \
     && yum install -y centos-release-scl epel-release yum-utils \
+    && sed -i 's@^mirrorlist=@#mirrorlist=@g;s@^# baseurl=http://mirror.centos.org/centos/$releasever@baseurl=https://vault.centos.org/7.9.2009@g' /etc/yum.repos.d/*.repo \
+    && sed -i 's@^mirrorlist=@#mirrorlist=@g;s@# *baseurl=http://mirror.centos.org/centos/7@baseurl=https://vault.centos.org/7.9.2009@g' /etc/yum.repos.d/*.repo \
     && yum-builddep --define "_with_gui 1" -y /pipy.spec
 
 RUN mv /pipy.tar.gz ~/rpmbuild/SOURCES \
