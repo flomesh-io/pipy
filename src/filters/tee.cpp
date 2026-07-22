@@ -135,11 +135,22 @@ void Tee::process(Event *evt) {
 std::map<std::string, pjs::Ref<Tee::Target>> Tee::s_targets;
 std::mutex Tee::s_targets_mutex;
 
+static const size_t MAX_S_TARGETS = 256;
+
 auto Tee::get_target(const std::string &filename, const Options &options) -> Target* {
   std::lock_guard<std::mutex> lock(s_targets_mutex);
   auto path = filename == "-" ? filename : fs::abs_path(filename);
   auto i = s_targets.find(path);
   if (i != s_targets.end()) return i->second;
+  if (s_targets.size() >= MAX_S_TARGETS) {
+    auto oldest = s_targets.begin();
+    for (auto it = s_targets.begin(); it != s_targets.end(); ++it) {
+      if (it->second->ref_count() <= oldest->second->ref_count()) {
+        oldest = it;
+      }
+    }
+    s_targets.erase(oldest);
+  }
   return s_targets[path] = new Target(path, options);
 }
 

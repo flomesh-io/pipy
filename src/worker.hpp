@@ -69,7 +69,7 @@ public:
 
   void for_each_pipeline_layout(const std::function<void(PipelineLayout *)> &cb) {
     for (auto pl : m_pipeline_templates) {
-      cb(pl);
+      cb(pl.get());
     }
   }
 
@@ -80,7 +80,7 @@ private:
   pjs::Ref<pjs::Promise::Period> m_period;
   pjs::Ref<pjs::Fiber> m_root_fiber;
   std::map<std::string, std::unique_ptr<pjs::Module>> m_module_map;
-  std::set<PipelineLayout*> m_pipeline_templates;
+  std::set<pjs::Ref<PipelineLayout>> m_pipeline_templates;
   std::set<Listener*> m_listeners;
   bool m_waiting_for_exit_callbacks = false;
 

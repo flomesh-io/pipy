@@ -213,7 +213,12 @@ public:
     );
   }
 
-  void cancel() { m_self = nullptr; }
+  void cancel() {
+    if (m_self) {
+      m_self = nullptr;
+      pjs::RefCount<T>::release();
+    }
+  }
 };
 
 } // namespace pipy

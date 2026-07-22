@@ -342,16 +342,16 @@ void Worker::stop(bool force) {
 
 void Worker::stop_all() {
   m_period->end();
-  for (auto *pt : m_pipeline_templates) pt->shutdown();
+  for (auto pt : m_pipeline_templates) pt->shutdown();
   if (s_current == this) s_current = nullptr;
 }
 
 void Worker::append_pipeline_template(PipelineLayout *pt) {
-  m_pipeline_templates.insert(pt);
+  m_pipeline_templates.insert(pjs::Ref<PipelineLayout>(pt));
 }
 
 void Worker::remove_pipeline_template(PipelineLayout *pt) {
-  m_pipeline_templates.erase(pt);
+  m_pipeline_templates.erase(pjs::Ref<PipelineLayout>(pt));
 }
 
 } // namespace pipy

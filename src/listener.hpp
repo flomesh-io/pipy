@@ -37,6 +37,7 @@
 #include <string>
 #include <set>
 #include <map>
+#include <memory>
 
 namespace pipy {
 
@@ -244,6 +245,7 @@ private:
   pjs::Ref<PipelineLayout> m_pipeline_layout_next;
   pjs::Ref<pjs::Str> m_label;
   List<Inbound> m_inbounds;
+  std::shared_ptr<bool> m_alive = std::make_shared<bool>(true);
 
   thread_local static std::set<Listener*> s_listeners;
   static bool s_reuse_port;

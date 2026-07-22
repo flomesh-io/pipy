@@ -179,6 +179,7 @@ Listener::Listener(Port::Protocol protocol, const std::string &ip, int port)
 Listener::~Listener() {
   m_port->remove_listener(this);
   s_listeners.erase(this);
+  *m_alive = false;
 }
 
 bool Listener::pipeline_layout(PipelineLayout *layout) {
@@ -373,10 +374,13 @@ void Listener::close(Inbound *inbound) {
 }
 
 void Listener::wake_up() {
-  m_net.post([this]() {
-    auto n = m_inbounds.size();
-    int max = m_options.max_connections;
-    if (max < 0 || n < max) resume();
+  auto alive = m_alive;
+  m_net.post([this, alive]() {
+    if (*alive) {
+      auto n = m_inbounds.size();
+      int max = m_options.max_connections;
+      if (max < 0 || n < max) resume();
+    }
   });
 }
 

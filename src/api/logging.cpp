@@ -73,7 +73,15 @@ bool Logger::tail(const std::string &name, Data &buffer) {
 }
 
 void Logger::close_all() {
+  History::clear_all();
+}
 
+void Logger::History::clear_all() {
+  for (auto &p : s_all_histories) {
+    p.second.m_buffer.clear();
+    p.second.m_buffer.shrink_to_fit();
+  }
+  s_all_histories.clear();
 }
 
 Logger::Logger(pjs::Str *name)
@@ -213,6 +221,7 @@ void Logger::StdoutTarget::write(const Data &msg) {
         m_is_stderr ? os::FileHandle::std_error() : os::FileHandle::std_output(),
         &s_dp_stdout
       );
+      m_file_stream->set_buffer_limit(4 * 1024 * 1024);
       m_file_stream->set_no_close();
     }
     Data *buf = Data::make();
@@ -342,7 +351,7 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options) {
   Connect::Options conn_opts;
   conn_opts.buffer_limit = options.buffer_limit;
   conn_opts.retry_delay = 5;
-  conn_opts.retry_count = -1;
+  conn_opts.retry_count = 3;
   ppl_pack->append(new Connect(url_obj->host(), conn_opts));
 
   m_ppl = ppl;

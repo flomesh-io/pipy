@@ -66,12 +66,16 @@ public:
   EventBuffer(std::shared_ptr<BufferStats> stats = nullptr)
     : m_stats(stats) {}
 
+  void set_buffer_limit(size_t limit) { m_buffer_limit = limit; }
+
   EventBuffer(const EventBuffer &r)
-    : m_stats(r.m_stats) {}
+    : m_stats(r.m_stats)
+    , m_buffer_limit(r.m_buffer_limit) {}
 
   EventBuffer(EventBuffer &&r)
     : m_events(std::move(r.m_events))
-    , m_stats(r.m_stats) {}
+    , m_stats(r.m_stats)
+    , m_buffer_limit(r.m_buffer_limit) {}
 
   ~EventBuffer() {
     clear();
@@ -86,6 +90,10 @@ public:
     e->m_in_buffer = true;
     e->retain();
     m_events.push(e);
+    if (m_buffer_limit > 0 && m_events.size() > m_buffer_limit) {
+      auto oldest = shift();
+      if (oldest) oldest->release();
+    }
     if (m_stats) {
       if (auto data = e->as<Data>()) {
         m_stats->size += data->size();
@@ -186,6 +194,7 @@ public:
 private:
   List<Event> m_events;
   std::shared_ptr<BufferStats> m_stats;
+  size_t m_buffer_limit = 0;
 };
 
 //

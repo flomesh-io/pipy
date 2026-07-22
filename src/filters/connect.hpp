@@ -29,6 +29,7 @@
 #include "filter.hpp"
 #include "outbound.hpp"
 #include "options.hpp"
+#include <memory>
 
 namespace pipy {
 
@@ -66,6 +67,7 @@ private:
   Options m_options;
   bool m_has_error = false;
   bool m_end_input = false;
+  std::shared_ptr<bool> m_alive = std::make_shared<bool>(true);
 
   void end() { m_end_input = true; }
   void error() { m_outbound = nullptr; m_has_error = true; }

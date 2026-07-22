@@ -337,10 +337,11 @@ void Quota::on_produce() {
 }
 
 void Quota::on_produce_async() {
+  pjs::Ref<Quota> self(this);
   m_net.post(
-    [this]() {
+    [self]() {
       InputContext ic;
-      on_produce();
+      self->on_produce();
     }
   );
 }
@@ -473,8 +474,12 @@ void Quota::Counter::schedule_producing() {
   if (m_produce_cycle <= 0) return;
   if (!m_is_producing_scheduled.compare_exchange_strong(expected_state, true)) return;
   retain();
+  auto guard = std::shared_ptr<void>(
+    nullptr,
+    [this](void*) { release(); }
+  );
   m_net.post(
-    [this]() {
+    [this, guard]() mutable {
       m_timer.schedule(
         m_produce_cycle, [this]() {
           m_is_producing_scheduled.store(false);
@@ -491,6 +496,7 @@ void Quota::Counter::schedule_producing() {
           }
         }
       );
+      guard.reset();
       release();
     }
   );
@@ -502,8 +508,12 @@ void Quota::Counter::on_produce() {
 }
 
 void Quota::Counter::finalize() {
-  m_net.post([this]() {
-    delete this;
+  // Note: If the io_context stops before this post handler executes,
+  // the Counter will leak. This is an inherent limitation of the
+  // event-driven finalization pattern.
+  auto self = this;
+  m_net.post([self]() {
+    delete self;
   });
 }
 
