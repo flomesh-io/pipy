@@ -112,7 +112,7 @@ public:
   // Quota::Counter
   //
 
-  class Counter : public pjs::RefCountMT<Counter> {
+  class Counter {
   public:
     static auto get(
       const std::string &key,
@@ -136,6 +136,9 @@ public:
     void enqueue(Quota *quota);
     void dequeue(Quota *quota);
 
+    void retain();
+    void release();
+
   private:
     Counter(
       const std::string &key,
@@ -157,6 +160,7 @@ public:
     std::set<Quota*> m_quotas;
     std::mutex m_quotas_mutex;
     Timer m_timer;
+    std::atomic<int> m_refs;
 
     void schedule_producing();
     void on_produce();

@@ -258,6 +258,7 @@ Quota::Quota(double initial_value, const Options &options)
       options.produce,
       options.per
     );
+    m_counter->release();
   }
 }
 
@@ -383,8 +384,8 @@ Quota::Counter::Counter(
   , m_produce_cycle(produce_cycle)
   , m_current_value(initial_value)
   , m_is_producing_scheduled(false)
+  , m_refs(0)
 {
-  m_counter_map[key] = this;
 }
 
 Quota::Counter::~Counter() = default;
@@ -400,12 +401,14 @@ auto Quota::Counter::get(
   auto i = m_counter_map.find(key);
   if (i != m_counter_map.end()) {
     auto p = i->second;
-    if (p->ref_count() > 0) {
-      p->init(initial_value, maximum_value, produce_value, produce_cycle);
-      return p;
-    }
+    p->retain();
+    p->init(initial_value, maximum_value, produce_value, produce_cycle);
+    return p;
   }
-  return new Counter(key, initial_value, maximum_value, produce_value, produce_cycle);
+  auto p = new Counter(key, initial_value, maximum_value, produce_value, produce_cycle);
+  m_counter_map[key] = p;
+  p->retain();
+  return p;
 }
 
 void Quota::Counter::init(
@@ -498,9 +501,24 @@ void Quota::Counter::on_produce() {
   for (auto quota : m_quotas) quota->on_produce_async();
 }
 
-void Quota::Counter::finalize() {
+void Quota::Counter::retain() {
+  m_refs.fetch_add(1, std::memory_order_relaxed);
+}
+
+void Quota::Counter::release() {
   std::lock_guard<std::mutex> lk(m_counter_map_mutex);
-  m_counter_map.erase(m_key);
+  if (m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+    finalize();
+  }
+}
+
+void Quota::Counter::finalize() {
+  auto i = m_counter_map.find(m_key);
+  if (i != m_counter_map.end()) {
+    if (i->second == this) {
+      m_counter_map.erase(i);
+    }
+  }
   m_net.post([this]() {
     delete this;
   });
