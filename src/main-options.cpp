@@ -71,6 +71,7 @@ void MainOptions::show_help() {
   std::cout << "  --log-history-limit=<size>           Set size limit of log history in bytes" << std::endl;
   std::cout << "  --log-local=<stdout|stderr|null>     Select local output for system log" << std::endl;
   std::cout << "  --log-local-only                     Do not send out system log" << std::endl;
+  std::cout << "  --no-reload                          Do not check for remote codebase updates" << std::endl;
   std::cout << "  --no-graph                           Do not print pipeline graphs to the log" << std::endl;
   std::cout << "  --no-status                          Do not report current status to the repo" << std::endl;
   std::cout << "  --no-metrics                         Do not report metrics to the repo" << std::endl;
@@ -242,6 +243,8 @@ void MainOptions::parse(const std::list<std::string> &args) {
         else throw std::runtime_error("unknown log output: " + v);
       } else if (k == "--log-local-only") {
         log_local_only = true;
+      } else if (k == "--no-reload") {
+        no_reload = true;
       } else if (k == "--no-graph") {
         no_graph = true;
       } else if (k == "--no-status") {

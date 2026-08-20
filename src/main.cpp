@@ -102,11 +102,13 @@ static void show_version() {
 // Reload codebase
 //
 
+static bool s_no_reload = false;
+
 static void reload_codebase(bool force) {
   if (auto *codebase = Codebase::current()) {
     codebase->sync(
       force, [](bool ok) {
-        if (ok) {
+        if (ok && !s_no_reload) {
           WorkerManager::get().reload();
         }
       }
@@ -432,6 +434,7 @@ int pipy_main(int argc, char *argv[]) {
     s_admin_options.trusted = opts.admin_tls_trusted;
     s_admin_log_file = opts.admin_log_file;
     s_admin_gui = opts.admin_gui;
+    s_no_reload = opts.no_reload;
 
     std::string admin_ip("::");
     int admin_port = 6060; // default repo port
