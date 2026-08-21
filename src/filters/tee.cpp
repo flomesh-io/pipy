@@ -108,7 +108,7 @@ void Tee::process(Event *evt) {
       auto *s = filename.to_string();
       m_resolved_filename = s;
       s->release();
-      if (m_options.shared) {
+      if (m_options.shared || m_resolved_filename->str() == "-") {
         m_target = get_target(m_resolved_filename->str(), m_options);
       } else {
         m_file = File::make(m_resolved_filename->str());
