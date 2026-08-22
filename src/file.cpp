@@ -156,7 +156,10 @@ void File::write(const Data &data) {
   if (m_stream) {
     m_stream->input()->input(Data::make(data));
   } else {
-    m_buffer.push(data);
+    static const size_t MAX_BUFFER_SIZE = 4 * 1024 * 1024;
+    if (m_buffer.size() < MAX_BUFFER_SIZE) {
+      m_buffer.push(data);
+    }
   }
 }
 

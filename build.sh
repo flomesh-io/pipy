@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-  PIPY_DIR=$(dirname $(readlink -e $(basename $0)))
+  PIPY_DIR="$(dirname "$(readlink -f "$0")")"
   OS_NAME=generic_linux
 elif [[ "$OSTYPE" == "darwin"* ]]; then
-  cd `dirname $0`
-  TARGET_FILE=`basename $0`
+  cd "$(dirname "$0")"
+  TARGET_FILE="$(basename "$0")"
   while [ -L "$TARGET_FILE" ]
   do
-    TARGET_FILE=$(readlink $TARGET_FILE)
-    cd $(dirname $TARGET_FILE)
-    TARGET_FILE=$(basename $TARGET_FILE)
+    TARGET_FILE="$(readlink "$TARGET_FILE")"
+    cd "$(dirname "$TARGET_FILE")"
+    TARGET_FILE="$(basename "$TARGET_FILE")"
   done
-  PHYS_DIR=$(pwd -P)
-  RESULT=$PHYS_DIR/$TARGET_FILE
-  PIPY_DIR=$(dirname $RESULT)
+  PHYS_DIR="$(pwd -P)"
+  RESULT="$PHYS_DIR/$TARGET_FILE"
+  PIPY_DIR="$(dirname "$RESULT")"
   OS_NAME=macos
-  export SDKROOT=$(xcrun --show-sdk-path)
+  export SDKROOT="$(xcrun --show-sdk-path)"
 fi
 
 # Number of processors to build.
@@ -143,10 +143,10 @@ then
     export VERSION=$(echo $RELEASE_VERSION | cut -d\- -f 1)
     export REVISION=$(echo $RELEASE_VERSION | cut -d\- -f 2)
 else
-    export RELEASE_VERSION=$(basename ${PIPY_DIR})
+    export RELEASE_VERSION="$(basename "${PIPY_DIR}")"
     export COMMIT_ID="N/A"
     export COMMIT_DATE="N/A"
-    export VERSION=$(basename ${PIPY_DIR})
+    export VERSION="$(basename "${PIPY_DIR}")"
     export REVISION=
 fi
 
@@ -187,17 +187,17 @@ function __build_deps_check() {
 function build() {
   __build_deps_check
 
-  cd ${PIPY_DIR}
+  cd "${PIPY_DIR}"
 	rm -rf src/scripts/repo/html
   if [ $PIPY_GUI == "ON" ] ; then
     npm install
     npm run build
     mv public src/scripts/repo/html
   fi
-  mkdir ${PIPY_DIR}/build 2>&1 > /dev/null || true
-  rm -fr ${PIPY_DIR}/build/*
-  cd ${PIPY_DIR}/build
-  $CMAKE -DPIPY_GUI=${PIPY_GUI} -DPIPY_CODEBASES=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $PIPY_DIR
+  mkdir "${PIPY_DIR}/build" 2>&1 > /dev/null || true
+  rm -fr "${PIPY_DIR}/build"/*
+  cd "${PIPY_DIR}/build"
+  $CMAKE -DPIPY_GUI=${PIPY_GUI} -DPIPY_CODEBASES=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} "${PIPY_DIR}"
   make -j${__NPROC}
   if [ $? -eq 0 ];then
     echo "Pipy has been built successfully and can be found in ${PIPY_DIR}/bin"
@@ -208,16 +208,16 @@ function build() {
 if $BUILD_BINARY; then
   build
   if $PACKAGE_OUTPUTS; then
-    mkdir -p ${PIPY_DIR}/buildroot/usr/local/bin
-    cp -a ${PIPY_DIR}/bin/pipy ${PIPY_DIR}/buildroot/usr/local/bin/pipy
-    tar zcv -f ${PKG_NAME}-${RELEASE_VERSION}-${OS_NAME}-${OS_ARCH}.tar.gz -C ${PIPY_DIR}/buildroot usr/local/bin/pipy
-    rm -rf ${PIPY_DIR}/buildroot
+    mkdir -p "${PIPY_DIR}/buildroot/usr/local/bin"
+    cp -a "${PIPY_DIR}/bin/pipy" "${PIPY_DIR}/buildroot/usr/local/bin/pipy"
+    tar zcv -f ${PKG_NAME}-${RELEASE_VERSION}-${OS_NAME}-${OS_ARCH}.tar.gz -C "${PIPY_DIR}/buildroot" usr/local/bin/pipy
+    rm -rf "${PIPY_DIR}/buildroot"
   fi
 fi
 
 # Build RPM from container
 if $BUILD_RPM; then
-  cd $PIPY_DIR
+  cd "${PIPY_DIR}"
 
   __CHANGELOG=`mktemp`
   git log --format="* %cd %aN%n- (%h) %s%d%n" --date=local | sed -r 's/[0-9]+:[0-9]+:[0-9]+ //' > $__CHANGELOG
@@ -230,9 +230,9 @@ if $BUILD_RPM; then
 
   cd ..
   tar zcvf pipy.tar.gz pipy
-  mv pipy.tar.gz $PIPY_DIR/rpm
+  mv pipy.tar.gz "${PIPY_DIR}/rpm"
 
-  cd $PIPY_DIR/rpm
+  cd "${PIPY_DIR}/rpm"
   cat $__CHANGELOG >> pipy.spec
   rm -f $__CHANGELOG
 
@@ -250,13 +250,13 @@ if $BUILD_RPM; then
     --build-arg BUILD_TYPE="$BUILD_TYPE" \
     -f $DOCKERFILE .
 
-  sudo docker run --rm -v $PIPY_DIR/rpm:/data pipy-rpmbuild:$RELEASE_VERSION bash -c "cp /rpm/*.rpm /data"
-  git checkout -- $PIPY_DIR/rpm/pipy.spec
-  rm -f $PIPY_DIR/rpm/pipy.tar.gz
+  sudo docker run --rm -v "${PIPY_DIR}/rpm":/data pipy-rpmbuild:$RELEASE_VERSION bash -c "cp /rpm/*.rpm /data"
+  git checkout -- "${PIPY_DIR}/rpm/pipy.spec"
+  rm -f "${PIPY_DIR}/rpm/pipy.tar.gz"
 fi
 
 if $BUILD_CONTAINER; then
-  cd $PIPY_DIR
+  cd "${PIPY_DIR}"
   if [[ "$RELEASE_VERSION" != "nightly"* ]]; then
     IMAGE_TAG=$RELEASE_VERSION
   else
@@ -286,7 +286,7 @@ if $BUILD_CONTAINER; then
 fi
 
 if $BUILD_ANDROID; then
-  cd $PIPY_DIR
+  cd "${PIPY_DIR}"
 
   if [ -z "$NDK"  ] || [ ! -f "$NDK/build/cmake/android.toolchain.cmake" ]
   then
@@ -296,7 +296,7 @@ if $BUILD_ANDROID; then
 
   export ANDROID_NDK_ROOT=$NDK
 
-  cd $PIPY_DIR/deps/openssl-3.2.0
+  cd "${PIPY_DIR}/deps/openssl-3.2.0"
 
   mkdir -p android && cd android
 
@@ -311,14 +311,14 @@ if $BUILD_ANDROID; then
   make
   make install_sw
 
-  cd $PIPY_DIR
+  cd "${PIPY_DIR}"
   rm -rf build && mkdir build
-  cd $PIPY_DIR/build
+  cd "${PIPY_DIR}/build"
 
   cmake -DCMAKE_TOOLCHAIN_FILE=${NDK}/build/cmake/android.toolchain.cmake \
     -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-34 -DCMAKE_ANDROID_STL_TYPE=c++_static \
     -DANDROID_ALLOW_UNDEFINED_SYMBOLS=TRUE \
-    -DPIPY_OPENSSL=${PIPY_DIR}/deps/openssl-3.2.0/android/arm64-v8a  \
+    -DPIPY_OPENSSL="${PIPY_DIR}/deps/openssl-3.2.0/android/arm64-v8a"  \
     -DPIPY_USE_SYSTEM_ZLIB=ON \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DCMAKE_BUILD_TYPE=Release \
@@ -329,7 +329,7 @@ if $BUILD_ANDROID; then
   ninja || exit $?
 
   if $PACKAGE_OUTPUTS; then
-    cd $PIPY_DIR
+    cd "${PIPY_DIR}"
 
     test -d usr/local/lib || mkdir -p usr/local/lib
     test -d usr/local/bin || mkdir -p usr/local/bin

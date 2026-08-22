@@ -202,6 +202,7 @@ private:
     static bool tail(const std::string &name, Data &buffer);
     static void enable_streaming(const std::string &name, bool enabled);
     static void for_each(const std::function<void(History*)> &cb);
+    static void clear_all();
 
     auto name() const -> const std::string& { return m_name; }
     auto size() const -> size_t { return m_tail - m_head; }

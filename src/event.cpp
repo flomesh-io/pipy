@@ -109,10 +109,22 @@ auto EventTarget::Input::make(EventTarget *target) -> Input* {
 void EventTarget::Input::input_async(Event *evt) {
   retain();
   evt->retain();
+  auto released = std::make_shared<bool>(false);
+  auto guard = std::shared_ptr<void>(
+    nullptr,
+    [this, evt, released](void*) {
+      if (!*released) {
+        release();
+        evt->release();
+        *released = true;
+      }
+    }
+  );
   Net::current().post(
-    [=]() {
+    [this, evt, guard, released]() {
       InputContext ic;
       input(evt);
+      *released = true;
       release();
       evt->release();
     }
@@ -121,10 +133,21 @@ void EventTarget::Input::input_async(Event *evt) {
 
 void EventTarget::Input::flush_async() {
   retain();
+  auto released = std::make_shared<bool>(false);
+  auto guard = std::shared_ptr<void>(
+    nullptr,
+    [this, released](void*) {
+      if (!*released) {
+        release();
+        *released = true;
+      }
+    }
+  );
   Net::current().post(
-    [this]() {
+    [this, guard, released]() {
       InputContext ic;
       input(Data::make());
+      *released = true;
       release();
     }
   );

@@ -123,6 +123,7 @@ Connect::Connect(const Connect &r)
 }
 
 Connect::~Connect() {
+  *m_alive = false;
 }
 
 void Connect::dump(Dump &d) {
@@ -173,7 +174,9 @@ void Connect::process(Event *evt) {
 
     if (options.on_state_f) {
       pjs::Ref<pjs::Function> f = options.on_state_f;
-      options.on_state_changed = [=](Outbound *ob) {
+      auto alive = m_alive;
+      options.on_state_changed = [this, f, alive](Outbound *ob) {
+        if (!*alive) return;
         pjs::Value arg(ob), ret;
         Filter::callback(f, 1, &arg, ret);
       };
