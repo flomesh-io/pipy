@@ -349,10 +349,19 @@ auto IPMask::first() -> pjs::Str* {
       // The last group must be initialized from the base address before OR-ing
       // the host bits in; reading it uninitialized returned garbage (e.g.
       // first() of fd00::5/128 came out as fd00::ffff).
-      data[7] = m_ip_base.v6()[7] | (~m_ip_mask.v6()[7] & 1);
+      // A /127 block (RFC 6164) has no reserved address, so the first usable
+      // address is the base itself, just like /128. Wider blocks start at
+      // base+1 (the first host after the network address).
+      data[7] = (m_bitmask >= 127)
+        ? m_ip_base.v6()[7]
+        : (m_ip_base.v6()[7] | (~m_ip_mask.v6()[7] & 1));
       m_first = IPAddressData(data).to_string();
     } else {
-      m_first = IPAddressData(m_ip_base.v4() | (~m_ip_mask.v4() & 1)).to_string();
+      // Same rule for IPv4: /31 (RFC 3021) has no network address, /32 is a
+      // single address; both start at the base.
+      m_first = (m_bitmask >= 31)
+        ? IPAddressData(m_ip_base.v4()).to_string()
+        : IPAddressData(m_ip_base.v4() | (~m_ip_mask.v4() & 1)).to_string();
     }
   }
   return m_first;
@@ -364,11 +373,19 @@ auto IPMask::last() -> pjs::Str* {
       uint16_t data[8];
       for (int i = 0; i < 7; i++) data[i] = m_ip_base.v6()[i] | ~m_ip_mask.v6()[i];
       auto mask = ~m_ip_mask.v6()[7];
-      data[7] = m_ip_base.v6()[7] | (mask & (mask - 1));
+      // A /127 block has no broadcast address, so the block's second address is
+      // usable and is the last one; /128 is a single address (mask == 0, the
+      // generic formula below already yields base).
+      data[7] = (m_bitmask == 127)
+        ? (m_ip_base.v6()[7] | 1)
+        : (m_ip_base.v6()[7] | (mask & (mask - 1)));
       m_last = IPAddressData(data).to_string();
     } else {
       auto mask = ~m_ip_mask.v4();
-      m_last = IPAddressData(m_ip_base.v4() | (mask & (mask - 1))).to_string();
+      // /31 (RFC 3021): both addresses are usable, last is base+1.
+      m_last = (m_bitmask == 31)
+        ? IPAddressData(m_ip_base.v4() | 1).to_string()
+        : IPAddressData(m_ip_base.v4() | (mask & (mask - 1))).to_string();
     }
   }
   return m_last;

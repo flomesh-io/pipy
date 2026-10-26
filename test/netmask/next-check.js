@@ -7,7 +7,7 @@
 // and /128 (the inverted mask is 0, which the cursor never reaches).
 //
 // Run: ./bin/pipy test/netmask/next-check.js
-// Expected: "SUMMARY: 14 passed, 0 failed" and exit status 0.
+// Expected: "SUMMARY: 24 passed, 0 failed" and exit status 0.
 
 function collect(nm, limit) {
   var out = [];
@@ -65,6 +65,29 @@ check('192.0.2.7/32 first', new Netmask('192.0.2.7/32').first,
   '192.0.2.7');
 check('192.0.2.0/24 last', new Netmask('192.0.2.0/24').last,
   '192.0.2.254');
+
+// first()/last() themselves must special-case the point-to-point and
+// single-address prefixes: /31 and /127 have no reserved network/broadcast
+// address (so last is base+1, not base), while /32 and /128 are one address.
+check('192.0.2.6/31 first', new Netmask('192.0.2.6/31').first, '192.0.2.6');
+check('192.0.2.6/31 last', new Netmask('192.0.2.6/31').last, '192.0.2.7');
+check('192.0.2.7/32 last', new Netmask('192.0.2.7/32').last, '192.0.2.7');
+check('2001:db8::4/127 first', new Netmask('2001:db8::4/127').first,
+  '2001:db8::4');
+check('2001:db8::4/127 last', new Netmask('2001:db8::4/127').last,
+  '2001:db8::5');
+check('2001:db8::5/128 last', new Netmask('2001:db8::5/128').last,
+  '2001:db8::5');
+
+// Invariant across the fixed prefixes: first() == next() #1 and
+// last() == next() #count.
+[['192.0.2.6/31', 2], ['192.0.2.7/32', 1],
+ ['2001:db8::4/127', 2], ['2001:db8::5/128', 1]].forEach(function (c) {
+  var nm = new Netmask(c[0]);
+  var seq = collect(nm, 8);
+  check(c[0] + ' first/last match sequence',
+    [seq.length, nm.first, nm.last], [c[1], seq[0], seq[seq.length - 1]]);
+});
 
 // next() must terminate: a /32 and a /128 own exactly one address, so calling
 // next() after the block is exhausted returns an empty string.
