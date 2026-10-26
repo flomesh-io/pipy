@@ -7,5 +7,6 @@
 !/curl/
 !/mux/
 !/congest/
+!/netmask/
 !/stress/
 !/random/

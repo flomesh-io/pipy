@@ -346,7 +346,10 @@ auto IPMask::first() -> pjs::Str* {
     if (m_ip_full.is_v6()) {
       uint16_t data[8];
       for (int i = 0; i < 7; i++) data[i] = m_ip_base.v6()[i];
-      data[7] |= (~m_ip_mask.v6()[7] & 1);
+      // The last group must be initialized from the base address before OR-ing
+      // the host bits in; reading it uninitialized returned garbage (e.g.
+      // first() of fd00::5/128 came out as fd00::ffff).
+      data[7] = m_ip_base.v6()[7] | (~m_ip_mask.v6()[7] & 1);
       m_first = IPAddressData(data).to_string();
     } else {
       m_first = IPAddressData(m_ip_base.v4() | (~m_ip_mask.v4() & 1)).to_string();
@@ -395,6 +398,21 @@ bool IPMask::contains(pjs::Str *addr) {
 auto IPMask::next() -> pjs::Str* {
   char str[100];
   if (m_ip_full.is_v6()) {
+    // A /127 block has two usable addresses (RFC 6164, the IPv6 counterpart of
+    // RFC 3021) and a /128 block is a single address. The generic path below
+    // gets both wrong: for /127, ~mask is 1, which is exactly the initial
+    // m_next, so it returns nothing; for /128, ~mask is 0, which m_next never
+    // reaches by incrementing, so it runs past the block. Mirrors the IPv4
+    // /31 and /32 case.
+    if (m_bitmask >= 127) {
+      uint64_t count = (m_bitmask == 128) ? 1 : 2;
+      if (m_next > count) return pjs::Str::empty;
+      auto n = m_next++ - 1;  // 0-based offset inside the block
+      uint16_t data[8];
+      m_ip_base.decompose_v6(data);
+      data[7] |= (uint16_t)n;
+      return pjs::Str::make(str, IPAddressData(data).to_string(str, sizeof(str)));
+    }
     uint64_t mask = (
       ((uint64_t)m_ip_mask.v6()[4] << 48) |
       ((uint64_t)m_ip_mask.v6()[5] << 32) |
@@ -411,6 +429,18 @@ auto IPMask::next() -> pjs::Str* {
     data[7] |= n >>  0;
     return pjs::Str::make(str, IPAddressData(data).to_string(str, sizeof(str)));
   } else {
+    // A /31 block has two usable addresses (RFC 3021) and a /32 block is a
+    // single address. Unlike wider blocks there is no network/broadcast
+    // address to exclude, so enumerate the block directly. Doing this via the
+    // generic path below would return nothing for /31 (~mask == 1 == the
+    // initial m_next) and run past the block for /32 (~mask == 0, which
+    // m_next never reaches by incrementing).
+    if (m_bitmask >= 31) {
+      uint64_t count = (m_bitmask == 32) ? 1 : 2;
+      if (m_next > count) return pjs::Str::empty;
+      auto n = m_next++ - 1;  // 0-based offset inside the block
+      return pjs::Str::make(str, IPAddressData(m_ip_base.v4() | n).to_string(str, sizeof(str)));
+    }
     if (m_next == ~m_ip_mask.v4()) return pjs::Str::empty;
     auto n = m_next++;
     return pjs::Str::make(str, IPAddressData(m_ip_base.v4() | n).to_string(str, sizeof(str)));
