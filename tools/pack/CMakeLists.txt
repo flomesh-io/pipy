@@ -12,7 +12,7 @@ if(CMAKE_CROSSCOMPILING)
         set(PACK_EXE "${PACK_BIN_DIR}/pack")
     endif()
 
-    set(BROTLI_SOURCE_DIR "${PROJECT_ROOT}/deps/brotli-1.0.9")
+    set(BROTLI_SOURCE_DIR "${PROJECT_ROOT}/deps/brotli-1.0.10")
     set(HOST_BROTLI_DIR "${HOST_BUILD_DIR}/brotli")
 
     file(WRITE "${HOST_BROTLI_DIR}/CMakeLists.txt"
@@ -71,7 +71,7 @@ else()
     endif()
 
     include_directories(
-        "${CMAKE_SOURCE_DIR}/../../deps/brotli-1.0.9/c/include"
+        "${CMAKE_SOURCE_DIR}/../../deps/brotli-1.0.10/c/include"
     )
 
     add_executable(pack main.cpp)

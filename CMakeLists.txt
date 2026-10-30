@@ -346,13 +346,13 @@ endforeach()
 
 set(BROTLI_BUNDLED_MODE ON CACHE BOOL "" FORCE)
 set(BROTLI_DISABLE_TESTS ON CACHE BOOL "" FORCE)
-add_subdirectory(deps/brotli-1.0.9)
+add_subdirectory(deps/brotli-1.0.10)
 
 if(PIPY_BROTLI)
   set(BROTLI_INC_DIR ${PIPY_BROTLI}/include)
   set(BROTLI_LIB ${PIPY_BROTLI}/lib/${LIB_BROTLI})
 else()
-  set(BROTLI_INC_DIR "${CMAKE_SOURCE_DIR}/deps/brotli-1.0.9/c/include")
+  set(BROTLI_INC_DIR "${CMAKE_SOURCE_DIR}/deps/brotli-1.0.10/c/include")
   set(BROTLI_LIB brotlidec-static)
 endif(PIPY_BROTLI)
 
